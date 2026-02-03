@@ -1,4 +1,6 @@
-import { Navbar } from "@/components/Navbar";
+'use client';
+
+import { useState } from 'react';
 import { Footer } from "@/components/Footer";
 import { ProductSidebar } from "@/components/products/ProductSidebar";
 import { ProductCard } from "@/components/products/ProductCard";
@@ -22,7 +24,7 @@ const products = [
 export default function ProductsPage() {
     return (
         <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white pb-20">
-            <Navbar />
+
 
             {/* Spacer for fixed navbar */}
             <div className="h-32 md:h-40"></div>

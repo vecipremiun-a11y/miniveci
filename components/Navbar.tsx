@@ -44,9 +44,9 @@ export function Navbar() {
 
           {/* Right Actions */}
           <div className="flex items-center gap-4 shrink-0">
-            <button className="hidden lg:block text-slate-600 font-medium hover:text-veci-primary transition-colors text-sm">
+            <Link href="/login" className="hidden lg:block text-slate-600 font-medium hover:text-veci-primary transition-colors text-sm">
               Iniciar sesión
-            </button>
+            </Link>
             <button className="btn-primary px-5 py-2.5 rounded-full font-bold flex items-center gap-2 text-sm shadow-md hover:shadow-lg transition-all">
               <ShoppingCart className="w-4 h-4" />
               <span>Carrito</span>
@@ -58,9 +58,9 @@ export function Navbar() {
         {/* Bottom Row: Navigation Links */}
         <div className="flex items-center justify-center gap-8 font-medium text-slate-600 text-sm overflow-x-auto pb-1 md:pb-0 scrollbar-hide w-full">
           <Link href="/" className="hover:text-veci-primary transition-colors whitespace-nowrap">Inicio</Link>
-          <Link href="/productos" className="hover:text-veci-primary transition-colors whitespace-nowrap">Productos</Link>
-          <Link href="#" className="hover:text-veci-primary transition-colors whitespace-nowrap">Categorías</Link>
-          <Link href="#" className="hover:text-veci-primary transition-colors whitespace-nowrap">Ofertas</Link>
+          <Link href="/productos" className="hover:text-veci-primary transition-colors whitespace-nowrap">Tienda</Link>
+          <Link href="#" className="hover:text-veci-primary transition-colors whitespace-nowrap">Suscripción</Link>
+          <Link href="#" className="hover:text-veci-primary transition-colors whitespace-nowrap">Sorteos</Link>
           <Link href="#" className="hover:text-veci-primary transition-colors whitespace-nowrap">Contacto</Link>
         </div>
 
