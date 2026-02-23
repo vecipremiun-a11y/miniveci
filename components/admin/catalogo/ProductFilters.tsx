@@ -22,7 +22,13 @@ export function ProductFilters({ categories }: { categories: any[] }) {
     // but better to assuming standard hook or implementing it.
     // I'll assume standard 500ms delay.
 
+    // Track previous search to avoid re-triggering on other param changes
+    const [prevSearch, setPrevSearch] = useState(search);
+
     useEffect(() => {
+        if (search === prevSearch) return; // Only act when search actually changed
+        setPrevSearch(search);
+
         const handler = setTimeout(() => {
             const params = new URLSearchParams(searchParams);
             if (search) params.set("search", search);
@@ -31,7 +37,7 @@ export function ProductFilters({ categories }: { categories: any[] }) {
             router.replace(`${pathname}?${params.toString()}`);
         }, 500);
         return () => clearTimeout(handler);
-    }, [search, router, pathname, searchParams]);
+    }, [search, prevSearch, router, pathname, searchParams]);
 
     const handleFilterChange = (key: string, value: string) => {
         const params = new URLSearchParams(searchParams);
