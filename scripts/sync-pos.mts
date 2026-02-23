@@ -191,7 +191,8 @@ async function run() {
                     });
                 }
                 // Add to skuMap so subsequent duplicates get UPDATED instead of INSERT failing
-                skuMap.set(sku, { id: productId, sku, web_price: posFields.posPrice, web_stock: posFields.posStock, category_id: categoryId, name: productName });                created++;
+                skuMap.set(sku, { id: productId, sku, web_price: posPrice, web_stock: posStock, category_id: categoryId, name: productName });
+                created++;
             }
 
             // Progress log
