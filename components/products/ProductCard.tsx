@@ -2,15 +2,22 @@
 
 import { motion } from 'framer-motion';
 import { Plus, Minus } from 'lucide-react';
+import Image from 'next/image';
+
+const PLACEHOLDER_IMAGE = '/placeholder-product.svg';
 
 interface ProductCardProps {
     name: string;
-    price: string;
-    image: string; // Emoji for now
+    price: number;
+    image?: string | null;
     isPopular?: boolean;
+    slug?: string;
 }
 
-export function ProductCard({ name, price, image, isPopular }: ProductCardProps) {
+export function ProductCard({ name, price, image, isPopular, slug }: ProductCardProps) {
+    const imageSrc = image || PLACEHOLDER_IMAGE;
+    const formattedPrice = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(price);
+
     return (
         <motion.div
             whileHover={{ y: -5 }}
@@ -27,18 +34,20 @@ export function ProductCard({ name, price, image, isPopular }: ProductCardProps)
             )}
 
             {/* Image Area */}
-            <div className="w-full h-40 flex items-center justify-center relative mb-4">
+            <div className="w-full h-40 flex items-center justify-center relative mb-4 overflow-hidden rounded-2xl">
                 {/* Glow effect behind image */}
                 <div className="absolute inset-0 bg-gradient-to-tr from-purple-200/50 to-pink-200/50 rounded-full blur-2xl opacity-50 group-hover:opacity-80 transition-opacity"></div>
-                <div className="text-8xl drop-shadow-2xl filter transform group-hover:scale-110 transition-transform duration-300">
-                    {image}
-                </div>
+                <img
+                    src={imageSrc}
+                    alt={name}
+                    className="relative z-10 max-h-full max-w-full object-contain drop-shadow-2xl transform group-hover:scale-110 transition-transform duration-300"
+                />
             </div>
 
             {/* Content */}
             <div className="w-full space-y-2">
-                <h3 className="font-bold text-slate-800 text-lg">{name}</h3>
-                <p className="font-extrabold text-veci-dark text-xl">${price}</p>
+                <h3 className="font-bold text-slate-800 text-lg truncate">{name}</h3>
+                <p className="font-extrabold text-veci-dark text-xl">{formattedPrice}</p>
 
                 {/* Actions Row */}
                 <div className="flex items-center gap-2 mt-4">

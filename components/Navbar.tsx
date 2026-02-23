@@ -1,18 +1,44 @@
 'use client';
 
 import Link from 'next/link';
-import { ShoppingCart, Search } from 'lucide-react';
-import { cn } from '@/lib/utils'; // We'll need to create this util
-import { useState, useEffect } from 'react';
+import { ShoppingCart, Search, User, LogOut, Shield, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
+
+const ADMIN_ROLES = ['owner', 'admin', 'preparacion', 'reparto', 'contenido'];
 
 export function Navbar() {
+  const pathname = usePathname();
+  const { data: session, status } = useSession();
   const [scrolled, setScrolled] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Don't render Navbar on admin routes
+  if (pathname?.startsWith('/admin')) {
+    return null;
+  }
 
   return (
     <nav className={cn(
@@ -44,9 +70,78 @@ export function Navbar() {
 
           {/* Right Actions */}
           <div className="flex items-center gap-4 shrink-0">
-            <Link href="/login" className="hidden lg:block text-slate-600 font-medium hover:text-veci-primary transition-colors text-sm">
-              Iniciar sesión
-            </Link>
+            {status === 'loading' ? (
+              <div className="w-8 h-8 rounded-full bg-slate-200 animate-pulse" />
+            ) : session?.user ? (
+              /* Logged-in user menu */
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/50 hover:bg-white/80 border border-white/60 backdrop-blur-md transition-all"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-veci-primary to-veci-secondary flex items-center justify-center text-white text-sm font-bold">
+                    {session.user.name?.charAt(0)?.toUpperCase() || <User className="w-4 h-4" />}
+                  </div>
+                  <span className="hidden sm:block text-sm font-medium text-slate-700 max-w-[120px] truncate">
+                    {session.user.name || 'Mi cuenta'}
+                  </span>
+                  <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", userMenuOpen && "rotate-180")} />
+                </button>
+
+                {/* Dropdown */}
+                {userMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="px-4 py-3 border-b border-slate-100">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{session.user.name}</p>
+                      <p className="text-xs text-slate-500 truncate">{session.user.email}</p>
+                      {isAdmin && (
+                        <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold uppercase bg-indigo-100 text-indigo-600 rounded-full">
+                          {session.user.role}
+                        </span>
+                      )}
+                    </div>
+
+                    {isAdmin && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        <Shield className="w-4 h-4 text-indigo-500" />
+                        Panel de Administración
+                      </Link>
+                    )}
+
+                    <Link
+                      href="/cuenta"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <User className="w-4 h-4 text-slate-400" />
+                      Mi Cuenta
+                    </Link>
+
+                    <div className="border-t border-slate-100 mt-1 pt-1">
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          signOut({ callbackUrl: '/' });
+                        }}
+                        className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Cerrar Sesión
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Not logged in */
+              <Link href="/login" className="hidden lg:block text-slate-600 font-medium hover:text-veci-primary transition-colors text-sm">
+                Iniciar sesión
+              </Link>
+            )}
             <button className="btn-primary px-5 py-2.5 rounded-full font-bold flex items-center gap-2 text-sm shadow-md hover:shadow-lg transition-all">
               <ShoppingCart className="w-4 h-4" />
               <span>Carrito</span>

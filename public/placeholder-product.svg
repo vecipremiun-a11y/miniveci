@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" fill="none">
+  <rect width="400" height="400" rx="40" fill="#F0EDFF"/>
+  <rect x="60" y="60" width="280" height="280" rx="30" fill="white" fill-opacity="0.7"/>
+  <!-- Shopping bag icon -->
+  <path d="M160 180h80v70c0 11-9 20-20 20h-40c-11 0-20-9-20-20v-70z" fill="#C4B5FD" stroke="#8B5CF6" stroke-width="4"/>
+  <path d="M170 180v-20c0-16.6 13.4-30 30-30s30 13.4 30 30v20" stroke="#8B5CF6" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="185" cy="205" r="5" fill="#8B5CF6"/>
+  <circle cx="215" cy="205" r="5" fill="#8B5CF6"/>
+  <!-- Brand text -->
+  <text x="200" y="320" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="36" fill="#6D28D9">MiniVeci</text>
+  <text x="200" y="345" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="500" font-size="14" fill="#A78BFA">Sin imagen disponible</text>
+</svg>

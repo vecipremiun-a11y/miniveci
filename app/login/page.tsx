@@ -3,23 +3,51 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { signIn, useSession } from 'next-auth/react';
+
+const ADMIN_ROLES = ['owner', 'admin', 'preparacion', 'reparto', 'contenido'];
 
 export default function LoginPage() {
     const router = useRouter();
+    const { data: session } = useSession();
     const [isLoading, setIsLoading] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
+        setError('');
 
-        // Simulate network delay
-        setTimeout(() => {
+        try {
+            const result = await signIn('credentials', {
+                email,
+                password,
+                redirect: false,
+            });
+
+            if (result?.error) {
+                setError('Correo o contraseña incorrectos');
+            } else {
+                // Fetch latest session to determine role
+                const res = await fetch('/api/auth/session');
+                const sess = await res.json();
+                const role = sess?.user?.role;
+
+                if (role && ADMIN_ROLES.includes(role)) {
+                    router.push('/admin');
+                } else {
+                    router.push('/cuenta');
+                }
+                router.refresh();
+            }
+        } catch {
+            setError('Ocurrió un error al iniciar sesión');
+        } finally {
             setIsLoading(false);
-            router.push('/cuenta');
-        }, 1500);
+        }
     };
 
     return (
@@ -38,6 +66,12 @@ export default function LoginPage() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
+                    {error && (
+                        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            {error}
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700 ml-1">Correo Electrónico</label>
                         <div className="relative group">
