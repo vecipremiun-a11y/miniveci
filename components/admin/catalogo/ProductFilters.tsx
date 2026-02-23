@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Search, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useDebounce } from "@/hooks/use-debounce"; // We need this hook, if not available I'll verify and create
 
@@ -22,12 +22,15 @@ export function ProductFilters({ categories }: { categories: any[] }) {
     // but better to assuming standard hook or implementing it.
     // I'll assume standard 500ms delay.
 
-    // Track previous search to avoid re-triggering on other param changes
-    const [prevSearch, setPrevSearch] = useState(search);
+    // Use ref to track if search changed (avoids re-render loop)
+    const isFirstRender = useRef(true);
 
     useEffect(() => {
-        if (search === prevSearch) return; // Only act when search actually changed
-        setPrevSearch(search);
+        // Skip the first render to avoid unnecessary URL update on mount
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
 
         const handler = setTimeout(() => {
             const params = new URLSearchParams(searchParams);
@@ -37,7 +40,7 @@ export function ProductFilters({ categories }: { categories: any[] }) {
             router.replace(`${pathname}?${params.toString()}`);
         }, 500);
         return () => clearTimeout(handler);
-    }, [search, prevSearch, router, pathname, searchParams]);
+    }, [search]); // Only react to search text changes
 
     const handleFilterChange = (key: string, value: string) => {
         const params = new URLSearchParams(searchParams);
