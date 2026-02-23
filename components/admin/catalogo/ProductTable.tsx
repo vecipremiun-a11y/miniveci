@@ -42,7 +42,7 @@ interface Product {
     isPublished: boolean;
     priceSource: string;
     stockSource: string;
-    images?: any[];
+    imageUrl?: string | null;
 }
 
 interface ProductTableProps {
@@ -90,13 +90,17 @@ export function ProductTable({ data, total, page, totalPages, limit }: ProductTa
             enableHiding: false,
         },
         {
-            accessorKey: "image",
+            accessorKey: "imageUrl",
             header: "Imagen",
             cell: ({ row }) => {
-                // Placeholder image logic
+                const url = row.original.imageUrl;
                 return (
                     <div className="h-10 w-10 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
-                        <ImageOff className="h-5 w-5 text-gray-400" />
+                        {url ? (
+                            <img src={url} alt={row.original.name} className="h-10 w-10 object-cover" />
+                        ) : (
+                            <ImageOff className="h-5 w-5 text-gray-400" />
+                        )}
                     </div>
                 );
             },

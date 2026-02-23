@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { products, categories } from "@/lib/db/schema";
+import { products, categories, productImages } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
 import { productSchema } from "@/lib/validations/product";
 import { desc, asc, eq, and, or, sql, inArray } from "drizzle-orm";
@@ -79,6 +79,7 @@ export async function GET(req: NextRequest) {
         const data = await db.select({
             product: products,
             categoryName: categories.name,
+            imageUrl: sql<string | null>`(SELECT url FROM product_images WHERE product_id = ${products.id} AND is_primary = 1 LIMIT 1)`,
         })
             .from(products)
             .leftJoin(categories, eq(products.categoryId, categories.id))
@@ -97,7 +98,7 @@ export async function GET(req: NextRequest) {
         const totalPages = Math.ceil(total / limit);
 
         return NextResponse.json({
-            products: data.map(d => ({ ...d.product, categoryName: d.categoryName })),
+            products: data.map(d => ({ ...d.product, categoryName: d.categoryName, imageUrl: d.imageUrl })),
             total,
             page,
             totalPages
