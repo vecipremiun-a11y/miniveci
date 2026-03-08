@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { apiCredentials, products, productImages, categories } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { put } from "@vercel/blob";
+import { put, del } from "@vercel/blob";
 import { emitProductChange } from "@/lib/product-live-updates";
 
 export const dynamic = "force-dynamic";
@@ -86,10 +86,11 @@ async function uploadBase64ToBlob(
 ): Promise<string> {
   const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
   const buffer = Buffer.from(base64Data, "base64");
-  const ext = imageBase64.includes("image/png") ? "png" : "jpg";
-  const blob = await put(`products/${sku}.${ext}`, buffer, {
+  // Always use .jpg to avoid phantom old-extension blobs
+  const blob = await put(`products/${sku}.jpg`, buffer, {
     access: "public",
     addRandomSuffix: false,
+    contentType: imageBase64.includes("image/png") ? "image/png" : "image/jpeg",
   });
   return blob.url;
 }
@@ -102,24 +103,28 @@ async function upsertPrimaryImage(
 ) {
   let finalUrl: string | null = null;
 
+  // Read existing image before uploading so we can delete old blob
+  const existing = await db.query.productImages.findFirst({
+    where: eq(productImages.productId, productId),
+    columns: { id: true, url: true },
+  });
+
   try {
     if (imageBase64) {
+      // Delete old blob if it's a Vercel Blob URL
+      if (existing?.url && existing.url.includes(".public.blob.vercel-storage.com")) {
+        try { await del(existing.url); } catch { /* ignore */ }
+      }
       finalUrl = await uploadBase64ToBlob(sku, imageBase64);
     } else if (imageUrl) {
       finalUrl = imageUrl;
     }
   } catch (err: any) {
     console.error("[POS_SYNC_IMAGE] Error uploading image:", err?.message || err);
-    // Don't fail the entire sync if image upload fails
     return;
   }
 
   if (!finalUrl) return;
-
-  const existing = await db.query.productImages.findFirst({
-    where: eq(productImages.productId, productId),
-    columns: { id: true },
-  });
 
   if (existing) {
     await db
