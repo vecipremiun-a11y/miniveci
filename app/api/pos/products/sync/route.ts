@@ -90,6 +90,7 @@ async function uploadBase64ToBlob(
   const blob = await put(`products/${sku}.jpg`, buffer, {
     access: "public",
     addRandomSuffix: false,
+    allowOverwrite: true,
     contentType: imageBase64.includes("image/png") ? "image/png" : "image/jpeg",
   });
   return blob.url;
