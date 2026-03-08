@@ -7,6 +7,7 @@ import { put } from "@vercel/blob";
 import { emitProductChange } from "@/lib/product-live-updates";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 const syncProductSchema = z.object({
   sku: z.string().trim().min(1, "sku es requerido"),
@@ -79,6 +80,20 @@ async function resolveCategory(categoryName: string): Promise<string | null> {
   return id;
 }
 
+async function uploadBase64ToBlob(
+  sku: string,
+  imageBase64: string
+): Promise<string> {
+  const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+  const buffer = Buffer.from(base64Data, "base64");
+  const ext = imageBase64.includes("image/png") ? "png" : "jpg";
+  const blob = await put(`products/${sku}.${ext}`, buffer, {
+    access: "public",
+    addRandomSuffix: false,
+  });
+  return blob.url;
+}
+
 async function upsertPrimaryImage(
   productId: string,
   sku: string,
@@ -87,18 +102,16 @@ async function upsertPrimaryImage(
 ) {
   let finalUrl: string | null = null;
 
-  if (imageBase64) {
-    // Upload base64 to Vercel Blob
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-    const buffer = Buffer.from(base64Data, "base64");
-    const ext = imageBase64.includes("image/png") ? "png" : "jpg";
-    const blob = await put(`products/${sku}.${ext}`, buffer, {
-      access: "public",
-      addRandomSuffix: false,
-    });
-    finalUrl = blob.url;
-  } else if (imageUrl) {
-    finalUrl = imageUrl;
+  try {
+    if (imageBase64) {
+      finalUrl = await uploadBase64ToBlob(sku, imageBase64);
+    } else if (imageUrl) {
+      finalUrl = imageUrl;
+    }
+  } catch (err: any) {
+    console.error("[POS_SYNC_IMAGE] Error uploading image:", err?.message || err);
+    // Don't fail the entire sync if image upload fails
+    return;
   }
 
   if (!finalUrl) return;
