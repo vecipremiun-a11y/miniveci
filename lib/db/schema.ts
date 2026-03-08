@@ -64,6 +64,12 @@ export const products = sqliteTable("products", {
     stockSource: text("stock_source").default("global"), // "global", "pos", "manual", "reserved"
     reservedQty: integer("reserved_qty").default(0),
 
+    // POS Sync Fields
+    offerPrice: integer("offer_price"),           // cents — precio de oferta
+    isOffer: integer("is_offer", { mode: "boolean" }).default(false),
+    unit: text("unit").default("Und"),              // Und, Kg, Lt, etc.
+    taxRate: real("tax_rate"),                       // ej: 19 para 19%
+
     // Status
     isPublished: integer("is_published", { mode: "boolean" }).default(false),
     isFeatured: integer("is_featured", { mode: "boolean" }).default(false),

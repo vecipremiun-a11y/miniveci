@@ -57,6 +57,10 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
             webDescription: initialData?.webDescription || "",
             seoTitle: initialData?.seoTitle || "",
             seoDescription: initialData?.seoDescription || "",
+            offerPrice: initialData?.offerPrice ?? null,
+            isOffer: initialData?.isOffer ?? false,
+            unit: initialData?.unit || "Und",
+            taxRate: initialData?.taxRate ?? null,
             priceSource: initialData?.priceSource || "global",
             stockSource: initialData?.stockSource || "global",
             reservedQty: initialData?.reservedQty || 0,
@@ -352,17 +356,82 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                             </CardContent>
                         </Card>
 
-                        <Card className="bg-gray-50 border-gray-200">
+                        <Card>
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-base text-gray-500 flex items-center gap-2">
+                                <CardTitle className="text-base flex items-center gap-2">
                                     <Info className="h-4 w-4" /> Datos POS
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <div className="text-sm text-gray-500">
-                                    <p>Sin vincular al POS</p>
-                                    <p className="text-xs mt-2">Próximamente: ver detalles de sincronización aquí.</p>
-                                </div>
+                            <CardContent className="space-y-4">
+                                <FormField
+                                    control={form.control}
+                                    name="offerPrice"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Precio de Oferta</FormLabel>
+                                            <FormControl>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-2.5 text-gray-500">$</span>
+                                                    <Input type="number" className="pl-7" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
+                                                </div>
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="isOffer"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                            <div className="space-y-0.5">
+                                                <FormLabel>En Oferta</FormLabel>
+                                                <FormDescription>Producto en promoción</FormDescription>
+                                            </div>
+                                            <FormControl>
+                                                <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="unit"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Unidad de Medida</FormLabel>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Seleccionar" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="Und">Unidad (Und)</SelectItem>
+                                                    <SelectItem value="Kg">Kilogramo (Kg)</SelectItem>
+                                                    <SelectItem value="Lt">Litro (Lt)</SelectItem>
+                                                    <SelectItem value="Mt">Metro (Mt)</SelectItem>
+                                                    <SelectItem value="Caja">Caja</SelectItem>
+                                                    <SelectItem value="Pack">Pack</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="taxRate"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Tasa de Impuesto (%)</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" placeholder="Ej: 19" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
                             </CardContent>
                         </Card>
 

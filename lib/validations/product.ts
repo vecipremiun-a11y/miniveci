@@ -22,6 +22,12 @@ export const productSchema = z.object({
     stockSource: z.enum(["global", "pos", "manual", "reserved"]).default("global"),
     reservedQty: z.coerce.number().min(0).default(0),
 
+    // POS fields
+    offerPrice: z.coerce.number().min(0).optional().nullable(),
+    isOffer: z.boolean().default(false),
+    unit: z.string().optional().default("Und"),
+    taxRate: z.coerce.number().min(0).optional().nullable(),
+
     // Status
     isPublished: z.boolean().default(false),
     isFeatured: z.boolean().default(false),
