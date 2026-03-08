@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { apiCredentials, products, productImages, categories } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { put } from "@vercel/blob";
 import { emitProductChange } from "@/lib/product-live-updates";
 
 export const dynamic = "force-dynamic";
@@ -80,11 +81,27 @@ async function resolveCategory(categoryName: string): Promise<string | null> {
 
 async function upsertPrimaryImage(
   productId: string,
+  sku: string,
   imageUrl: string | null | undefined,
   imageBase64: string | null | undefined
 ) {
-  const url = imageUrl || (imageBase64 ? `data:image/png;base64,${imageBase64}` : null);
-  if (!url) return;
+  let finalUrl: string | null = null;
+
+  if (imageBase64) {
+    // Upload base64 to Vercel Blob
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Data, "base64");
+    const ext = imageBase64.includes("image/png") ? "png" : "jpg";
+    const blob = await put(`products/${sku}.${ext}`, buffer, {
+      access: "public",
+      addRandomSuffix: false,
+    });
+    finalUrl = blob.url;
+  } else if (imageUrl) {
+    finalUrl = imageUrl;
+  }
+
+  if (!finalUrl) return;
 
   const existing = await db.query.productImages.findFirst({
     where: eq(productImages.productId, productId),
@@ -94,13 +111,13 @@ async function upsertPrimaryImage(
   if (existing) {
     await db
       .update(productImages)
-      .set({ url, isPrimary: true })
+      .set({ url: finalUrl, isPrimary: true })
       .where(eq(productImages.id, existing.id));
   } else {
     await db.insert(productImages).values({
       id: crypto.randomUUID(),
       productId,
-      url,
+      url: finalUrl,
       isPrimary: true,
       sortOrder: 0,
     });
@@ -235,7 +252,7 @@ async function handleProductSync(req: NextRequest) {
     }
 
     // Handle image
-    await upsertPrimaryImage(productId, data.image_url, data.image_base64);
+    await upsertPrimaryImage(productId, skuUpper, data.image_url, data.image_base64);
 
     // Emit live update
     await emitProductChange(productId, {
