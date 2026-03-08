@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const data = [
     { name: "00:00", total: 0 },
@@ -16,6 +16,11 @@ const data = [
 
 export function SalesChart() {
     const [period, setPeriod] = useState("hoy"); // hoy, semana, mes
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     return (
         <Card className="col-span-4">
@@ -44,6 +49,9 @@ export function SalesChart() {
             </CardHeader>
             <CardContent className="pl-2">
                 <div className="h-[300px] w-full">
+                    {!isMounted ? (
+                        <div className="h-full w-full rounded-2xl bg-slate-100/80" aria-hidden="true" />
+                    ) : (
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={data}>
                             <defs>
@@ -81,6 +89,7 @@ export function SalesChart() {
                             />
                         </AreaChart>
                     </ResponsiveContainer>
+                    )}
                 </div>
             </CardContent>
         </Card>

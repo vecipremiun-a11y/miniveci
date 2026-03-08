@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { products, categories, productImages } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
+import { emitProductChange } from "@/lib/product-live-updates";
 import { productSchema } from "@/lib/validations/product";
 import { desc, asc, eq, and, or, sql, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
@@ -163,7 +164,18 @@ export async function POST(req: NextRequest) {
             updatedAt: new Date().toISOString(),
         }).returning();
 
-        return NextResponse.json(newProduct[0], { status: 201 });
+        await emitProductChange(newProduct[0].id, {
+            slug: newProduct[0].slug,
+            reason: "created",
+        });
+
+        const refreshedProduct = await db.query.products.findFirst({
+            where: eq(products.id, newProduct[0].id),
+        });
+
+        return NextResponse.json({
+            ...(refreshedProduct ?? newProduct[0]),
+        }, { status: 201 });
 
     } catch (error: any) {
         if (error instanceof AuthError) {

@@ -2,21 +2,39 @@
 
 import { motion } from 'framer-motion';
 import { Plus, Minus } from 'lucide-react';
-import Image from 'next/image';
+import { useState } from 'react';
+import { useCart } from '@/components/cart/CartProvider';
+import { useRouter } from 'next/navigation';
 
 const PLACEHOLDER_IMAGE = '/placeholder-product.svg';
 
 interface ProductCardProps {
+    id: string;
     name: string;
     price: number;
+    stock: number;
     image?: string | null;
     isPopular?: boolean;
     slug?: string;
 }
 
-export function ProductCard({ name, price, image, isPopular, slug }: ProductCardProps) {
+export function ProductCard({ id, name, price, stock, image, isPopular, slug }: ProductCardProps) {
+    const { addItem } = useCart();
+    const router = useRouter();
+    const [quantity, setQuantity] = useState(1);
     const imageSrc = image || PLACEHOLDER_IMAGE;
     const formattedPrice = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(price);
+    const stockLabel = `${stock} UND`;
+
+    const handleAdd = () => {
+        addItem({ id, name, price, image: imageSrc, slug }, quantity);
+        setQuantity(1);
+    };
+
+    const goToDetail = () => {
+        if (!slug) return;
+        router.push(`/productos/${slug}`);
+    };
 
     return (
         <motion.div
@@ -24,7 +42,8 @@ export function ProductCard({ name, price, image, isPopular, slug }: ProductCard
             initial={{ opacity: 0, scale: 0.9 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            className="glass-card p-4 rounded-[2rem] flex flex-col items-center relative group"
+            onClick={goToDetail}
+            className="glass-card p-4 rounded-[2rem] flex flex-col items-center relative group cursor-pointer"
         >
             {/* Badge */}
             {isPopular && (
@@ -47,24 +66,48 @@ export function ProductCard({ name, price, image, isPopular, slug }: ProductCard
             {/* Content */}
             <div className="w-full space-y-2">
                 <h3 className="font-bold text-slate-800 text-lg truncate">{name}</h3>
-                <p className="font-extrabold text-veci-dark text-xl">{formattedPrice}</p>
+                <div className="flex items-center justify-between gap-3">
+                    <p className="font-extrabold text-veci-dark text-xl">{formattedPrice}</p>
+                    <div className="shrink-0 inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-100">
+                        {stockLabel}
+                    </div>
+                </div>
 
                 {/* Actions Row */}
                 <div className="flex items-center gap-2 mt-4">
 
                     {/* Quantity Selector */}
                     <div className="flex items-center gap-3 bg-white/60 rounded-full px-3 py-2 border border-white/50 shadow-sm">
-                        <button className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setQuantity((q) => Math.max(1, q - 1));
+                            }}
+                            className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
+                        >
                             <Minus className="w-3 h-3" />
                         </button>
-                        <span className="text-sm font-bold text-slate-700">1</span>
-                        <button className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                        <span className="text-sm font-bold text-slate-700">{quantity}</span>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setQuantity((q) => Math.min(stock, q + 1));
+                            }}
+                            disabled={quantity >= stock}
+                            className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
                             <Plus className="w-3 h-3" />
                         </button>
                     </div>
 
                     {/* Add Button */}
-                    <button className="flex-1 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-sm font-bold py-2.5 px-4 rounded-full shadow-lg hover:shadow-xl hover:shadow-purple-200 transition-all flex items-center justify-center">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleAdd();
+                        }}
+                        className="flex-1 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-sm font-bold py-2.5 px-4 rounded-full shadow-lg hover:shadow-xl hover:shadow-purple-200 transition-all flex items-center justify-center"
+                    >
                         Agregar
                     </button>
 

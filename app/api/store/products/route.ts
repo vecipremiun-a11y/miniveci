@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { products, categories, posConfig, productImages } from "@/lib/db/schema";
+import { products, categories, productImages } from "@/lib/db/schema";
 import { eq, and, or, like, desc, inArray, sql } from "drizzle-orm";
-import { resolveProduct, ProductInput, CategoryInput, PosConfigInput } from "@/lib/services/product-resolver";
+import { resolveProduct, ProductInput, CategoryInput } from "@/lib/services/product-resolver";
 
 export const dynamic = "force-dynamic";
 
@@ -10,15 +10,11 @@ export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const categorySlug = searchParams.get("category");
-        const search = searchParams.get("search");
+        const search = searchParams.get("search")?.trim();
         const isFeatured = searchParams.get("featured") === "true";
         const page = parseInt(searchParams.get("page") || "1") || 1;
         const limit = Math.min(parseInt(searchParams.get("limit") || "20") || 20, 100);
         const offset = (page - 1) * limit;
-
-        // Fetch Global POS Config once
-        const allConfigs = await db.select().from(posConfig).where(eq(posConfig.id, "main")).limit(1);
-        const globalConfig = allConfigs[0] || null;
 
         // Resolve Category Filter
         let categoryIdFilter: string | null = null;
@@ -46,7 +42,8 @@ export async function GET(req: NextRequest) {
             conditions.push(
                 or(
                     like(products.name, `%${search}%`),
-                    like(products.description, `%${search}%`)
+                    like(products.description, `%${search}%`),
+                    like(categories.name, `%${search}%`)
                 )
             );
         }
@@ -80,8 +77,7 @@ export async function GET(req: NextRequest) {
 
             const resolved = resolveProduct(
                 raw as ProductInput,
-                cat as CategoryInput | null,
-                globalConfig as PosConfigInput | null
+                cat as CategoryInput | null
             );
 
             if (resolved.is_available && resolved.resolved_stock > 0) {

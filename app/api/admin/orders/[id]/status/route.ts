@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { orders, orderItems, products, orderStatusHistory } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
+import { emitProductChange } from "@/lib/product-live-updates";
+import { syncPaidOrderToPos } from "@/services/pos-sync";
 import { eq, sql } from "drizzle-orm";
 
 // Basic state machine logic for order transitions
@@ -38,6 +40,13 @@ export async function PUT(
         }
 
         const currentStatus = order.status || "new";
+        const orderItemsForUpdate = await db.select({
+            productId: orderItems.productId,
+            productSlug: products.slug,
+        })
+            .from(orderItems)
+            .leftJoin(products, eq(orderItems.productId, products.id))
+            .where(eq(orderItems.orderId, id));
 
         if (!validTransitions[currentStatus]?.includes(newStatus)) {
             return NextResponse.json({
@@ -92,6 +101,24 @@ export async function PUT(
                 }
             }
         });
+
+        const changedProducts = Array.from(new Map(orderItemsForUpdate
+            .filter((item) => !!item.productId)
+            .map((item) => [item.productId as string, item.productSlug ?? null])).entries());
+
+        await Promise.all(changedProducts.map(([productId, slug]) => emitProductChange(productId, {
+            slug,
+            reason: `order-status:${newStatus}`,
+            changedFields: ["stock"],
+        })));
+
+        if (newStatus === "paid" && currentStatus !== "paid") {
+            try {
+                await syncPaidOrderToPos(id);
+            } catch (syncError) {
+                console.error("[ORDER_STATUS_PUT][POS_SYNC]", syncError);
+            }
+        }
 
         return NextResponse.json({ success: true, newStatus });
 

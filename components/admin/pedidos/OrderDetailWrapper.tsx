@@ -326,10 +326,10 @@ export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: s
                         </CardContent>
                     </Card>
 
-                    {/* POS Status & Payment */}
+                    {/* Payment */}
                     <Card>
                         <CardHeader className="pb-3 border-b">
-                            <CardTitle className="text-base">Sincronización POS & Pago</CardTitle>
+                            <CardTitle className="text-base">Pago</CardTitle>
                         </CardHeader>
                         <CardContent className="pt-4 space-y-4">
                             <div className="space-y-2">
@@ -344,28 +344,6 @@ export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: s
                                     <span className="text-muted-foreground">ID Transacción</span>
                                     <span className="font-medium text-slate-600 font-mono text-xs">{order.paymentId || 'N/A'}</span>
                                 </div>
-                                <div className="flex justify-between items-center text-sm pt-2">
-                                    <span className="text-muted-foreground">Estado POS</span>
-                                    {order.posSynced ? (
-                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1.5"><Check className="w-3 h-3" /> Sincronizado</Badge>
-                                    ) : order.posSyncError ? (
-                                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 gap-1.5"><AlertTriangle className="w-3 h-3" /> Error Sync</Badge>
-                                    ) : (
-                                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1.5"><Clock className="w-3 h-3" /> Pendiente</Badge>
-                                    )}
-                                </div>
-                                {order.posSynced && order.posOrderId && (
-                                    <div className="flex justify-between items-center text-sm pt-2">
-                                        <span className="text-muted-foreground">ID Boiler POS</span>
-                                        <span className="font-medium font-mono text-xs text-primary">{order.posOrderId}</span>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="flex gap-2 pt-2">
-                                <Button variant="outline" size="sm" className="flex-1" disabled={order.posSynced}>
-                                    <RefreshCw className="w-3 h-3 mr-2" /> Forzar Sync
-                                </Button>
                             </div>
                         </CardContent>
                     </Card>

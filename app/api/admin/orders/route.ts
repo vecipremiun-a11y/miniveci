@@ -1,8 +1,63 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders } from "@/lib/db/schema";
+import { orderItems, orderStatusHistory, orders, products } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
+import { syncPaidOrderToPos } from "@/services/pos-sync";
 import { desc, asc, eq, like, and, or, sql, gte, lte } from "drizzle-orm";
+import * as z from "zod";
+
+const orderCreateSchema = z.object({
+  external_order_id: z.string().optional(),
+  status: z.string().optional(),
+  client_name: z.string().optional(),
+  customer_email: z.string().email().optional(),
+  customer_phone: z.string().optional(),
+  payment_method: z.string().optional(),
+  observation: z.string().optional(),
+  total: z.number().optional(),
+  items: z.array(z.object({
+    pos_id: z.string().optional(),
+    sku: z.string().optional(),
+    name: z.string().optional(),
+    quantity: z.number().positive(),
+    price: z.number().nonnegative(),
+  })).min(1),
+});
+
+function mapIncomingStatus(status?: string) {
+  switch (status) {
+    case "pending":
+    case undefined:
+      return "new";
+    case "paid":
+    case "preparing":
+    case "ready":
+    case "shipped":
+    case "delivered":
+    case "cancelled":
+    case "refunded":
+      return status;
+    default:
+      return "new";
+  }
+}
+
+function mapPaymentStatus(status?: string) {
+  switch (status) {
+    case "paid":
+    case "preparing":
+    case "ready":
+    case "shipped":
+    case "delivered":
+      return "paid";
+    case "refunded":
+      return "refunded";
+    case "cancelled":
+      return "failed";
+    default:
+      return "pending";
+  }
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -85,6 +140,99 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  // Optional: Manual order creation from admin panel
-  return NextResponse.json({ error: "Not Implemented" }, { status: 501 });
+  try {
+    const session = await requireAuth();
+    const body = await req.json();
+    const data = orderCreateSchema.parse(body);
+    const now = new Date().toISOString();
+    const orderId = crypto.randomUUID();
+    const orderNumber = data.external_order_id || `WEB-${Date.now()}`;
+    const normalizedStatus = mapIncomingStatus(data.status);
+    const subtotal = data.items.reduce((sum, item) => sum + Math.round(item.quantity * item.price), 0);
+    const total = data.total != null ? Math.round(data.total) : subtotal;
+
+    const productMatches = await Promise.all(data.items.map(async (item) => {
+      if (item.sku) {
+        const bySku = await db.select({ id: products.id }).from(products).where(eq(products.sku, item.sku)).limit(1);
+        return bySku[0]?.id ?? null;
+      }
+
+      return null;
+    }));
+
+    await db.transaction(async (tx) => {
+      await tx.insert(orders).values({
+        id: orderId,
+        orderNumber,
+        customerName: data.client_name || "Cliente web",
+        customerEmail: data.customer_email || `${orderNumber.toLowerCase()}@local.invalid`,
+        customerPhone: data.customer_phone || null,
+        customerRut: null,
+        shippingAddress: null,
+        shippingComuna: null,
+        shippingCity: null,
+        shippingNotes: data.observation || null,
+        deliveryType: "pickup",
+        deliveryDate: null,
+        deliveryTimeSlot: null,
+        status: normalizedStatus,
+        paymentMethod: data.payment_method || null,
+        paymentStatus: mapPaymentStatus(data.status),
+        paymentId: null,
+        subtotal,
+        discount: 0,
+        shippingCost: 0,
+        total,
+        internalNotes: data.observation || null,
+        couponCode: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      for (let index = 0; index < data.items.length; index += 1) {
+        const item = data.items[index];
+        const unitPrice = Math.round(item.price);
+        await tx.insert(orderItems).values({
+          id: crypto.randomUUID(),
+          orderId,
+          productId: productMatches[index],
+          productName: item.name || `Producto ${index + 1}`,
+          productSku: item.sku || `POS-${item.pos_id || index + 1}`,
+          quantity: Math.round(item.quantity),
+          unitPrice,
+          totalPrice: Math.round(item.quantity * unitPrice),
+          stockSource: "manual",
+          createdAt: now,
+        });
+      }
+
+      await tx.insert(orderStatusHistory).values({
+        id: crypto.randomUUID(),
+        orderId,
+        status: normalizedStatus,
+        changedBy: session.user?.id || session.user?.email || "admin",
+        notes: data.observation || "Pedido creado manualmente",
+        createdAt: now,
+      });
+    });
+
+    if (normalizedStatus === "paid") {
+      try {
+        await syncPaidOrderToPos(orderId);
+      } catch (syncError) {
+        console.error("[ORDERS_POST][POS_SYNC]", syncError);
+      }
+    }
+
+    return NextResponse.json({ success: true, orderId, orderNumber }, { status: 201 });
+  } catch (error: any) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (error?.name === "ZodError" || error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Validation Error", details: error.errors }, { status: 400 });
+    }
+    console.error("[ORDERS_POST]", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
 }

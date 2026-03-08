@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { products, categories, productImages } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
+import { emitProductChange, emitProductDeletion } from "@/lib/product-live-updates";
+import { mapMutationKeysToStoreFields } from "@/lib/store-product-change-fields";
 import { productSchema } from "@/lib/validations/product";
 import { eq } from "drizzle-orm";
 import { ZodError } from "zod";
@@ -76,12 +78,25 @@ export async function PUT(
         }
 
         const { categoryId, ...productData } = validatedData;
+        const changedKeys = Object.entries(productData)
+            .filter(([key, value]) => existingProduct[key as keyof typeof existingProduct] !== value)
+            .map(([key]) => key);
+
+        if (categoryId !== undefined && existingProduct.categoryId !== categoryId) {
+            changedKeys.push("categoryId");
+        }
 
         await db.update(products).set({
             ...productData,
             categoryId: categoryId, // Optional update
             updatedAt: new Date().toISOString(),
         }).where(eq(products.id, id));
+
+        await emitProductChange(id, {
+            slug: validatedData.slug || existingProduct.slug,
+            reason: "updated",
+            changedFields: mapMutationKeysToStoreFields(changedKeys),
+        });
 
         return NextResponse.json({ success: true });
 
@@ -106,12 +121,18 @@ export async function DELETE(
         const { id } = await params;
 
         // Verify product exists before deleting
-        const existCheck = await db.select({ id: products.id }).from(products).where(eq(products.id, id)).limit(1);
+        const existCheck = await db.select({
+            id: products.id,
+            slug: products.slug,
+            sku: products.sku,
+        }).from(products).where(eq(products.id, id)).limit(1);
         if (existCheck.length === 0) {
             return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 });
         }
 
         await db.delete(products).where(eq(products.id, id));
+
+        emitProductDeletion(id, existCheck[0].slug, "deleted");
 
         return NextResponse.json({ success: true });
     } catch (error) {

@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, Edit, Copy, Eye, Clock, CircleDot, AlertTriangle } from "lucide-react";
+import { MoreHorizontal, Edit, Copy, Eye, Clock, CircleDot } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -42,8 +42,6 @@ interface Order {
     paymentStatus: string;
     deliveryType: string;
     createdAt: string;
-    posSynced: boolean;
-    posSyncError: string | null;
 }
 
 interface OrderTableProps {
@@ -170,13 +168,6 @@ export function OrderTable({ data, total, page, totalPages, limit }: OrderTableP
                 return (
                     <div className="font-semibold flex items-center gap-2 text-right justify-start">
                         ${amount.toLocaleString('es-CL')}
-
-                        {/* POS Sync Error Indicator */}
-                        {row.original.posSyncError && (
-                            <div title={`Error sync POS: ${row.original.posSyncError}`}>
-                                <AlertTriangle className="w-4 h-4 text-red-500" />
-                            </div>
-                        )}
                     </div>
                 );
             },

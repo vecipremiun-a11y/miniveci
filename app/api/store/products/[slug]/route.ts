@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { products, posConfig, productImages } from "@/lib/db/schema";
+import { products, productImages } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { resolveProduct, ProductInput, CategoryInput, PosConfigInput } from "@/lib/services/product-resolver";
+import { resolveProduct, ProductInput, CategoryInput } from "@/lib/services/product-resolver";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest, context: any) {
     try {
         const { slug } = await context.params;
-
-        const globalConfig = await db.query.posConfig.findFirst({
-            where: eq(posConfig.id, "main")
-        });
 
         const rawProduct = await db.query.products.findFirst({
             where: and(
@@ -35,8 +31,7 @@ export async function GET(req: NextRequest, context: any) {
 
         const resolved = resolveProduct(
             rawProduct as ProductInput,
-            rawProduct.category as CategoryInput | null,
-            globalConfig as PosConfigInput | null
+            rawProduct.category as CategoryInput | null
         );
 
         if (!resolved.is_available || resolved.resolved_stock <= 0) {

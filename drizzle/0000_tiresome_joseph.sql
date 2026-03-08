@@ -61,9 +61,6 @@ CREATE TABLE `orders` (
 	`discount` integer DEFAULT 0,
 	`shipping_cost` integer DEFAULT 0,
 	`total` integer NOT NULL,
-	`pos_synced` integer DEFAULT false,
-	`pos_order_id` text,
-	`pos_sync_error` text,
 	`internal_notes` text,
 	`coupon_code` text,
 	`created_at` text DEFAULT CURRENT_TIMESTAMP,
@@ -75,46 +72,6 @@ CREATE INDEX `order_number_idx` ON `orders` (`order_number`);--> statement-break
 CREATE INDEX `status_idx` ON `orders` (`status`);--> statement-breakpoint
 CREATE INDEX `customer_email_idx` ON `orders` (`customer_email`);--> statement-breakpoint
 CREATE INDEX `created_at_idx` ON `orders` (`created_at`);--> statement-breakpoint
-CREATE TABLE `pos_config` (
-	`id` text PRIMARY KEY DEFAULT 'main' NOT NULL,
-	`company_id` text,
-	`api_key` text,
-	`api_url` text,
-	`is_connected` integer DEFAULT false,
-	`last_connection_test` text,
-	`sync_prices` integer DEFAULT true,
-	`sync_stock` integer DEFAULT true,
-	`sync_name` integer DEFAULT false,
-	`sync_images` integer DEFAULT false,
-	`created_at` text DEFAULT CURRENT_TIMESTAMP,
-	`updated_at` text DEFAULT CURRENT_TIMESTAMP
-);
---> statement-breakpoint
-CREATE TABLE `pos_sync_logs` (
-	`id` text PRIMARY KEY NOT NULL,
-	`event_type` text NOT NULL,
-	`status` text NOT NULL,
-	`products_processed` integer DEFAULT 0,
-	`products_created` integer DEFAULT 0,
-	`products_updated` integer DEFAULT 0,
-	`errors_count` integer DEFAULT 0,
-	`error_details` text,
-	`duration_ms` integer,
-	`triggered_by` text,
-	`created_at` text DEFAULT CURRENT_TIMESTAMP
-);
---> statement-breakpoint
-CREATE TABLE `pos_webhook_events` (
-	`id` text PRIMARY KEY NOT NULL,
-	`event_type` text NOT NULL,
-	`payload` text NOT NULL,
-	`processed` integer DEFAULT false,
-	`process_result` text,
-	`retry_count` integer DEFAULT 0,
-	`created_at` text DEFAULT CURRENT_TIMESTAMP,
-	`processed_at` text
-);
---> statement-breakpoint
 CREATE TABLE `product_images` (
 	`id` text PRIMARY KEY NOT NULL,
 	`product_id` text,
@@ -132,13 +89,6 @@ CREATE TABLE `products` (
 	`slug` text NOT NULL,
 	`description` text,
 	`category_id` text,
-	`pos_id` text,
-	`pos_price` integer,
-	`pos_stock` integer,
-	`pos_name` text,
-	`pos_sku` text,
-	`pos_barcode` text,
-	`pos_last_sync` text,
 	`web_price` integer,
 	`web_stock` integer,
 	`web_title` text,
@@ -160,11 +110,9 @@ CREATE TABLE `products` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `products_sku_unique` ON `products` (`sku`);--> statement-breakpoint
 CREATE UNIQUE INDEX `products_slug_unique` ON `products` (`slug`);--> statement-breakpoint
-CREATE UNIQUE INDEX `products_pos_id_unique` ON `products` (`pos_id`);--> statement-breakpoint
 CREATE INDEX `slug_idx` ON `products` (`slug`);--> statement-breakpoint
 CREATE INDEX `sku_idx` ON `products` (`sku`);--> statement-breakpoint
 CREATE INDEX `category_id_idx` ON `products` (`category_id`);--> statement-breakpoint
-CREATE INDEX `pos_id_idx` ON `products` (`pos_id`);--> statement-breakpoint
 CREATE TABLE `sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text,

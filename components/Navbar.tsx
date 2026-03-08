@@ -4,16 +4,21 @@ import Link from 'next/link';
 import { ShoppingCart, Search, User, LogOut, Shield, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useRef } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
+import { useCart } from '@/components/cart/CartProvider';
 
 const ADMIN_ROLES = ['owner', 'admin', 'preparacion', 'reparto', 'contenido'];
 
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
+  const { totalItems } = useCart();
   const [scrolled, setScrolled] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
@@ -34,6 +39,28 @@ export function Navbar() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (pathname?.startsWith('/productos')) {
+      setSearchQuery(searchParams.get('search') || '');
+      return;
+    }
+
+    setSearchQuery('');
+  }, [pathname, searchParams]);
+
+  const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const params = new URLSearchParams();
+    const normalizedQuery = searchQuery.trim();
+
+    if (normalizedQuery) {
+      params.set('search', normalizedQuery);
+    }
+
+    router.push(params.toString() ? `/productos?${params.toString()}` : '/productos');
+  };
 
   // Don't render Navbar on admin routes
   if (pathname?.startsWith('/admin')) {
@@ -59,14 +86,17 @@ export function Navbar() {
           </div>
 
           {/* Centered Search Bar - Expanded */}
-          <div className="hidden md:flex flex-1 max-w-xl mx-auto relative items-center bg-white/50 hover:bg-white/80 border border-white backdrop-blur-md rounded-full px-4 py-2.5 transition-all group focus-within:ring-2 focus-within:ring-veci-secondary/50 focus-within:bg-white focus-within:shadow-md">
+          <form onSubmit={handleSearchSubmit} className="hidden md:flex flex-1 max-w-xl mx-auto relative items-center bg-white/50 hover:bg-white/80 border border-white backdrop-blur-md rounded-full px-4 py-2.5 transition-all group focus-within:ring-2 focus-within:ring-veci-secondary/50 focus-within:bg-white focus-within:shadow-md">
             <Search className="w-5 h-5 text-slate-400 group-focus-within:text-veci-purple transition-colors" />
             <input
               type="text"
               placeholder="Buscar productos..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
               className="bg-transparent border-none outline-none text-sm ml-3 w-full text-slate-700 placeholder:text-slate-400 font-medium"
             />
-          </div>
+            <button type="submit" className="sr-only">Buscar</button>
+          </form>
 
           {/* Right Actions */}
           <div className="flex items-center gap-4 shrink-0">
@@ -142,19 +172,36 @@ export function Navbar() {
                 Iniciar sesión
               </Link>
             )}
-            <button className="btn-primary px-5 py-2.5 rounded-full font-bold flex items-center gap-2 text-sm shadow-md hover:shadow-lg transition-all">
+            <Link href="/carrito" className="btn-primary px-5 py-2.5 rounded-full font-bold flex items-center gap-2 text-sm shadow-md hover:shadow-lg transition-all">
               <ShoppingCart className="w-4 h-4" />
               <span>Carrito</span>
-            </button>
+              {totalItems > 0 && (
+                <span className="bg-white/20 text-white text-xs font-extrabold min-w-5 h-5 rounded-full inline-flex items-center justify-center px-1.5">
+                  {totalItems}
+                </span>
+              )}
+            </Link>
           </div>
 
         </div>
+
+        <form onSubmit={handleSearchSubmit} className="md:hidden flex items-center bg-white/80 border border-white backdrop-blur-md rounded-full px-4 py-2.5 transition-all group focus-within:ring-2 focus-within:ring-veci-secondary/50 focus-within:bg-white focus-within:shadow-md">
+          <Search className="w-5 h-5 text-slate-400 group-focus-within:text-veci-purple transition-colors" />
+          <input
+            type="text"
+            placeholder="Buscar productos..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="bg-transparent border-none outline-none text-sm ml-3 w-full text-slate-700 placeholder:text-slate-400 font-medium"
+          />
+          <button type="submit" className="sr-only">Buscar</button>
+        </form>
 
         {/* Bottom Row: Navigation Links */}
         <div className="flex items-center justify-center gap-8 font-medium text-slate-600 text-sm overflow-x-auto pb-1 md:pb-0 scrollbar-hide w-full">
           <Link href="/" className="hover:text-veci-primary transition-colors whitespace-nowrap">Inicio</Link>
           <Link href="/productos" className="hover:text-veci-primary transition-colors whitespace-nowrap">Tienda</Link>
-          <Link href="#" className="hover:text-veci-primary transition-colors whitespace-nowrap">Suscripción</Link>
+          <Link href="/suscripcion" className="hover:text-veci-primary transition-colors whitespace-nowrap">Suscripción</Link>
           <Link href="#" className="hover:text-veci-primary transition-colors whitespace-nowrap">Sorteos</Link>
           <Link href="#" className="hover:text-veci-primary transition-colors whitespace-nowrap">Contacto</Link>
         </div>

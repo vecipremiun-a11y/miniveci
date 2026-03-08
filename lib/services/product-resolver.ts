@@ -1,8 +1,6 @@
 export type ProductInput = {
     webPrice?: number | null;
-    posPrice?: number | null;
     webStock?: number | null;
-    posStock?: number | null;
     priceSource?: string | null;
     stockSource?: string | null;
     reservedQty?: number | null;
@@ -16,12 +14,6 @@ export type CategoryInput = {
     [key: string]: any;
 };
 
-export type PosConfigInput = {
-    syncPrices?: boolean | null;
-    syncStock?: boolean | null;
-    [key: string]: any;
-};
-
 export type ResolvedProduct = ProductInput & {
     resolved_price: number;
     resolved_stock: number;
@@ -32,8 +24,7 @@ export type ResolvedProduct = ProductInput & {
 
 export function resolveProductPrice(
     product: ProductInput,
-    category?: CategoryInput | null,
-    posConfig?: PosConfigInput | null
+    category?: CategoryInput | null
 ): { price: number; label: string } {
     const source = product.priceSource || "global";
 
@@ -42,9 +33,7 @@ export function resolveProductPrice(
     }
 
     if (source === "pos") {
-        // If POS price is null, fall back to web price
-        if (product.posPrice != null) return { price: product.posPrice, label: "POS" };
-        return { price: product.webPrice ?? 0, label: "Manual (fallback)" };
+        return { price: product.webPrice ?? 0, label: "Manual" };
     }
 
     // "global" fallback logic
@@ -55,16 +44,7 @@ export function resolveProductPrice(
     }
 
     if (catSource === "pos") {
-        if (product.posPrice != null) return { price: product.posPrice, label: "POS (Categoría)" };
-        return { price: product.webPrice ?? 0, label: "Manual (fallback Categoría)" };
-    }
-
-    // fallback to global config
-    const globalActive = posConfig?.syncPrices ?? false;
-    if (globalActive) {
-        // If POS price is null, fall back to web price
-        if (product.posPrice != null) return { price: product.posPrice, label: "POS (Global)" };
-        return { price: product.webPrice ?? 0, label: "Manual (fallback Global)" };
+        return { price: product.webPrice ?? 0, label: "Manual (Categoría)" };
     }
 
     return { price: product.webPrice ?? 0, label: "Manual (Global)" };
@@ -72,8 +52,7 @@ export function resolveProductPrice(
 
 export function resolveProductStock(
     product: ProductInput,
-    category?: CategoryInput | null,
-    posConfig?: PosConfigInput | null
+    category?: CategoryInput | null
 ): { stock: number; label: string } {
     const source = product.stockSource || "global";
 
@@ -82,15 +61,14 @@ export function resolveProductStock(
     }
 
     if (source === "pos") {
-        if (product.posStock != null) return { stock: product.posStock, label: "POS" };
-        return { stock: product.webStock ?? 0, label: "Manual (fallback)" };
+        return { stock: product.webStock ?? 0, label: "Manual" };
     }
 
     if (source === "reserved") {
-        const pos = product.posStock ?? 0;
+        const web = product.webStock ?? 0;
         const reserved = product.reservedQty ?? 0;
-        const calculated = Math.max(0, pos - reserved);
-        return { stock: calculated, label: "POS - Reservas" };
+        const calculated = Math.max(0, web - reserved);
+        return { stock: calculated, label: "Web - Reservas" };
     }
 
     // "global" fallback logic
@@ -101,22 +79,14 @@ export function resolveProductStock(
     }
 
     if (catSource === "pos") {
-        if (product.posStock != null) return { stock: product.posStock, label: "POS (Categoría)" };
-        return { stock: product.webStock ?? 0, label: "Manual (fallback Categoría)" };
+        return { stock: product.webStock ?? 0, label: "Manual (Categoría)" };
     }
 
     if (catSource === "reserved") {
-        const pos = product.posStock ?? 0;
+        const web = product.webStock ?? 0;
         const reserved = product.reservedQty ?? 0;
-        const calculated = Math.max(0, pos - reserved);
-        return { stock: calculated, label: "POS - Reservas (Categoría)" };
-    }
-
-    // fallback to global config
-    const globalActive = posConfig?.syncStock ?? false;
-    if (globalActive) {
-        if (product.posStock != null) return { stock: product.posStock, label: "POS (Global)" };
-        return { stock: product.webStock ?? 0, label: "Manual (fallback Global)" };
+        const calculated = Math.max(0, web - reserved);
+        return { stock: calculated, label: "Web - Reservas (Categoría)" };
     }
 
     return { stock: product.webStock ?? 0, label: "Manual (Global)" };
@@ -124,11 +94,10 @@ export function resolveProductStock(
 
 export function resolveProduct(
     product: ProductInput,
-    category?: CategoryInput | null,
-    posConfig?: PosConfigInput | null
+    category?: CategoryInput | null
 ): ResolvedProduct {
-    const { price, label: priceLabel } = resolveProductPrice(product, category, posConfig);
-    const { stock, label: stockLabel } = resolveProductStock(product, category, posConfig);
+    const { price, label: priceLabel } = resolveProductPrice(product, category);
+    const { stock, label: stockLabel } = resolveProductStock(product, category);
 
     const isAvailable = stock > 0 && !!product.isPublished;
 

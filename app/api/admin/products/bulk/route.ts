@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-utils";
+import { emitProductChange, emitProductDeletion } from "@/lib/product-live-updates";
 import { inArray } from "drizzle-orm";
 import * as z from "zod";
 
@@ -23,10 +24,14 @@ export async function PUT(req: NextRequest) {
 
         const validatedData = bulkActionSchema.parse(body);
         const { ids, action, categoryId } = validatedData;
+        const affectedProducts = await db.select().from(products).where(inArray(products.id, ids));
 
         if (action === "delete") {
             // Delete operation
             await db.delete(products).where(inArray(products.id, ids));
+            affectedProducts.forEach((product) => {
+                emitProductDeletion(product.id, product.slug, "bulk-delete");
+            });
             return NextResponse.json({ message: "Productos eliminados exitosamente" });
 
         } else if (action === "publish" || action === "unpublish") {
@@ -36,6 +41,12 @@ export async function PUT(req: NextRequest) {
                 .set({ isPublished, updatedAt: new Date().toISOString() })
                 .where(inArray(products.id, ids));
 
+            await Promise.all(affectedProducts.map((product) => emitProductChange(product.id, {
+                slug: product.slug,
+                reason: action,
+                changedFields: ["stock"],
+            })));
+
             return NextResponse.json({ message: "Estado actualizado exitosamente" });
 
         } else if (action === "change_category") {
@@ -44,6 +55,11 @@ export async function PUT(req: NextRequest) {
             await db.update(products)
                 .set({ categoryId, updatedAt: new Date().toISOString() })
                 .where(inArray(products.id, ids));
+
+            await Promise.all(affectedProducts.map((product) => emitProductChange(product.id, {
+                slug: product.slug,
+                reason: "change-category",
+            })));
 
             return NextResponse.json({ message: "Categoría actualizada exitosamente" });
 

@@ -47,15 +47,6 @@ export const products = sqliteTable("products", {
     description: text("description"),
     categoryId: text("category_id").references(() => categories.id),
 
-    // Datos POS (Read-only/Cache)
-    posId: text("pos_id").unique(),
-    posPrice: integer("pos_price"), // cents
-    posStock: integer("pos_stock"),
-    posName: text("pos_name"),
-    posSku: text("pos_sku"),
-    posBarcode: text("pos_barcode"),
-    posLastSync: text("pos_last_sync"),
-
     // Costos / Margen
     costPrice: integer("cost_price"), // cents — precio de costo del POS
     profitMargin: real("profit_margin"), // porcentaje de margen de ganancia
@@ -86,7 +77,6 @@ export const products = sqliteTable("products", {
     slugIdx: index("slug_idx").on(table.slug),
     skuIdx: index("sku_idx").on(table.sku),
     categoryIdIdx: index("category_id_idx").on(table.categoryId),
-    posIdIdx: index("pos_id_idx").on(table.posId),
 }));
 
 export const productImages = sqliteTable("product_images", {
@@ -133,11 +123,6 @@ export const orders = sqliteTable("orders", {
     shippingCost: integer("shipping_cost").default(0),
     total: integer("total").notNull(),
 
-    // POS
-    posSynced: integer("pos_synced", { mode: "boolean" }).default(false),
-    posOrderId: text("pos_order_id"),
-    posSyncError: text("pos_sync_error"),
-
     // Notes
     internalNotes: text("internal_notes"),
     couponCode: text("coupon_code"),
@@ -173,49 +158,12 @@ export const orderStatusHistory = sqliteTable("order_status_history", {
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
-// --- POS INTEGRATION ---
-
-export const posConfig = sqliteTable("pos_config", {
+export const apiCredentials = sqliteTable("api_credentials", {
     id: text("id").primaryKey().default("main"),
-    companyId: text("company_id"),
-    apiKey: text("api_key"),
-    apiUrl: text("api_url"),
-    isConnected: integer("is_connected", { mode: "boolean" }).default(false),
-    lastConnectionTest: text("last_connection_test"),
-
-    // Create switches
-    syncPrices: integer("sync_prices", { mode: "boolean" }).default(true),
-    syncStock: integer("sync_stock", { mode: "boolean" }).default(true),
-    syncName: integer("sync_name", { mode: "boolean" }).default(false),
-    syncImages: integer("sync_images", { mode: "boolean" }).default(false),
-
-    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
-});
-
-export const posSyncLogs = sqliteTable("pos_sync_logs", {
-    id: text("id").primaryKey(),
-    eventType: text("event_type").notNull(), // "webhook", "sync_incremental", "sync_total", "manual"
-    status: text("status").notNull(), // "success", "error", "partial"
-    productsProcessed: integer("products_processed").default(0),
-    productsCreated: integer("products_created").default(0),
-    productsUpdated: integer("products_updated").default(0),
-    errorsCount: integer("errors_count").default(0),
-    errorDetails: text("error_details", { mode: "json" }),
-    durationMs: integer("duration_ms"),
-    triggeredBy: text("triggered_by"),
-    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
-});
-
-export const posWebhookEvents = sqliteTable("pos_webhook_events", {
-    id: text("id").primaryKey(),
-    eventType: text("event_type").notNull(),
-    payload: text("payload", { mode: "json" }).notNull(),
-    processed: integer("processed", { mode: "boolean" }).default(false),
-    processResult: text("process_result"),
-    retryCount: integer("retry_count").default(0),
-    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
-    processedAt: text("processed_at"),
+    clientId: text("client_id").notNull().unique(),
+    clientSecret: text("client_secret").notNull(),
+    posWebhookUrl: text("pos_webhook_url").notNull(),
+    webhookSecret: text("webhook_secret").notNull().default(""),
 });
 
 // --- RELATIONS ---

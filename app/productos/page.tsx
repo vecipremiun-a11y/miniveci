@@ -1,37 +1,109 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Footer } from "@/components/Footer";
 import { ProductSidebar } from "@/components/products/ProductSidebar";
 import { ProductCard } from "@/components/products/ProductCard";
-import { ChevronDown, LayoutGrid, List, Loader2, PackageOpen } from "lucide-react";
-
-interface StoreProduct {
-    id: string;
-    name: string;
-    slug: string;
-    price: number;
-    stock: number;
-    images: { id: string; url: string; isPrimary: boolean }[];
-    badges: string[] | null;
-    tags: string[] | null;
-    category: { id: string; name: string; slug: string } | null;
-}
+import { useDebounce } from '@/hooks/use-debounce';
+import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
+import { ChevronDown, LayoutGrid, List, Loader2, PackageOpen, Search, X } from "lucide-react";
 
 interface ApiResponse {
-    data: StoreProduct[];
+    data: StoreProductPayload[];
     meta: { total: number; page: number; limit: number; totalPages: number };
 }
 
-export default function ProductsPage() {
+type StoreProduct = StoreProductPayload;
+
+function mergeProductChanges(currentProduct: StoreProduct, change: ProductChangeEventPayload) {
+    if (!change.changes || !change.changedFields || change.changedFields.length === 0) {
+        return change.product ?? currentProduct;
+    }
+
+    return {
+        ...currentProduct,
+        ...change.changes,
+    };
+}
+
+function matchesProductFilters(product: StoreProduct, selectedCategory: string | null, search: string) {
+    if (selectedCategory && product.category?.slug !== selectedCategory) {
+        return false;
+    }
+
+    const normalizedSearch = search.trim().toLowerCase();
+    if (!normalizedSearch) {
+        return true;
+    }
+
+    return [product.name, product.description || '', product.category?.name || '']
+        .some((value) => value.toLowerCase().includes(normalizedSearch));
+}
+
+function ProductsPageContent() {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [products, setProducts] = useState<StoreProduct[]>([]);
     const [loading, setLoading] = useState(true);
     const [meta, setMeta] = useState({ total: 0, page: 1, limit: 20, totalPages: 1 });
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    const [search, setSearch] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(searchParams.get('category'));
+    const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
     const [sortBy, setSortBy] = useState<'featured' | 'price_asc' | 'price_desc' | 'newest'>('newest');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-    const [page, setPage] = useState(1);
+    const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page') || '1') || 1));
+    const productsRef = useRef<StoreProduct[]>([]);
+    const metaRef = useRef(meta);
+    const search = useDebounce(searchInput, 350);
+
+    useEffect(() => {
+        productsRef.current = products;
+    }, [products]);
+
+    useEffect(() => {
+        metaRef.current = meta;
+    }, [meta]);
+
+    useEffect(() => {
+        const nextSearch = searchParams.get('search') || '';
+        const nextCategory = searchParams.get('category');
+        const nextPage = Math.max(1, Number(searchParams.get('page') || '1') || 1);
+
+        setSearchInput((current) => current === nextSearch ? current : nextSearch);
+        setSelectedCategory((current) => current === nextCategory ? current : nextCategory);
+        setPage((current) => current === nextPage ? current : nextPage);
+    }, [searchParams]);
+
+    useEffect(() => {
+        const params = new URLSearchParams(searchParams.toString());
+        const normalizedSearch = search.trim();
+
+        if (normalizedSearch) {
+            params.set('search', normalizedSearch);
+        } else {
+            params.delete('search');
+        }
+
+        if (selectedCategory) {
+            params.set('category', selectedCategory);
+        } else {
+            params.delete('category');
+        }
+
+        if (page > 1) {
+            params.set('page', String(page));
+        } else {
+            params.delete('page');
+        }
+
+        const nextQuery = params.toString();
+        const currentQuery = searchParams.toString();
+
+        if (nextQuery !== currentQuery) {
+            router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+        }
+    }, [page, pathname, router, search, searchParams, selectedCategory]);
 
     const fetchProducts = useCallback(async () => {
         setLoading(true);
@@ -40,7 +112,7 @@ export default function ProductsPage() {
             params.set('page', String(page));
             params.set('limit', '20');
             if (selectedCategory) params.set('category', selectedCategory);
-            if (search) params.set('search', search);
+            if (search.trim()) params.set('search', search.trim());
 
             const res = await fetch(`/api/store/products?${params.toString()}`);
             if (res.ok) {
@@ -59,8 +131,104 @@ export default function ProductsPage() {
         fetchProducts();
     }, [fetchProducts]);
 
+    const applyProductChange = useCallback((change: ProductChangeEventPayload) => {
+        const currentProducts = productsRef.current;
+        const currentMeta = metaRef.current;
+        const currentIndex = currentProducts.findIndex((product) => product.id === change.productId || product.slug === change.slug);
+        const nextProduct = change.product;
+        const isVisible = nextProduct ? matchesProductFilters(nextProduct, selectedCategory, search) : false;
+
+        let nextProducts = currentProducts;
+        let totalDelta = 0;
+
+        if (change.type === 'delete' || !nextProduct || !isVisible) {
+            if (currentIndex === -1) {
+                return;
+            }
+
+            nextProducts = currentProducts.filter((product) => product.id !== change.productId);
+            totalDelta = -1;
+        } else if (currentIndex >= 0) {
+            nextProducts = currentProducts.map((product, index) => index === currentIndex ? mergeProductChanges(product, change) : product);
+        } else if (page === 1) {
+            nextProducts = [nextProduct, ...currentProducts].slice(0, currentMeta.limit);
+            totalDelta = 1;
+        } else {
+            return;
+        }
+
+        productsRef.current = nextProducts;
+        setProducts(nextProducts);
+
+        if (totalDelta !== 0) {
+            const nextMeta = {
+                ...currentMeta,
+                total: Math.max(0, currentMeta.total + totalDelta),
+            };
+            nextMeta.totalPages = Math.max(1, Math.ceil(nextMeta.total / nextMeta.limit));
+            metaRef.current = nextMeta;
+            setMeta(nextMeta);
+        }
+    }, [page, search, selectedCategory]);
+
+    useEffect(() => {
+        const eventSource = new EventSource('/api/store/products/events');
+
+        const onProductChange = (event: Event) => {
+            const messageEvent = event as MessageEvent<string>;
+            const payload = JSON.parse(messageEvent.data) as ProductChangeEventPayload;
+            applyProductChange(payload);
+        };
+
+        eventSource.addEventListener('product-change', onProductChange);
+
+        return () => {
+            eventSource.removeEventListener('product-change', onProductChange);
+            eventSource.close();
+        };
+    }, [applyProductChange]);
+
+    useEffect(() => {
+        if (products.length === 0) return;
+
+        let cancelled = false;
+
+        const refreshVisibleProducts = async () => {
+            if (cancelled || document.visibilityState !== 'visible') return;
+
+            try {
+                await fetch('/api/store/products/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ productIds: products.map((product) => product.id) }),
+                });
+            } catch {
+                // Silent fallback; SSE or next interval will retry.
+            }
+        };
+
+        refreshVisibleProducts();
+        const intervalId = window.setInterval(refreshVisibleProducts, 15000);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(intervalId);
+        };
+    }, [products]);
+
     const handleCategoryChange = (slug: string | null) => {
         setSelectedCategory(slug);
+        setPage(1);
+    };
+
+    const handleSearchChange = (value: string) => {
+        setSearchInput(value);
+        setPage(1);
+    };
+
+    const clearFilters = () => {
+        setSearchInput('');
+        setSelectedCategory(null);
         setPage(1);
     };
 
@@ -93,14 +261,37 @@ export default function ProductsPage() {
                 <div className="flex-1">
 
                     {/* Top Bar */}
-                    <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white/40 backdrop-blur-md p-4 rounded-3xl border border-white">
-                        <span className="text-slate-500 text-sm font-medium">
-                            {meta.total > 0
-                                ? `Mostrando ${startIdx}-${endIdx} de ${meta.total} productos`
-                                : 'Sin productos'}
-                        </span>
+                    <div className="flex flex-col xl:flex-row justify-between xl:items-center mb-8 gap-4 bg-white/40 backdrop-blur-md p-4 rounded-3xl border border-white">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full xl:w-auto xl:flex-1">
+                            <div className="relative w-full xl:max-w-md">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input
+                                    type="text"
+                                    value={searchInput}
+                                    onChange={(event) => handleSearchChange(event.target.value)}
+                                    placeholder="Buscar por nombre, descripción o categoría..."
+                                    className="w-full rounded-full border border-white bg-white/80 py-3 pl-11 pr-11 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-veci-secondary/50 focus:ring-2 focus:ring-veci-secondary/30"
+                                />
+                                {searchInput && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSearchChange('')}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                                        aria-label="Limpiar búsqueda"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
 
-                        <div className="flex items-center gap-4">
+                            <span className="text-slate-500 text-sm font-medium whitespace-nowrap">
+                                {meta.total > 0
+                                    ? `Mostrando ${startIdx}-${endIdx} de ${meta.total} productos`
+                                    : 'Sin productos'}
+                            </span>
+                        </div>
+
+                        <div className="flex items-center gap-4 self-end xl:self-auto">
                             {/* Sort */}
                             <div className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
                                 <span>Ordenar por: <span className="text-veci-dark">
@@ -140,14 +331,14 @@ export default function ProductsPage() {
                             <PackageOpen className="w-16 h-16 text-slate-300" />
                             <h3 className="text-xl font-bold text-slate-500">No hay productos disponibles</h3>
                             <p className="text-slate-400 text-sm">
-                                {selectedCategory ? 'No se encontraron productos en esta categoría.' : 'Pronto habrá productos disponibles.'}
+                                {selectedCategory || search ? 'No se encontraron productos con los filtros actuales.' : 'Pronto habrá productos disponibles.'}
                             </p>
-                            {selectedCategory && (
+                            {(selectedCategory || search) && (
                                 <button
-                                    onClick={() => handleCategoryChange(null)}
+                                    onClick={clearFilters}
                                     className="mt-2 px-4 py-2 bg-purple-100 text-purple-600 rounded-full text-sm font-bold hover:bg-purple-200 transition-colors"
                                 >
-                                    Ver todos los productos
+                                    Limpiar filtros
                                 </button>
                             )}
                         </div>
@@ -158,8 +349,10 @@ export default function ProductsPage() {
                                 {products.map((product) => (
                                     <ProductCard
                                         key={product.id}
+                                        id={product.id}
                                         name={product.name}
                                         price={product.price}
+                                        stock={product.stock}
                                         image={getPrimaryImage(product)}
                                         isPopular={product.badges?.includes('popular') || product.tags?.includes('popular') || false}
                                         slug={product.slug}
@@ -198,5 +391,24 @@ export default function ProductsPage() {
 
             <Footer />
         </main>
+    );
+}
+
+export default function ProductsPage() {
+    return (
+        <Suspense fallback={(
+            <main className="min-h-screen bg-veci-bg pb-20">
+                <div className="h-32 md:h-40"></div>
+                <div className="max-w-7xl mx-auto px-6 md:px-12 h-[50vh] flex items-center justify-center">
+                    <div className="flex items-center gap-3 text-slate-500 font-semibold">
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                        Cargando productos...
+                    </div>
+                </div>
+                <Footer />
+            </main>
+        )}>
+            <ProductsPageContent />
+        </Suspense>
     );
 }

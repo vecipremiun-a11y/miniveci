@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { productImages, products } from "@/lib/db/schema";
 import { requireAuth } from "@/lib/auth-utils";
+import { emitProductChange } from "@/lib/product-live-updates";
 import { eq, and } from "drizzle-orm";
 import * as z from "zod";
 
@@ -58,6 +59,12 @@ export async function POST(
             sortOrder: nextSortOrder
         }).returning();
 
+        await emitProductChange(productId, {
+            slug: product.slug,
+            reason: "image-added",
+            changedFields: ["images"],
+        });
+
         return NextResponse.json(newImage[0], { status: 201 });
 
     } catch (error: any) {
@@ -98,6 +105,19 @@ export async function DELETE(
         if (deletedImage.length === 0) {
             return NextResponse.json({ error: "Image not found" }, { status: 404 });
         }
+
+        const product = await db.query.products.findFirst({
+            where: eq(products.id, productId),
+            columns: {
+                slug: true,
+            },
+        });
+
+        await emitProductChange(productId, {
+            slug: product?.slug ?? null,
+            reason: "image-deleted",
+            changedFields: ["images"],
+        });
 
         return NextResponse.json({ message: "Image deleted successfully" });
     } catch (error) {

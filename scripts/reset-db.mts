@@ -137,14 +137,6 @@ async function main() {
             "description" text,
             "category_id" text REFERENCES "categories"("id"),
 
-            "pos_id" text,
-            "pos_price" integer,
-            "pos_stock" integer,
-            "pos_name" text,
-            "pos_sku" text,
-            "pos_barcode" text,
-            "pos_last_sync" text,
-
             "web_price" integer,
             "web_stock" integer,
             "web_title" text,
@@ -168,11 +160,9 @@ async function main() {
     `);
     await client.execute(`CREATE UNIQUE INDEX "products_sku_unique" ON "products" ("sku")`);
     await client.execute(`CREATE UNIQUE INDEX "products_slug_unique" ON "products" ("slug")`);
-    await client.execute(`CREATE UNIQUE INDEX "products_pos_id_unique" ON "products" ("pos_id")`);
     await client.execute(`CREATE INDEX "slug_idx" ON "products" ("slug")`);
     await client.execute(`CREATE INDEX "sku_idx" ON "products" ("sku")`);
     await client.execute(`CREATE INDEX "category_id_idx" ON "products" ("category_id")`);
-    await client.execute(`CREATE INDEX "pos_id_idx" ON "products" ("pos_id")`);
     console.log("   ✅ Tabla: products");
 
     // --- product_images ---
@@ -218,10 +208,6 @@ async function main() {
             "shipping_cost" integer DEFAULT 0,
             "total" integer NOT NULL,
 
-            "pos_synced" integer DEFAULT false,
-            "pos_order_id" text,
-            "pos_sync_error" text,
-
             "internal_notes" text,
             "coupon_code" text,
 
@@ -265,60 +251,6 @@ async function main() {
         )
     `);
     console.log("   ✅ Tabla: order_status_history");
-
-    // --- pos_config ---
-    await client.execute(`
-        CREATE TABLE "pos_config" (
-            "id" text PRIMARY KEY NOT NULL DEFAULT 'main',
-            "company_id" text,
-            "api_key" text,
-            "api_url" text,
-            "is_connected" integer DEFAULT false,
-            "last_connection_test" text,
-
-            "sync_prices" integer DEFAULT true,
-            "sync_stock" integer DEFAULT true,
-            "sync_name" integer DEFAULT false,
-            "sync_images" integer DEFAULT false,
-
-            "created_at" text DEFAULT CURRENT_TIMESTAMP,
-            "updated_at" text DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-    console.log("   ✅ Tabla: pos_config");
-
-    // --- pos_sync_logs ---
-    await client.execute(`
-        CREATE TABLE "pos_sync_logs" (
-            "id" text PRIMARY KEY NOT NULL,
-            "event_type" text NOT NULL,
-            "status" text NOT NULL,
-            "products_processed" integer DEFAULT 0,
-            "products_created" integer DEFAULT 0,
-            "products_updated" integer DEFAULT 0,
-            "errors_count" integer DEFAULT 0,
-            "error_details" text,
-            "duration_ms" integer,
-            "triggered_by" text,
-            "created_at" text DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-    console.log("   ✅ Tabla: pos_sync_logs");
-
-    // --- pos_webhook_events ---
-    await client.execute(`
-        CREATE TABLE "pos_webhook_events" (
-            "id" text PRIMARY KEY NOT NULL,
-            "event_type" text NOT NULL,
-            "payload" text NOT NULL,
-            "processed" integer DEFAULT false,
-            "process_result" text,
-            "retry_count" integer DEFAULT 0,
-            "created_at" text DEFAULT CURRENT_TIMESTAMP,
-            "processed_at" text
-        )
-    `);
-    console.log("   ✅ Tabla: pos_webhook_events");
 
     // ============================================
     // PASO 5: Verificar resultado final
