@@ -101,14 +101,24 @@ async function upsertPrimaryImage(
   sku: string,
   imageUrl: string | null | undefined,
   imageBase64: string | null | undefined
-) {
+): Promise<string | null> {
   let finalUrl: string | null = null;
+
+  console.log("[POS_SYNC_IMAGE] Called with:", {
+    productId,
+    sku,
+    hasImageUrl: !!imageUrl,
+    hasImageBase64: !!imageBase64,
+    base64Length: imageBase64?.length || 0,
+  });
 
   // Read existing image before uploading so we can delete old blob
   const existing = await db.query.productImages.findFirst({
     where: eq(productImages.productId, productId),
     columns: { id: true, url: true },
   });
+
+  console.log("[POS_SYNC_IMAGE] Existing image:", existing?.url || "none");
 
   try {
     if (imageBase64) {
@@ -117,21 +127,27 @@ async function upsertPrimaryImage(
         try { await del(existing.url); } catch { /* ignore */ }
       }
       finalUrl = await uploadBase64ToBlob(sku, imageBase64);
+      console.log("[POS_SYNC_IMAGE] Uploaded to blob:", finalUrl);
     } else if (imageUrl) {
       finalUrl = imageUrl;
+      console.log("[POS_SYNC_IMAGE] Using provided URL:", finalUrl);
     }
   } catch (err: any) {
     console.error("[POS_SYNC_IMAGE] Error uploading image:", err?.message || err);
-    return;
+    return null;
   }
 
-  if (!finalUrl) return;
+  if (!finalUrl) {
+    console.log("[POS_SYNC_IMAGE] No image to save, skipping");
+    return null;
+  }
 
   if (existing) {
     await db
       .update(productImages)
       .set({ url: finalUrl, isPrimary: true })
       .where(eq(productImages.id, existing.id));
+    console.log("[POS_SYNC_IMAGE] Updated existing image record");
   } else {
     await db.insert(productImages).values({
       id: crypto.randomUUID(),
@@ -140,7 +156,10 @@ async function upsertPrimaryImage(
       isPrimary: true,
       sortOrder: 0,
     });
+    console.log("[POS_SYNC_IMAGE] Created new image record");
   }
+
+  return finalUrl;
 }
 
 export async function OPTIONS() {
@@ -271,7 +290,10 @@ async function handleProductSync(req: NextRequest) {
     }
 
     // Handle image
-    await upsertPrimaryImage(productId, skuUpper, data.image_url, data.image_base64);
+    console.log("[POS_SYNC] Fields received:", Object.keys(body));
+    console.log("[POS_SYNC] data.image_base64 present:", !!data.image_base64, "length:", data.image_base64?.length || 0);
+    console.log("[POS_SYNC] data.image_url present:", !!data.image_url);
+    const imageUrl = await upsertPrimaryImage(productId, skuUpper, data.image_url, data.image_base64);
 
     // Emit live update
     await emitProductChange(productId, {
@@ -289,6 +311,7 @@ async function handleProductSync(req: NextRequest) {
           product: {
             id: productId,
             sku: skuUpper,
+            imageUrl: imageUrl || undefined,
           },
         },
         { status: 200 }
