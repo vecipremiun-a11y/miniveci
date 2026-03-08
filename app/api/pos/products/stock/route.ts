@@ -21,7 +21,7 @@ const syncStockSchema = z.object({
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "PUT,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-api-key, x-api-secret, api_key, api_secret, api-key, api-secret",
+    "Access-Control-Allow-Headers": "Content-Type, x-api-key, x-api-secret, x-api-consumer-key, x-api-consumer-secret, api_key, api_secret, api-key, api-secret",
 };
 
 function withCors(response: NextResponse) {
@@ -34,11 +34,13 @@ function withCors(response: NextResponse) {
 function extractCredentials(req: NextRequest) {
     const apiKey =
         req.headers.get("x-api-key") ||
+        req.headers.get("x-api-consumer-key") ||
         req.headers.get("api_key") ||
         req.headers.get("api-key");
 
     const apiSecret =
         req.headers.get("x-api-secret") ||
+        req.headers.get("x-api-consumer-secret") ||
         req.headers.get("api_secret") ||
         req.headers.get("api-secret");
 
