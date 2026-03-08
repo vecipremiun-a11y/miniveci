@@ -93,7 +93,7 @@ async function uploadBase64ToBlob(
     allowOverwrite: true,
     contentType: imageBase64.includes("image/png") ? "image/png" : "image/jpeg",
   });
-  return blob.url;
+  return `${blob.url}?v=${Date.now()}`;
 }
 
 async function upsertPrimaryImage(
