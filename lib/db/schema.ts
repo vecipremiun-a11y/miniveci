@@ -48,11 +48,11 @@ export const products = sqliteTable("products", {
     categoryId: text("category_id").references(() => categories.id),
 
     // Costos / Margen
-    costPrice: integer("cost_price"), // cents — precio de costo del POS
+    costPrice: integer("cost_price"), // CLP (pesos) — precio de costo del POS
     profitMargin: real("profit_margin"), // porcentaje de margen de ganancia
 
     // Datos Web (Editable)
-    webPrice: integer("web_price"), // cents
+    webPrice: integer("web_price"), // CLP (pesos)
     webStock: integer("web_stock"),
     webTitle: text("web_title"),
     webDescription: text("web_description"),
@@ -65,7 +65,7 @@ export const products = sqliteTable("products", {
     reservedQty: integer("reserved_qty").default(0),
 
     // POS Sync Fields
-    offerPrice: integer("offer_price"),           // cents — precio de oferta
+    offerPrice: integer("offer_price"),           // CLP (pesos) — precio de oferta
     isOffer: integer("is_offer", { mode: "boolean" }).default(false),
     unit: text("unit").default("Und"),              // Und, Kg, Lt, etc.
     taxRate: real("tax_rate"),                       // ej: 19 para 19%
@@ -124,7 +124,7 @@ export const orders = sqliteTable("orders", {
     paymentId: text("payment_id"),
 
     // Totals
-    subtotal: integer("subtotal").notNull(), // cents
+    subtotal: integer("subtotal").notNull(), // CLP (pesos)
     discount: integer("discount").default(0),
     shippingCost: integer("shipping_cost").default(0),
     total: integer("total").notNull(),
@@ -149,7 +149,7 @@ export const orderItems = sqliteTable("order_items", {
     productName: text("product_name").notNull(),
     productSku: text("product_sku").notNull(),
     quantity: integer("quantity").notNull(),
-    unitPrice: integer("unit_price").notNull(), // cents
+    unitPrice: integer("unit_price").notNull(), // CLP (pesos)
     totalPrice: integer("total_price").notNull(),
     stockSource: text("stock_source"),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),

@@ -148,9 +148,9 @@ async function handleProductSync(req: NextRequest) {
       categoryId = await resolveCategory(data.category);
     }
 
-    // Convert sale_price to cents for webPrice
-    const webPriceCents =
-      data.sale_price !== undefined ? Math.round(data.sale_price * 100) : undefined;
+    // CLP no tiene decimales — guardar tal cual
+    const webPrice =
+      data.sale_price !== undefined ? Math.round(data.sale_price) : undefined;
 
     // Look for existing product by SKU
     const existing = await db
@@ -180,11 +180,11 @@ async function handleProductSync(req: NextRequest) {
       if (data.stock !== undefined) {
         updateFields.webStock = data.stock;
       }
-      if (webPriceCents !== undefined) {
-        updateFields.webPrice = webPriceCents;
+      if (webPrice !== undefined) {
+        updateFields.webPrice = webPrice;
       }
       if (data.offer_price !== undefined) {
-        updateFields.offerPrice = data.offer_price !== null ? Math.round(data.offer_price * 100) : null;
+        updateFields.offerPrice = data.offer_price !== null ? Math.round(data.offer_price) : null;
       }
       if (data.is_offer !== undefined) {
         updateFields.isOffer = data.is_offer;
@@ -221,9 +221,9 @@ async function handleProductSync(req: NextRequest) {
         name: productName,
         slug,
         categoryId,
-        webPrice: webPriceCents ?? 0,
+        webPrice: webPrice ?? 0,
         webStock: data.stock ?? 0,
-        offerPrice: data.offer_price != null ? Math.round(data.offer_price * 100) : null,
+        offerPrice: data.offer_price != null ? Math.round(data.offer_price) : null,
         isOffer: data.is_offer ?? false,
         unit: data.unit ?? "Und",
         taxRate: data.tax_rate ?? null,
