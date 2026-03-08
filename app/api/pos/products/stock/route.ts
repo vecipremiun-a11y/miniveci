@@ -8,8 +8,8 @@ import { emitProductChange } from "@/lib/product-live-updates";
 export const dynamic = "force-dynamic";
 
 const syncStockSchema = z.object({
-    sku: z.string().min(1).optional(),
-    product_id: z.string().min(1).optional(),
+    sku: z.string().trim().min(1).transform((value) => value.toUpperCase()).optional(),
+    product_id: z.string().trim().min(1).optional(),
     stock: z.number().int().min(0, "Stock inválido").optional(),
     cantidad_vendida: z.number().int().positive("cantidad_vendida inválida").optional(),
 }).refine((payload) => Boolean(payload.sku || payload.product_id), {
@@ -75,11 +75,15 @@ async function handleStockSync(req: NextRequest) {
         let targetProduct = null as null | { id: string; sku: string; slug: string | null };
 
         if (sku) {
-            const bySku = await db.query.products.findFirst({
-                where: eq(products.sku, sku),
-                columns: { id: true, sku: true, slug: true },
-            });
-            if (bySku) targetProduct = bySku;
+            const bySku = await db
+                .select({ id: products.id, sku: products.sku, slug: products.slug })
+                .from(products)
+                .where(sql`UPPER(TRIM(${products.sku})) = ${sku}`)
+                .limit(1);
+
+            if (bySku[0]) {
+                targetProduct = bySku[0];
+            }
         }
 
         if (!targetProduct && product_id) {
@@ -123,6 +127,12 @@ async function handleStockSync(req: NextRequest) {
                 });
 
         if (updated.length === 0) {
+            console.warn("[POS_SYNC_STOCK] Actualización sin filas afectadas", {
+                sku,
+                product_id,
+                stock,
+                cantidad_vendida,
+            });
             return withCors(NextResponse.json({ error: "Product not found" }, { status: 404 }));
         }
 
@@ -135,6 +145,7 @@ async function handleStockSync(req: NextRequest) {
         return withCors(NextResponse.json({
             success: true,
             message: "Stock synchronized",
+            affectedRows: updated.length,
             product: {
                 id: updated[0].id,
                 sku: updated[0].sku,

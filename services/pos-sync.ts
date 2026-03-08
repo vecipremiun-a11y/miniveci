@@ -8,6 +8,10 @@ export type PosSyncResult = {
     errors: string[];
 };
 
+function normalizeSku(value: string | null | undefined) {
+    return String(value ?? "").trim().toUpperCase();
+}
+
 function getSecurityHeaders(clientSecret: string, clientId: string, webhookSecret: string) {
     return {
         "Content-Type": "application/json",
@@ -53,6 +57,16 @@ export async function syncPaidOrderToPos(orderId: string): Promise<PosSyncResult
 
     for (const item of items) {
         try {
+            const normalizedSku = normalizeSku(item.sku);
+
+            if (!normalizedSku) {
+                result.failed += 1;
+                result.errors.push(`SKU inválido (vacío tras normalización): ${String(item.sku ?? "")}`);
+                continue;
+            }
+
+            console.log(`Enviando SKU: [${normalizedSku}]`);
+
             const response = await fetch(credentials.posWebhookUrl, {
                 method: "POST",
                 headers: getSecurityHeaders(
@@ -61,7 +75,7 @@ export async function syncPaidOrderToPos(orderId: string): Promise<PosSyncResult
                     credentials.webhookSecret,
                 ),
                 body: JSON.stringify({
-                    sku: item.sku,
+                    sku: normalizedSku,
                     cantidad_vendida: item.quantity,
                 }),
             });
@@ -74,7 +88,7 @@ export async function syncPaidOrderToPos(orderId: string): Promise<PosSyncResult
             result.sent += 1;
         } catch (error: any) {
             result.failed += 1;
-            result.errors.push(`SKU ${item.sku}: ${error?.message || "Error desconocido"}`);
+            result.errors.push(`SKU ${normalizeSku(item.sku)}: ${error?.message || "Error desconocido"}`);
         }
     }
 
