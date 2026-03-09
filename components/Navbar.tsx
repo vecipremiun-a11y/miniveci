@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { ShoppingCart, Search, User, LogOut, Shield, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useCart } from '@/components/cart/CartProvider';
+import { CartDrawer } from '@/components/cart/CartDrawer';
 
 const ADMIN_ROLES = ['owner', 'admin', 'preparacion', 'reparto', 'contenido'];
 
@@ -19,7 +20,9 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [cartOpen, setCartOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const closeCart = useCallback(() => setCartOpen(false), []);
 
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
 
@@ -194,7 +197,7 @@ export function Navbar() {
                 Iniciar sesión
               </Link>
             )}
-            <Link href="/carrito" className="btn-primary px-5 py-2.5 rounded-full font-bold flex items-center gap-2 text-sm shadow-md hover:shadow-lg transition-all">
+            <button onClick={() => setCartOpen(true)} className="btn-primary px-5 py-2.5 rounded-full font-bold flex items-center gap-2 text-sm shadow-md hover:shadow-lg transition-all">
               <ShoppingCart className="w-4 h-4" />
               <span>Carrito</span>
               {totalItems > 0 && (
@@ -202,7 +205,7 @@ export function Navbar() {
                   {totalItems}
                 </span>
               )}
-            </Link>
+            </button>
           </div>
 
         </div>
@@ -229,6 +232,8 @@ export function Navbar() {
         </div>
 
       </div>
+
+      <CartDrawer open={cartOpen} onClose={closeCart} />
     </nav>
   );
 }
