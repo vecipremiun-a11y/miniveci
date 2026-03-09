@@ -240,6 +240,7 @@ function ProductsPageContent() {
 
     const handleCategoryChange = (slug: string | null) => {
         setSelectedCategory(slug);
+        setSearchInput('');
         setPage(1);
     };
 
