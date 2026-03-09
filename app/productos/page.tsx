@@ -93,8 +93,14 @@ function ProductsPageContent() {
         }
     }, [debouncedMaxPrice, searchParams, updateURL]);
 
+    const abortRef = useRef<AbortController | null>(null);
+
     const fetchProducts = useCallback(async () => {
-        if (productsRef.current.length === 0) setLoading(true);
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        setLoading(true);
         try {
             const params = new URLSearchParams();
             params.set('page', String(page));
@@ -104,21 +110,25 @@ function ProductsPageContent() {
             if (inOffer) params.set('offer', 'true');
             if (debouncedMaxPrice < 50000) params.set('maxPrice', String(debouncedMaxPrice));
 
-            const res = await fetch(`/api/store/products?${params.toString()}`);
-            if (res.ok) {
+            const res = await fetch(`/api/store/products?${params.toString()}`, {
+                signal: controller.signal,
+            });
+            if (res.ok && !controller.signal.aborted) {
                 const json: ApiResponse = await res.json();
                 setProducts(json.data);
                 setMeta(json.meta);
             }
-        } catch (err) {
+        } catch (err: any) {
+            if (err?.name === 'AbortError') return;
             console.error('Error fetching products:', err);
         } finally {
-            setLoading(false);
+            if (!controller.signal.aborted) setLoading(false);
         }
     }, [page, selectedCategory, search, sortBy, inOffer, debouncedMaxPrice]);
 
     useEffect(() => {
         fetchProducts();
+        return () => { abortRef.current?.abort(); };
     }, [fetchProducts]);
 
     const applyProductChange = useCallback((change: ProductChangeEventPayload) => {
