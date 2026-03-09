@@ -12,6 +12,9 @@ export async function GET(req: NextRequest) {
         const categorySlug = searchParams.get("category");
         const search = searchParams.get("search")?.trim();
         const isFeatured = searchParams.get("featured") === "true";
+        const onlyOffer = searchParams.get("offer") === "true";
+        const maxPriceParam = searchParams.get("maxPrice");
+        const maxPrice = maxPriceParam ? parseInt(maxPriceParam) || null : null;
         const page = parseInt(searchParams.get("page") || "1") || 1;
         const limit = Math.min(parseInt(searchParams.get("limit") || "20") || 20, 100);
         const offset = (page - 1) * limit;
@@ -36,6 +39,10 @@ export async function GET(req: NextRequest) {
 
         if (isFeatured) {
             conditions.push(eq(products.isFeatured, true));
+        }
+
+        if (onlyOffer) {
+            conditions.push(eq(products.isOffer, true));
         }
 
         if (search) {
@@ -79,6 +86,10 @@ export async function GET(req: NextRequest) {
                 raw as ProductInput,
                 cat as CategoryInput | null
             );
+
+            const finalPrice = (raw.isOffer && raw.offerPrice) ? raw.offerPrice : resolved.resolved_price;
+
+            if (maxPrice !== null && finalPrice > maxPrice) continue;
 
             if (resolved.is_available && resolved.resolved_stock > 0) {
                 const itemImages = allImages.filter(i => i.productId === raw.id).map(img => ({

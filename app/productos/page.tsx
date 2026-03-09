@@ -53,6 +53,9 @@ function ProductsPageContent() {
     const [sortBy, setSortBy] = useState<'featured' | 'price_asc' | 'price_desc' | 'newest'>('newest');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page') || '1') || 1));
+    const [inOffer, setInOffer] = useState(searchParams.get('offer') === 'true');
+    const [maxPrice, setMaxPrice] = useState(Number(searchParams.get('maxPrice') || '50000') || 50000);
+    const debouncedMaxPrice = useDebounce(maxPrice, 400);
     const productsRef = useRef<StoreProduct[]>([]);
     const metaRef = useRef(meta);
     const search = useDebounce(searchInput, 350);
@@ -70,9 +73,14 @@ function ProductsPageContent() {
         const nextCategory = searchParams.get('category');
         const nextPage = Math.max(1, Number(searchParams.get('page') || '1') || 1);
 
+        const nextOffer = searchParams.get('offer') === 'true';
+        const nextMaxPrice = Number(searchParams.get('maxPrice') || '50000') || 50000;
+
         setSearchInput((current) => current === nextSearch ? current : nextSearch);
         setSelectedCategory((current) => current === nextCategory ? current : nextCategory);
         setPage((current) => current === nextPage ? current : nextPage);
+        setInOffer((current) => current === nextOffer ? current : nextOffer);
+        setMaxPrice((current) => current === nextMaxPrice ? current : nextMaxPrice);
     }, [searchParams]);
 
     useEffect(() => {
@@ -97,13 +105,25 @@ function ProductsPageContent() {
             params.delete('page');
         }
 
+        if (inOffer) {
+            params.set('offer', 'true');
+        } else {
+            params.delete('offer');
+        }
+
+        if (debouncedMaxPrice < 50000) {
+            params.set('maxPrice', String(debouncedMaxPrice));
+        } else {
+            params.delete('maxPrice');
+        }
+
         const nextQuery = params.toString();
         const currentQuery = searchParams.toString();
 
         if (nextQuery !== currentQuery) {
             router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
         }
-    }, [page, pathname, router, search, searchParams, selectedCategory]);
+    }, [page, pathname, router, search, searchParams, selectedCategory, inOffer, debouncedMaxPrice]);
 
     const fetchProducts = useCallback(async () => {
         setLoading(true);
@@ -113,6 +133,8 @@ function ProductsPageContent() {
             params.set('limit', '20');
             if (selectedCategory) params.set('category', selectedCategory);
             if (search.trim()) params.set('search', search.trim());
+            if (inOffer) params.set('offer', 'true');
+            if (debouncedMaxPrice < 50000) params.set('maxPrice', String(debouncedMaxPrice));
 
             const res = await fetch(`/api/store/products?${params.toString()}`);
             if (res.ok) {
@@ -125,7 +147,7 @@ function ProductsPageContent() {
         } finally {
             setLoading(false);
         }
-    }, [page, selectedCategory, search, sortBy]);
+    }, [page, selectedCategory, search, sortBy, inOffer, debouncedMaxPrice]);
 
     useEffect(() => {
         fetchProducts();
@@ -226,9 +248,21 @@ function ProductsPageContent() {
         setPage(1);
     };
 
+    const handleOfferChange = (value: boolean) => {
+        setInOffer(value);
+        setPage(1);
+    };
+
+    const handleMaxPriceChange = (value: number) => {
+        setMaxPrice(value);
+        setPage(1);
+    };
+
     const clearFilters = () => {
         setSearchInput('');
         setSelectedCategory(null);
+        setInOffer(false);
+        setMaxPrice(50000);
         setPage(1);
     };
 
@@ -254,6 +288,10 @@ function ProductsPageContent() {
                     <ProductSidebar
                         selectedCategory={selectedCategory}
                         onCategoryChange={handleCategoryChange}
+                        inOffer={inOffer}
+                        onOfferChange={handleOfferChange}
+                        maxPrice={maxPrice}
+                        onMaxPriceChange={handleMaxPriceChange}
                     />
                 </div>
 

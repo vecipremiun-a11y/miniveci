@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Minus, Check, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -14,6 +14,10 @@ interface Category {
 interface ProductSidebarProps {
     selectedCategory?: string | null;
     onCategoryChange?: (slug: string | null) => void;
+    inOffer?: boolean;
+    onOfferChange?: (value: boolean) => void;
+    maxPrice?: number;
+    onMaxPriceChange?: (value: number) => void;
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -28,10 +32,20 @@ const CATEGORY_COLORS: Record<string, string> = {
     limpieza: 'bg-teal-100 text-teal-600', congelados: 'bg-sky-100 text-sky-600',
 };
 
-export function ProductSidebar({ selectedCategory, onCategoryChange }: ProductSidebarProps) {
+const MAX_PRICE_LIMIT = 50000;
+
+const formatCLP = (value: number) =>
+    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
+
+export function ProductSidebar({ selectedCategory, onCategoryChange, inOffer = false, onOfferChange, maxPrice = MAX_PRICE_LIMIT, onMaxPriceChange }: ProductSidebarProps) {
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
-    const [inOffer, setInOffer] = useState(false);
+
+    const pricePercent = Math.round((maxPrice / MAX_PRICE_LIMIT) * 100);
+
+    const handlePriceInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onMaxPriceChange?.(Number(e.target.value));
+    }, [onMaxPriceChange]);
 
     useEffect(() => {
         fetch('/api/store/categories')
@@ -62,19 +76,32 @@ export function ProductSidebar({ selectedCategory, onCategoryChange }: ProductSi
             {/* Price Filter */}
             <div>
                 <h4 className="font-bold text-slate-700 mb-4">Precio</h4>
-                <div className="relative w-full h-2 bg-indigo-100 rounded-full mb-4">
-                    <div className="absolute left-0 top-0 h-full bg-gradient-to-r from-pink-300 to-purple-400 rounded-full" style={{ width: '60%' }}></div>
-                    <div className="absolute top-1/2 -translate-y-1/2 left-[60%] w-5 h-5 bg-white border-2 border-purple-400 rounded-full shadow-md cursor-pointer hover:scale-110 transition-transform"></div>
+                <div className="relative w-full h-2 mb-4">
+                    <div className="absolute inset-0 bg-indigo-100 rounded-full" />
+                    <div className="absolute left-0 top-0 h-full bg-gradient-to-r from-pink-300 to-purple-400 rounded-full" style={{ width: `${pricePercent}%` }} />
+                    <input
+                        type="range"
+                        min={100}
+                        max={MAX_PRICE_LIMIT}
+                        step={100}
+                        value={maxPrice}
+                        onChange={handlePriceInput}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div
+                        className="absolute top-1/2 -translate-y-1/2 w-5 h-5 bg-white border-2 border-purple-400 rounded-full shadow-md pointer-events-none"
+                        style={{ left: `calc(${pricePercent}% - 10px)` }}
+                    />
                 </div>
                 <div className="flex items-center justify-between text-sm font-bold text-slate-500">
-                    <span>$1</span>
-                    <span className="bg-white/50 px-3 py-1 rounded-full border border-white shadow-sm text-xs">Hasta $50.000</span>
+                    <span>$100</span>
+                    <span className="bg-white/50 px-3 py-1 rounded-full border border-white shadow-sm text-xs">Hasta {formatCLP(maxPrice)}</span>
                 </div>
             </div>
 
             {/* Offer Checkbox */}
             <div
-                onClick={() => setInOffer(!inOffer)}
+                onClick={() => onOfferChange?.(!inOffer)}
                 className="flex items-center gap-3 cursor-pointer group"
             >
                 <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${inOffer ? 'bg-purple-500 text-white shadow-lg shadow-purple-200' : 'bg-slate-100 text-transparent border border-slate-200'}`}>
