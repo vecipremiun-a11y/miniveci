@@ -7,7 +7,7 @@ import { ProductSidebar } from "@/components/products/ProductSidebar";
 import { ProductCard } from "@/components/products/ProductCard";
 import { useDebounce } from '@/hooks/use-debounce';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
-import { ChevronDown, LayoutGrid, List, Loader2, PackageOpen, Search, X } from "lucide-react";
+import { ChevronDown, LayoutGrid, List, Loader2, PackageOpen } from "lucide-react";
 
 interface ApiResponse {
     data: StoreProductPayload[];
@@ -262,34 +262,11 @@ function ProductsPageContent() {
 
                     {/* Top Bar */}
                     <div className="flex flex-col xl:flex-row justify-between xl:items-center mb-8 gap-4 bg-white/40 backdrop-blur-md p-4 rounded-3xl border border-white">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full xl:w-auto xl:flex-1">
-                            <div className="relative w-full xl:max-w-md">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                <input
-                                    type="text"
-                                    value={searchInput}
-                                    onChange={(event) => handleSearchChange(event.target.value)}
-                                    placeholder="Buscar por nombre, descripción o categoría..."
-                                    className="w-full rounded-full border border-white bg-white/80 py-3 pl-11 pr-11 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-veci-secondary/50 focus:ring-2 focus:ring-veci-secondary/30"
-                                />
-                                {searchInput && (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleSearchChange('')}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
-                                        aria-label="Limpiar búsqueda"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                )}
-                            </div>
-
-                            <span className="text-slate-500 text-sm font-medium whitespace-nowrap">
-                                {meta.total > 0
-                                    ? `Mostrando ${startIdx}-${endIdx} de ${meta.total} productos`
-                                    : 'Sin productos'}
-                            </span>
-                        </div>
+                        <span className="text-slate-500 text-sm font-medium whitespace-nowrap">
+                            {meta.total > 0
+                                ? `Mostrando ${startIdx}-${endIdx} de ${meta.total} productos`
+                                : 'Sin productos'}
+                        </span>
 
                         <div className="flex items-center gap-4 self-end xl:self-auto">
                             {/* Sort */}
