@@ -86,14 +86,13 @@ async function uploadBase64ToBlob(
 ): Promise<string> {
   const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
   const buffer = Buffer.from(base64Data, "base64");
-  // Always use .jpg to avoid phantom old-extension blobs
+  // addRandomSuffix: true → each upload gets a unique URL, avoiding CDN cache issues
   const blob = await put(`products/${sku}.jpg`, buffer, {
     access: "public",
-    addRandomSuffix: false,
-    allowOverwrite: true,
+    addRandomSuffix: true,
     contentType: imageBase64.includes("image/png") ? "image/png" : "image/jpeg",
   });
-  return `${blob.url}?v=${Date.now()}`;
+  return blob.url;
 }
 
 async function upsertPrimaryImage(
@@ -122,9 +121,10 @@ async function upsertPrimaryImage(
 
   try {
     if (imageBase64) {
-      // Delete old blob if it's a Vercel Blob URL
+      // Delete old blob if it's a Vercel Blob URL (strip query params)
       if (existing?.url && existing.url.includes(".public.blob.vercel-storage.com")) {
-        try { await del(existing.url); } catch { /* ignore */ }
+        const cleanUrl = existing.url.split("?")[0];
+        try { await del(cleanUrl); } catch { /* ignore */ }
       }
       finalUrl = await uploadBase64ToBlob(sku, imageBase64);
       console.log("[POS_SYNC_IMAGE] Uploaded to blob:", finalUrl);
