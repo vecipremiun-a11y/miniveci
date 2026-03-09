@@ -68,11 +68,17 @@ export function Navbar() {
 
   useEffect(() => {
     if (pathname?.startsWith('/productos')) {
-      setSearchQuery(searchParams.get('search') || '');
+      const search = searchParams.get('search') || '';
+      setSearchQuery(search);
+      if (!search) {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
     } else {
       setSearchQuery('');
+      setSuggestions([]);
+      setShowSuggestions(false);
     }
-    setShowSuggestions(false);
   }, [pathname, searchParams]);
 
   // Fetch suggestions as user types
