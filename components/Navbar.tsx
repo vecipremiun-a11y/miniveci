@@ -39,6 +39,7 @@ export function Navbar() {
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const searchBoxMobileRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const userTypingRef = useRef(false);
   const closeCart = useCallback(() => setCartOpen(false), []);
 
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
@@ -66,11 +67,13 @@ export function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Sync searchQuery from URL — but skip if user is actively typing
   useEffect(() => {
+    if (userTypingRef.current) return;
     if (pathname?.startsWith('/productos')) {
-      const search = searchParams.get('search') || '';
-      setSearchQuery(search);
-      if (!search) {
+      const urlSearch = searchParams.get('search') || '';
+      setSearchQuery(urlSearch);
+      if (!urlSearch) {
         setSuggestions([]);
         setShowSuggestions(false);
       }
@@ -130,20 +133,16 @@ export function Navbar() {
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setShowSuggestions(false);
+    setSuggestions([]);
+    userTypingRef.current = false;
 
     if (activeIndex >= 0 && suggestions[activeIndex]) {
       router.push(`/productos/${suggestions[activeIndex].slug}`);
       return;
     }
 
-    const params = new URLSearchParams();
     const normalizedQuery = searchQuery.trim();
-
-    if (normalizedQuery) {
-      params.set('search', normalizedQuery);
-    }
-
-    router.push(params.toString() ? `/productos?${params.toString()}` : '/productos');
+    router.push(normalizedQuery ? `/productos?search=${encodeURIComponent(normalizedQuery)}` : '/productos');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -161,6 +160,8 @@ export function Navbar() {
 
   const goToSuggestion = (slug: string) => {
     setShowSuggestions(false);
+    setSuggestions([]);
+    userTypingRef.current = false;
     router.push(`/productos/${slug}`);
   };
 
@@ -231,6 +232,8 @@ export function Navbar() {
             onMouseDown={(e) => {
               e.preventDefault();
               setShowSuggestions(false);
+              setSuggestions([]);
+              userTypingRef.current = false;
               const q = searchQuery.trim();
               router.push(q ? `/productos?search=${encodeURIComponent(q)}` : '/productos');
             }}
@@ -269,7 +272,7 @@ export function Navbar() {
                 type="text"
                 placeholder="Buscar productos..."
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(event) => { userTypingRef.current = true; setSearchQuery(event.target.value); }}
                 onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
                 onKeyDown={handleKeyDown}
                 className="bg-transparent border-none outline-none text-sm ml-3 w-full text-slate-700 placeholder:text-slate-400 font-medium"
@@ -374,7 +377,7 @@ export function Navbar() {
               type="text"
               placeholder="Buscar productos..."
               value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              onChange={(event) => { userTypingRef.current = true; setSearchQuery(event.target.value); }}
               onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
               onKeyDown={handleKeyDown}
               className="bg-transparent border-none outline-none text-sm ml-3 w-full text-slate-700 placeholder:text-slate-400 font-medium"

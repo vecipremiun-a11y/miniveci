@@ -48,17 +48,32 @@ function ProductsPageContent() {
     const [products, setProducts] = useState<StoreProduct[]>([]);
     const [loading, setLoading] = useState(true);
     const [meta, setMeta] = useState({ total: 0, page: 1, limit: 20, totalPages: 1 });
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(searchParams.get('category'));
-    const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
     const [sortBy, setSortBy] = useState<'featured' | 'price_asc' | 'price_desc' | 'newest'>('newest');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-    const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page') || '1') || 1));
-    const [inOffer, setInOffer] = useState(searchParams.get('offer') === 'true');
     const [maxPrice, setMaxPrice] = useState(Number(searchParams.get('maxPrice') || '50000') || 50000);
     const debouncedMaxPrice = useDebounce(maxPrice, 400);
     const productsRef = useRef<StoreProduct[]>([]);
     const metaRef = useRef(meta);
-    const search = useDebounce(searchInput, 350);
+
+    // All filters read directly from URL — single source of truth, no cycles
+    const search = searchParams.get('search')?.trim() || '';
+    const selectedCategory = searchParams.get('category') || null;
+    const page = Math.max(1, Number(searchParams.get('page') || '1') || 1);
+    const inOffer = searchParams.get('offer') === 'true';
+
+    // Helper to update URL params without cycles
+    const updateURL = useCallback((updates: Record<string, string | null>) => {
+        const params = new URLSearchParams(searchParams.toString());
+        for (const [key, value] of Object.entries(updates)) {
+            if (value === null || value === '') {
+                params.delete(key);
+            } else {
+                params.set(key, value);
+            }
+        }
+        const query = params.toString();
+        router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }, [pathname, router, searchParams]);
 
     useEffect(() => {
         productsRef.current = products;
@@ -68,71 +83,24 @@ function ProductsPageContent() {
         metaRef.current = meta;
     }, [meta]);
 
+    // Sync maxPrice to URL when debounced value changes
     useEffect(() => {
-        const nextSearch = searchParams.get('search') || '';
-        const nextCategory = searchParams.get('category');
-        const nextPage = Math.max(1, Number(searchParams.get('page') || '1') || 1);
-
-        const nextOffer = searchParams.get('offer') === 'true';
-        const nextMaxPrice = Number(searchParams.get('maxPrice') || '50000') || 50000;
-
-        setSearchInput((current) => current === nextSearch ? current : nextSearch);
-        setSelectedCategory((current) => current === nextCategory ? current : nextCategory);
-        setPage((current) => current === nextPage ? current : nextPage);
-        setInOffer((current) => current === nextOffer ? current : nextOffer);
-        setMaxPrice((current) => current === nextMaxPrice ? current : nextMaxPrice);
-    }, [searchParams]);
-
-    useEffect(() => {
-        const params = new URLSearchParams(searchParams.toString());
-        const normalizedSearch = search.trim();
-
-        if (normalizedSearch) {
-            params.set('search', normalizedSearch);
-        } else {
-            params.delete('search');
+        const currentMax = Number(searchParams.get('maxPrice') || '50000') || 50000;
+        if (debouncedMaxPrice < 50000 && debouncedMaxPrice !== currentMax) {
+            updateURL({ maxPrice: String(debouncedMaxPrice), page: null });
+        } else if (debouncedMaxPrice >= 50000 && searchParams.has('maxPrice')) {
+            updateURL({ maxPrice: null, page: null });
         }
-
-        if (selectedCategory) {
-            params.set('category', selectedCategory);
-        } else {
-            params.delete('category');
-        }
-
-        if (page > 1) {
-            params.set('page', String(page));
-        } else {
-            params.delete('page');
-        }
-
-        if (inOffer) {
-            params.set('offer', 'true');
-        } else {
-            params.delete('offer');
-        }
-
-        if (debouncedMaxPrice < 50000) {
-            params.set('maxPrice', String(debouncedMaxPrice));
-        } else {
-            params.delete('maxPrice');
-        }
-
-        const nextQuery = params.toString();
-        const currentQuery = searchParams.toString();
-
-        if (nextQuery !== currentQuery) {
-            router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-        }
-    }, [page, pathname, router, search, searchParams, selectedCategory, inOffer, debouncedMaxPrice]);
+    }, [debouncedMaxPrice, searchParams, updateURL]);
 
     const fetchProducts = useCallback(async () => {
-        setLoading(true);
+        if (productsRef.current.length === 0) setLoading(true);
         try {
             const params = new URLSearchParams();
             params.set('page', String(page));
             params.set('limit', '20');
             if (selectedCategory) params.set('category', selectedCategory);
-            if (search.trim()) params.set('search', search.trim());
+            if (search) params.set('search', search);
             if (inOffer) params.set('offer', 'true');
             if (debouncedMaxPrice < 50000) params.set('maxPrice', String(debouncedMaxPrice));
 
@@ -239,32 +207,24 @@ function ProductsPageContent() {
     }, [products]);
 
     const handleCategoryChange = (slug: string | null) => {
-        setSelectedCategory(slug);
-        setSearchInput('');
-        setPage(1);
+        updateURL({ category: slug, search: null, page: null });
     };
 
     const handleSearchChange = (value: string) => {
-        setSearchInput(value);
-        setPage(1);
+        // search is handled by Navbar
     };
 
     const handleOfferChange = (value: boolean) => {
-        setInOffer(value);
-        setPage(1);
+        updateURL({ offer: value ? 'true' : null, page: null });
     };
 
     const handleMaxPriceChange = (value: number) => {
         setMaxPrice(value);
-        setPage(1);
     };
 
     const clearFilters = () => {
-        setSearchInput('');
-        setSelectedCategory(null);
-        setInOffer(false);
         setMaxPrice(50000);
-        setPage(1);
+        router.replace(pathname, { scroll: false });
     };
 
     const getPrimaryImage = (product: StoreProduct): string | null => {
@@ -382,7 +342,7 @@ function ProductsPageContent() {
                             {meta.totalPages > 1 && (
                                 <div className="flex justify-center gap-2 mt-10">
                                     <button
-                                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                                        onClick={() => updateURL({ page: page > 2 ? String(page - 1) : null })}
                                         disabled={page === 1}
                                         className="px-4 py-2 rounded-full bg-white/50 border border-white text-sm font-bold text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                     >
@@ -392,7 +352,7 @@ function ProductsPageContent() {
                                         Página {meta.page} de {meta.totalPages}
                                     </span>
                                     <button
-                                        onClick={() => setPage(p => Math.min(meta.totalPages, p + 1))}
+                                        onClick={() => updateURL({ page: String(page + 1) })}
                                         disabled={page >= meta.totalPages}
                                         className="px-4 py-2 rounded-full bg-white/50 border border-white text-sm font-bold text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                     >
