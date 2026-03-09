@@ -38,6 +38,8 @@ export async function getPublicStoreProductById(productId: string): Promise<Stor
         seoTitle: rawProduct.seoTitle,
         seoDescription: rawProduct.seoDescription,
         price: resolved.resolved_price,
+        offerPrice: rawProduct.isOffer && rawProduct.offerPrice ? rawProduct.offerPrice : null,
+        isOffer: Boolean(rawProduct.isOffer),
         stock: resolved.resolved_stock,
         category: rawProduct.category
             ? {

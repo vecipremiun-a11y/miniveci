@@ -19,6 +19,8 @@ export interface StoreProductPayload {
     seoTitle: string | null;
     seoDescription: string | null;
     price: number;
+    offerPrice: number | null;
+    isOffer: boolean;
     stock: number;
     category: StoreProductCategory | null;
     images: StoreProductImage[];

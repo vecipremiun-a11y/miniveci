@@ -1,8 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Plus, Minus } from 'lucide-react';
-import { useState } from 'react';
+import { Plus, Minus, Percent } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { useCart } from '@/components/cart/CartProvider';
 import { useRouter } from 'next/navigation';
 
@@ -12,22 +12,36 @@ interface ProductCardProps {
     id: string;
     name: string;
     price: number;
+    offerPrice?: number | null;
+    isOffer?: boolean;
     stock: number;
     image?: string | null;
     isPopular?: boolean;
     slug?: string;
 }
 
-export function ProductCard({ id, name, price, stock, image, isPopular, slug }: ProductCardProps) {
+export function ProductCard({ id, name, price, offerPrice, isOffer, stock, image, isPopular, slug }: ProductCardProps) {
     const { addItem } = useCart();
     const router = useRouter();
     const [quantity, setQuantity] = useState(1);
     const imageSrc = image || PLACEHOLDER_IMAGE;
-    const formattedPrice = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(price);
+
+    const hasOffer = Boolean(isOffer && offerPrice && offerPrice < price);
+    const displayPrice = hasOffer ? offerPrice! : price;
+    const discountPercent = hasOffer ? Math.round(((price - offerPrice!) / price) * 100) : 0;
+
+    const formattedPrice = useMemo(() =>
+        new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(displayPrice),
+        [displayPrice]
+    );
+    const formattedOriginal = useMemo(() =>
+        hasOffer ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(price) : '',
+        [hasOffer, price]
+    );
     const stockLabel = `${stock} UND`;
 
     const handleAdd = () => {
-        addItem({ id, name, price, image: imageSrc, slug }, quantity);
+        addItem({ id, name, price: displayPrice, image: imageSrc, slug }, quantity);
         setQuantity(1);
     };
 
@@ -45,11 +59,28 @@ export function ProductCard({ id, name, price, stock, image, isPopular, slug }: 
             onClick={goToDetail}
             className="glass-card p-4 rounded-[2rem] flex flex-col items-center relative group cursor-pointer"
         >
-            {/* Badge */}
-            {isPopular && (
-                <span className="absolute top-4 right-4 bg-orange-100 text-orange-500 text-xs font-bold px-3 py-1 rounded-full z-10">
-                    Popular
-                </span>
+            {/* Badges */}
+            <div className="absolute top-4 right-4 z-10 flex flex-col gap-1.5">
+                {hasOffer && (
+                    <span className="inline-flex items-center gap-1 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-extrabold px-2.5 py-1 rounded-full shadow-md shadow-red-200/50 animate-pulse">
+                        <Percent className="w-3 h-3" />
+                        -{discountPercent}%
+                    </span>
+                )}
+                {isPopular && (
+                    <span className="bg-orange-100 text-orange-500 text-xs font-bold px-3 py-1 rounded-full">
+                        Popular
+                    </span>
+                )}
+            </div>
+
+            {/* Offer ribbon */}
+            {hasOffer && (
+                <div className="absolute top-0 left-4 z-10">
+                    <div className="bg-gradient-to-b from-red-500 to-rose-600 text-white text-[10px] font-extrabold uppercase tracking-wider px-2 py-1.5 rounded-b-lg shadow-md">
+                        Oferta
+                    </div>
+                </div>
             )}
 
             {/* Image Area */}
@@ -67,7 +98,12 @@ export function ProductCard({ id, name, price, stock, image, isPopular, slug }: 
             <div className="w-full space-y-2">
                 <h3 className="font-bold text-slate-800 text-lg truncate">{name}</h3>
                 <div className="flex items-center justify-between gap-3">
-                    <p className="font-extrabold text-veci-dark text-xl">{formattedPrice}</p>
+                    <div className="flex items-baseline gap-2">
+                        <p className={`font-extrabold text-xl ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>{formattedPrice}</p>
+                        {hasOffer && (
+                            <p className="text-sm text-slate-400 line-through font-medium">{formattedOriginal}</p>
+                        )}
+                    </div>
                     <div className="shrink-0 inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-100">
                         {stockLabel}
                     </div>

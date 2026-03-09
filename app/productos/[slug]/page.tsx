@@ -129,14 +129,27 @@ export default function ProductDetailPage() {
         };
     }, [product?.id]);
 
+    const hasOffer = Boolean(product?.isOffer && product?.offerPrice && product.offerPrice < product.price);
+    const displayPrice = hasOffer ? product!.offerPrice! : product?.price ?? 0;
+    const discountPercent = hasOffer ? Math.round(((product!.price - product!.offerPrice!) / product!.price) * 100) : 0;
+
     const priceText = useMemo(() => {
         if (!product) return '';
         return new Intl.NumberFormat('es-CL', {
             style: 'currency',
             currency: 'CLP',
             maximumFractionDigits: 0,
+        }).format(displayPrice);
+    }, [product, displayPrice]);
+
+    const originalPriceText = useMemo(() => {
+        if (!product || !hasOffer) return '';
+        return new Intl.NumberFormat('es-CL', {
+            style: 'currency',
+            currency: 'CLP',
+            maximumFractionDigits: 0,
         }).format(product.price);
-    }, [product]);
+    }, [product, hasOffer]);
 
     const currentImage = useMemo(() => {
         if (!product || product.images.length === 0) return '/placeholder-product.svg';
@@ -224,6 +237,12 @@ export default function ProductDetailPage() {
 
                     <div className="bg-white/60 backdrop-blur-md border border-white rounded-3xl p-8">
                         <div className="flex flex-wrap gap-2 mb-4">
+                            {hasOffer && (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-sm shadow-red-200/50">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" /></svg>
+                                    Oferta -{discountPercent}%
+                                </span>
+                            )}
                             {product.category && (
                                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-100">
                                     {product.category.name}
@@ -247,7 +266,17 @@ export default function ProductDetailPage() {
                             <span className="text-sm font-semibold text-slate-600">{rating.toFixed(1)} / 5</span>
                         </div>
 
-                        <p className="text-4xl font-extrabold text-veci-dark mt-6">{priceText}</p>
+                        <div className="mt-6 flex items-baseline gap-3">
+                            <p className={`text-4xl font-extrabold ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>{priceText}</p>
+                            {hasOffer && (
+                                <p className="text-xl text-slate-400 line-through font-semibold">{originalPriceText}</p>
+                            )}
+                        </div>
+                        {hasOffer && (
+                            <p className="mt-1.5 text-sm font-bold text-emerald-600">
+                                Ahorras {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(product.price - product.offerPrice!)}
+                            </p>
+                        )}
 
                         <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
                             <p className="text-sm text-slate-500">Disponibilidad</p>
@@ -277,7 +306,7 @@ export default function ProductDetailPage() {
                         </div>
 
                         <button
-                            onClick={() => addItem({ id: product.id, name: product.name, price: product.price, image: currentImage, slug: product.slug }, quantity)}
+                            onClick={() => addItem({ id: product.id, name: product.name, price: displayPrice, image: currentImage, slug: product.slug }, quantity)}
                             disabled={product.stock <= 0}
                             className="mt-8 w-full btn-primary rounded-full py-3.5 text-base font-extrabold disabled:opacity-50 disabled:cursor-not-allowed"
                         >

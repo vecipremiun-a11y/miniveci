@@ -96,6 +96,8 @@ export async function GET(req: NextRequest) {
                     seoTitle: raw.seoTitle,
                     seoDescription: raw.seoDescription,
                     price: resolved.resolved_price,
+                    offerPrice: raw.isOffer && raw.offerPrice ? raw.offerPrice : null,
+                    isOffer: Boolean(raw.isOffer),
                     stock: resolved.resolved_stock,
                     category: cat ? {
                         id: cat.id,
