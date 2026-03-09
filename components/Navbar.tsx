@@ -49,6 +49,28 @@ export function Navbar() {
     setSearchQuery('');
   }, [pathname, searchParams]);
 
+  // Live-update URL search param while on /productos
+  useEffect(() => {
+    if (!pathname?.startsWith('/productos')) return;
+
+    const timeout = setTimeout(() => {
+      const current = searchParams.get('search') || '';
+      const normalized = searchQuery.trim();
+      if (normalized === current) return;
+
+      const params = new URLSearchParams(searchParams.toString());
+      if (normalized) {
+        params.set('search', normalized);
+      } else {
+        params.delete('search');
+      }
+      params.delete('page');
+      router.replace(`/productos${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false });
+    }, 350);
+
+    return () => clearTimeout(timeout);
+  }, [searchQuery, pathname, router, searchParams]);
+
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
