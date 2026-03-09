@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ShoppingCart, Search, User, LogOut, Shield, ChevronDown } from 'lucide-react';
+import { ShoppingCart, Search, User, LogOut, Shield, ChevronDown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -10,6 +10,16 @@ import { useCart } from '@/components/cart/CartProvider';
 import { CartDrawer } from '@/components/cart/CartDrawer';
 
 const ADMIN_ROLES = ['owner', 'admin', 'preparacion', 'reparto', 'contenido'];
+
+interface SearchSuggestion {
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  offerPrice: number | null;
+  isOffer: boolean;
+  image: string | null;
+}
 
 export function Navbar() {
   const pathname = usePathname();
@@ -21,7 +31,14 @@ export function Navbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  const searchBoxMobileRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const closeCart = useCallback(() => setCartOpen(false), []);
 
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
@@ -38,6 +55,12 @@ export function Navbar() {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setUserMenuOpen(false);
       }
+      if (
+        searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node) &&
+        searchBoxMobileRef.current && !searchBoxMobileRef.current.contains(e.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -46,36 +69,66 @@ export function Navbar() {
   useEffect(() => {
     if (pathname?.startsWith('/productos')) {
       setSearchQuery(searchParams.get('search') || '');
+    } else {
+      setSearchQuery('');
+    }
+    setShowSuggestions(false);
+  }, [pathname, searchParams]);
+
+  // Fetch suggestions as user types
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
       return;
     }
 
-    setSearchQuery('');
-  }, [pathname, searchParams]);
-
-  // Live-update URL search param while on /productos
-  useEffect(() => {
-    if (!pathname?.startsWith('/productos')) return;
+    setLoadingSuggestions(true);
+    setActiveIndex(-1);
 
     const timeout = setTimeout(() => {
-      const current = searchParams.get('search') || '';
-      const normalized = searchQuery.trim();
-      if (normalized === current) return;
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-      const params = new URLSearchParams(searchParams.toString());
-      if (normalized) {
-        params.set('search', normalized);
-      } else {
-        params.delete('search');
-      }
-      params.delete('page');
-      router.replace(`/productos${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false });
-    }, 350);
+      fetch(`/api/store/products?search=${encodeURIComponent(trimmed)}&limit=8`, { signal: controller.signal })
+        .then((res) => res.json())
+        .then((json) => {
+          const items: SearchSuggestion[] = (json.data || []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            price: p.price,
+            offerPrice: p.offerPrice ?? null,
+            isOffer: Boolean(p.isOffer),
+            image: p.images?.[0]?.url || null,
+          }));
+          setSuggestions(items);
+          setShowSuggestions(true);
+          setLoadingSuggestions(false);
+        })
+        .catch((err) => {
+          if (err.name !== 'AbortError') {
+            setLoadingSuggestions(false);
+          }
+        });
+    }, 250);
 
-    return () => clearTimeout(timeout);
-  }, [searchQuery, pathname, router, searchParams]);
+    return () => {
+      clearTimeout(timeout);
+      abortRef.current?.abort();
+    };
+  }, [searchQuery]);
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setShowSuggestions(false);
+
+    if (activeIndex >= 0 && suggestions[activeIndex]) {
+      router.push(`/productos/${suggestions[activeIndex].slug}`);
+      return;
+    }
 
     const params = new URLSearchParams();
     const normalizedQuery = searchQuery.trim();
@@ -87,10 +140,102 @@ export function Navbar() {
     router.push(params.toString() ? `/productos?${params.toString()}` : '/productos');
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((i) => (i < suggestions.length - 1 ? i + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => (i > 0 ? i - 1 : suggestions.length - 1));
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
+  const goToSuggestion = (slug: string) => {
+    setShowSuggestions(false);
+    router.push(`/productos/${slug}`);
+  };
+
+  const formatPrice = (value: number) =>
+    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
+
   // Don't render Navbar on admin routes
   if (pathname?.startsWith('/admin')) {
     return null;
   }
+
+  const suggestionsDropdown = showSuggestions && (
+    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-[80]">
+      {loadingSuggestions ? (
+        <div className="flex items-center justify-center py-6 text-slate-400">
+          <Loader2 className="w-5 h-5 animate-spin" />
+        </div>
+      ) : suggestions.length === 0 ? (
+        <div className="px-4 py-5 text-center text-sm text-slate-400">
+          No se encontraron productos
+        </div>
+      ) : (
+        <>
+          <ul>
+            {suggestions.map((s, idx) => {
+              const hasOffer = s.isOffer && s.offerPrice !== null && s.offerPrice < s.price;
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); goToSuggestion(s.slug); }}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                      idx === activeIndex ? "bg-slate-50" : "hover:bg-slate-50"
+                    )}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
+                      {s.image ? (
+                        <img src={s.image} alt={s.name} className="w-full h-full object-contain" />
+                      ) : (
+                        <Search className="w-4 h-4 text-slate-300" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{s.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn("text-xs font-bold", hasOffer ? "text-red-600" : "text-slate-500")}>
+                          {formatPrice(hasOffer ? s.offerPrice! : s.price)}
+                        </span>
+                        {hasOffer && (
+                          <span className="text-[10px] text-slate-400 line-through">{formatPrice(s.price)}</span>
+                        )}
+                      </div>
+                    </div>
+                    {hasOffer && (
+                      <span className="shrink-0 text-[10px] font-extrabold bg-red-500 text-white px-1.5 py-0.5 rounded-full">
+                        -{Math.round(((s.price - s.offerPrice!) / s.price) * 100)}%
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setShowSuggestions(false);
+              const q = searchQuery.trim();
+              router.push(q ? `/productos?search=${encodeURIComponent(q)}` : '/productos');
+            }}
+            className="w-full px-4 py-2.5 text-sm font-bold text-veci-primary bg-slate-50/80 hover:bg-slate-100 border-t border-slate-100 transition-colors text-center"
+          >
+            Ver todos los resultados
+          </button>
+        </>
+      )}
+    </div>
+  );
 
   return (
     <nav className={cn(
@@ -110,18 +255,23 @@ export function Navbar() {
             <span className="text-xl font-bold text-veci-dark tracking-tight hidden sm:block">VeciMarket</span>
           </div>
 
-          {/* Centered Search Bar - Expanded */}
-          <form onSubmit={handleSearchSubmit} className="hidden md:flex flex-1 max-w-xl mx-auto relative items-center bg-white/50 hover:bg-white/80 border border-white backdrop-blur-md rounded-full px-4 py-2.5 transition-all group focus-within:ring-2 focus-within:ring-veci-secondary/50 focus-within:bg-white focus-within:shadow-md">
-            <Search className="w-5 h-5 text-slate-400 group-focus-within:text-veci-purple transition-colors" />
-            <input
-              type="text"
-              placeholder="Buscar productos..."
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              className="bg-transparent border-none outline-none text-sm ml-3 w-full text-slate-700 placeholder:text-slate-400 font-medium"
-            />
-            <button type="submit" className="sr-only">Buscar</button>
-          </form>
+          {/* Centered Search Bar - Desktop */}
+          <div ref={searchBoxRef} className="hidden md:block flex-1 max-w-xl mx-auto relative">
+            <form onSubmit={handleSearchSubmit} className="flex items-center bg-white/50 hover:bg-white/80 border border-white backdrop-blur-md rounded-full px-4 py-2.5 transition-all group focus-within:ring-2 focus-within:ring-veci-secondary/50 focus-within:bg-white focus-within:shadow-md">
+              <Search className="w-5 h-5 text-slate-400 group-focus-within:text-veci-purple transition-colors" />
+              <input
+                type="text"
+                placeholder="Buscar productos..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                onKeyDown={handleKeyDown}
+                className="bg-transparent border-none outline-none text-sm ml-3 w-full text-slate-700 placeholder:text-slate-400 font-medium"
+              />
+              <button type="submit" className="sr-only">Buscar</button>
+            </form>
+            {suggestionsDropdown}
+          </div>
 
           {/* Right Actions */}
           <div className="flex items-center gap-4 shrink-0">
@@ -210,17 +360,23 @@ export function Navbar() {
 
         </div>
 
-        <form onSubmit={handleSearchSubmit} className="md:hidden flex items-center bg-white/80 border border-white backdrop-blur-md rounded-full px-4 py-2.5 transition-all group focus-within:ring-2 focus-within:ring-veci-secondary/50 focus-within:bg-white focus-within:shadow-md">
-          <Search className="w-5 h-5 text-slate-400 group-focus-within:text-veci-purple transition-colors" />
-          <input
-            type="text"
-            placeholder="Buscar productos..."
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            className="bg-transparent border-none outline-none text-sm ml-3 w-full text-slate-700 placeholder:text-slate-400 font-medium"
-          />
-          <button type="submit" className="sr-only">Buscar</button>
-        </form>
+        {/* Mobile Search */}
+        <div ref={searchBoxMobileRef} className="md:hidden relative">
+          <form onSubmit={handleSearchSubmit} className="flex items-center bg-white/80 border border-white backdrop-blur-md rounded-full px-4 py-2.5 transition-all group focus-within:ring-2 focus-within:ring-veci-secondary/50 focus-within:bg-white focus-within:shadow-md">
+            <Search className="w-5 h-5 text-slate-400 group-focus-within:text-veci-purple transition-colors" />
+            <input
+              type="text"
+              placeholder="Buscar productos..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+              onKeyDown={handleKeyDown}
+              className="bg-transparent border-none outline-none text-sm ml-3 w-full text-slate-700 placeholder:text-slate-400 font-medium"
+            />
+            <button type="submit" className="sr-only">Buscar</button>
+          </form>
+          {suggestionsDropdown}
+        </div>
 
         {/* Bottom Row: Navigation Links */}
         <div className="flex items-center justify-center gap-8 font-medium text-slate-600 text-sm overflow-x-auto pb-1 md:pb-0 scrollbar-hide w-full">
