@@ -60,7 +60,7 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, image
             className="glass-card p-4 rounded-[2rem] flex flex-col items-center relative group cursor-pointer"
         >
             {/* Badges */}
-            <div className="absolute top-4 right-4 z-10 flex flex-col gap-1.5">
+            <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5">
                 {hasOffer && (
                     <span className="inline-flex items-center gap-1 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-extrabold px-2.5 py-1 rounded-full shadow-md shadow-red-200/50 animate-pulse">
                         <Percent className="w-3 h-3" />
@@ -76,7 +76,7 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, image
 
             {/* Offer ribbon */}
             {hasOffer && (
-                <div className="absolute top-0 left-4 z-10">
+                <div className="absolute top-0 left-4 z-20">
                     <div className="bg-gradient-to-b from-red-500 to-rose-600 text-white text-[10px] font-extrabold uppercase tracking-wider px-2 py-1.5 rounded-b-lg shadow-md">
                         Oferta
                     </div>
