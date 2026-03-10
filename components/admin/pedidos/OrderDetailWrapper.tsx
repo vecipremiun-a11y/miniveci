@@ -295,8 +295,32 @@ export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: s
                             </div>
 
                             <div className="flex gap-2 pt-2">
-                                <Button variant="outline" size="sm" className="flex-1 whitespace-nowrap"><MapPin className="w-3 h-3 mr-2" /> Ver Mapa</Button>
-                                <Button variant="outline" size="sm" className="hidden 2xl:flex"><Bell className="w-3 h-3 mr-2" /> Notificar</Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1 whitespace-nowrap"
+                                    onClick={() => {
+                                        const q = [order.shippingAddress, order.shippingComuna, order.shippingCity, 'Chile'].filter(Boolean).join(', ');
+                                        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, '_blank');
+                                    }}
+                                    disabled={!order.shippingAddress}
+                                >
+                                    <MapPin className="w-3 h-3 mr-2" /> Ver Mapa
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        if (order.customerPhone) {
+                                            const phone = order.customerPhone.replace(/\D/g, '');
+                                            const msg = `Hola ${order.customerName}, te escribimos de MiniVeci respecto a tu pedido #${order.orderNumber}.`;
+                                            window.open(`https://wa.me/${phone.startsWith('56') ? phone : '56' + phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                                        }
+                                    }}
+                                    disabled={!order.customerPhone}
+                                >
+                                    <Bell className="w-3 h-3 mr-2" /> Notificar
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>

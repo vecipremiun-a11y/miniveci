@@ -77,10 +77,22 @@ export default function LoginPage() {
                         <div className="relative group">
                             <Mail className="absolute left-4 top-3.5 w-5 h-5 text-slate-400 group-focus-within:text-veci-primary transition-colors" />
                             <input
-                                type="email"
+                                type="text"
+                                inputMode="email"
+                                autoComplete="email"
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if ((e.ctrlKey && e.altKey && e.key === 'q') || (e.ctrlKey && e.altKey && e.key === 'Q')) {
+                                        e.preventDefault();
+                                        const input = e.currentTarget;
+                                        const start = input.selectionStart ?? email.length;
+                                        const end = input.selectionEnd ?? email.length;
+                                        setEmail(email.slice(0, start) + '@' + email.slice(end));
+                                        setTimeout(() => input.setSelectionRange(start + 1, start + 1), 0);
+                                    }
+                                }}
                                 placeholder="ejemplo@correo.com"
                                 className="w-full bg-white/50 border border-white focus:bg-white pl-12 pr-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-veci-primary/50 transition-all font-medium text-slate-700 placeholder:text-slate-400"
                             />
@@ -125,7 +137,7 @@ export default function LoginPage() {
 
                 <div className="mt-8 text-center text-sm text-slate-500 font-medium">
                     ¿No tienes una cuenta?{' '}
-                    <Link href="#" className="text-veci-primary hover:text-veci-secondary font-bold hover:underline transition-all">
+                    <Link href="/registro" className="text-veci-primary hover:text-veci-secondary font-bold hover:underline transition-all">
                         Regístrate aquí
                     </Link>
                 </div>

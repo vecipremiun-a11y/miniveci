@@ -33,6 +33,7 @@ export function Navbar() {
   const [cartOpen, setCartOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -43,6 +44,8 @@ export function Navbar() {
   const closeCart = useCallback(() => setCartOpen(false), []);
 
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
+
+  useEffect(() => { setHasMounted(true); }, []);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -247,6 +250,7 @@ export function Navbar() {
   );
 
   return (
+    <>
     <nav className={cn(
       "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-6 md:px-12 border-b border-transparent",
       scrolled ? "bg-white/80 backdrop-blur-md shadow-sm py-2 border-white/50" : "bg-transparent py-4"
@@ -359,7 +363,7 @@ export function Navbar() {
             <button onClick={() => setCartOpen(true)} className="btn-primary px-5 py-2.5 rounded-full font-bold flex items-center gap-2 text-sm shadow-md hover:shadow-lg transition-all">
               <ShoppingCart className="w-4 h-4" />
               <span>Carrito</span>
-              {totalItems > 0 && (
+              {hasMounted && totalItems > 0 && (
                 <span className="bg-white/20 text-white text-xs font-extrabold min-w-5 h-5 rounded-full inline-flex items-center justify-center px-1.5">
                   {totalItems}
                 </span>
@@ -398,7 +402,8 @@ export function Navbar() {
 
       </div>
 
-      <CartDrawer open={cartOpen} onClose={closeCart} />
     </nav>
+    <CartDrawer open={cartOpen} onClose={closeCart} />
+    </>
   );
 }

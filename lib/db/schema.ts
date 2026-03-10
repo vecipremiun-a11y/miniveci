@@ -22,6 +22,30 @@ export const sessions = sqliteTable("sessions", {
     createdAt: text("created_at"),
 });
 
+// --- CUSTOMERS (Store) ---
+
+export const customers = sqliteTable("customers", {
+    id: text("id").primaryKey(),
+    email: text("email").unique().notNull(),
+    passwordHash: text("password_hash").notNull(),
+    firstName: text("first_name").notNull(),
+    lastName: text("last_name").notNull(),
+    phone: text("phone").notNull(),
+    rut: text("rut"),
+
+    // Dirección principal
+    address: text("address"),
+    comuna: text("comuna"),
+    city: text("city").default("Santiago"),
+    addressNotes: text("address_notes"),
+
+    active: integer("active", { mode: "boolean" }).default(true),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    customerEmailIdx: index("customer_email_idx_unique").on(table.email),
+}));
+
 // --- CATALOG ---
 
 export const categories = sqliteTable("categories", {
@@ -99,6 +123,7 @@ export const productImages = sqliteTable("product_images", {
 export const orders = sqliteTable("orders", {
     id: text("id").primaryKey(),
     orderNumber: text("order_number").unique().notNull(),
+    customerId: text("customer_id").references(() => customers.id),
     customerName: text("customer_name").notNull(),
     customerEmail: text("customer_email").notNull(),
     customerPhone: text("customer_phone"),
@@ -207,4 +232,8 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
 
 export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one }) => ({
     order: one(orders, { fields: [orderStatusHistory.orderId], references: [orders.id] }),
+}));
+
+export const customersRelations = relations(customers, ({ many }) => ({
+    orders: many(orders),
 }));

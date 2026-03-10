@@ -3,15 +3,18 @@
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
 import { useCart } from '@/components/cart/CartProvider';
-import { ArrowLeft, CalendarDays, Clock3, CreditCard, MapPin, Store } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { ArrowLeft, CalendarDays, Clock3, CreditCard, MapPin, Store, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { es } from 'date-fns/locale';
+import { useSession } from 'next-auth/react';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 
 type DeliveryMethod = 'store' | 'delivery';
-type PaymentMethod = 'mastercard' | 'visa' | 'apple-pay' | 'other';
+type PaymentMethod = 'contrarembolso' | 'transferencia' | 'mercadopago';
 
 const TIME_SLOTS = [
     '09:00 - 12:00',
@@ -21,9 +24,13 @@ const TIME_SLOTS = [
 ];
 
 export default function CheckoutPage() {
-    const { items, subtotal } = useCart();
+    const { items, subtotal, clearCart } = useCart();
+    const { data: session } = useSession();
+    const router = useRouter();
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState('');
     const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('delivery');
-    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('visa');
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('contrarembolso');
     const [acceptedTerms, setAcceptedTerms] = useState(true);
     const [deliveryDate, setDeliveryDate] = useState<Date | undefined>(new Date());
     const [deliveryTime, setDeliveryTime] = useState<string>('15:00 - 18:00');
@@ -31,6 +38,37 @@ export default function CheckoutPage() {
     const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
     const [couponMessage, setCouponMessage] = useState<string | null>(null);
     const [couponError, setCouponError] = useState<string | null>(null);
+
+    // Contact fields (auto-filled from customer profile)
+    const [contactName, setContactName] = useState('');
+    const [contactLastName, setContactLastName] = useState('');
+    const [contactPhone, setContactPhone] = useState('');
+    const [contactEmail, setContactEmail] = useState('');
+    const [contactRut, setContactRut] = useState('');
+    const [contactAddress, setContactAddress] = useState('');
+    const [contactComuna, setContactComuna] = useState('');
+    const [contactCity, setContactCity] = useState('Santiago');
+    const [contactNotes, setContactNotes] = useState('');
+
+    // Auto-fill from customer profile
+    useEffect(() => {
+        if (session?.user?.role !== 'customer') return;
+        fetch('/api/store/customer')
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (!data) return;
+                setContactName(data.firstName || '');
+                setContactLastName(data.lastName || '');
+                setContactPhone(data.phone || '');
+                setContactEmail(data.email || '');
+                setContactRut(data.rut || '');
+                setContactAddress(data.address || '');
+                setContactComuna(data.comuna || '');
+                setContactCity(data.city || 'Santiago');
+                setContactNotes(data.addressNotes || '');
+            })
+            .catch(() => {});
+    }, [session]);
 
     const shipping = deliveryMethod === 'delivery' ? 1990 : 0;
     const baseDiscount = subtotal > 50000 ? Math.round(subtotal * 0.05) : 0;
@@ -78,6 +116,68 @@ export default function CheckoutPage() {
         setCouponError('Código inválido. Prueba con VECI10 o VECI5.');
     };
 
+    const handleFinalize = async () => {
+        setSubmitError('');
+        if (items.length === 0) return;
+        if (!contactName || !contactEmail) {
+            setSubmitError('Nombre y email son requeridos.');
+            return;
+        }
+        if (deliveryMethod === 'delivery' && !contactAddress) {
+            setSubmitError('Ingresa una dirección de entrega.');
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const res = await fetch('/api/store/orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customerName: contactName,
+                    customerLastName: contactLastName,
+                    customerEmail: contactEmail,
+                    customerPhone: contactPhone,
+                    customerRut: contactRut,
+                    customerId: session?.user?.role === 'customer' ? (session.user as any).id : null,
+                    deliveryType: deliveryMethod === 'store' ? 'pickup' : 'delivery',
+                    deliveryDate: deliveryDate?.toISOString().split('T')[0] || null,
+                    deliveryTimeSlot: deliveryTime,
+                    shippingAddress: contactAddress,
+                    shippingComuna: contactComuna,
+                    shippingCity: contactCity,
+                    shippingNotes: contactNotes,
+                    paymentMethod,
+                    couponCode: appliedCoupon || null,
+                    subtotal,
+                    discount,
+                    shippingCost: shipping,
+                    total,
+                    items: items.map(i => ({
+                        id: i.id,
+                        name: i.name,
+                        sku: i.id,
+                        quantity: i.quantity,
+                        price: i.price,
+                    })),
+                }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                setSubmitError(data.error || 'Error al crear el pedido.');
+                return;
+            }
+
+            clearCart();
+            router.push(`/pedido-exitoso?order=${encodeURIComponent(data.orderNumber)}`);
+        } catch {
+            setSubmitError('Error de conexión. Intenta de nuevo.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     return (
         <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white pb-20">
             <div className="h-32 md:h-40" />
@@ -95,10 +195,11 @@ export default function CheckoutPage() {
                         <div>
                             <h2 className="text-lg font-extrabold text-slate-700 mb-4">1. Información de contacto</h2>
                             <div className="grid sm:grid-cols-2 gap-4">
-                                <InputField label="Nombre" defaultValue="Eduard" />
-                                <InputField label="Apellido" defaultValue="Franz" />
-                                <InputField label="Teléfono" defaultValue="+56 9 5555 0115" />
-                                <InputField label="E-mail" defaultValue="correo@ejemplo.com" />
+                                <InputField label="Nombre" value={contactName} onChange={setContactName} />
+                                <InputField label="Apellido" value={contactLastName} onChange={setContactLastName} />
+                                <InputField label="Teléfono" value={contactPhone} onChange={setContactPhone} />
+                                <InputField label="E-mail" value={contactEmail} onChange={setContactEmail} />
+                                <InputField label="RUT" value={contactRut} onChange={setContactRut} />
                             </div>
                         </div>
 
@@ -130,18 +231,44 @@ export default function CheckoutPage() {
                                     value={deliveryTime}
                                     onChange={setDeliveryTime}
                                 />
-                                <InputField label="Ciudad" defaultValue="Santiago" />
-                                <InputField label="Dirección" defaultValue="Av. Principal 2464" />
+                                <div className="sm:col-span-2">
+                                    <AddressAutocomplete
+                                        address={contactAddress}
+                                        comuna={contactComuna}
+                                        city={contactCity}
+                                        onAddressChange={({ address, comuna, city }) => {
+                                            setContactAddress(address);
+                                            setContactComuna(comuna);
+                                            setContactCity(city);
+                                        }}
+                                        onManualAddressChange={setContactAddress}
+                                    />
+                                </div>
+                                <InputField label="Notas de entrega" value={contactNotes} onChange={setContactNotes} className="sm:col-span-2" />
                             </div>
                         </div>
 
                         <div>
                             <h2 className="text-lg font-extrabold text-slate-700 mb-4">3. Método de pago</h2>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                <PayButton active={paymentMethod === 'mastercard'} onClick={() => setPaymentMethod('mastercard')} label="Mastercard" />
-                                <PayButton active={paymentMethod === 'visa'} onClick={() => setPaymentMethod('visa')} label="VISA" />
-                                <PayButton active={paymentMethod === 'apple-pay'} onClick={() => setPaymentMethod('apple-pay')} label="Apple Pay" />
-                                <PayButton active={paymentMethod === 'other'} onClick={() => setPaymentMethod('other')} label="OTRO" />
+                            <div className="grid gap-3">
+                                <PayButton
+                                    active={paymentMethod === 'contrarembolso'}
+                                    onClick={() => setPaymentMethod('contrarembolso')}
+                                    label="💵 Pago contra entrega"
+                                    description="Paga en efectivo o tarjeta cuando recibas tu pedido"
+                                />
+                                <PayButton
+                                    active={paymentMethod === 'transferencia'}
+                                    onClick={() => setPaymentMethod('transferencia')}
+                                    label="🏦 Transferencia bancaria"
+                                    description="Realiza una transferencia y envíanos el comprobante"
+                                />
+                                <PayButton
+                                    active={paymentMethod === 'mercadopago'}
+                                    onClick={() => setPaymentMethod('mercadopago')}
+                                    label="💳 Mercado Pago"
+                                    description="Paga con tarjeta de crédito, débito o cuenta Mercado Pago"
+                                />
                             </div>
                         </div>
                     </div>
@@ -212,14 +339,19 @@ export default function CheckoutPage() {
                     </div>
 
                     <button
-                        disabled={!acceptedTerms || items.length === 0}
+                        onClick={handleFinalize}
+                        disabled={!acceptedTerms || items.length === 0 || isSubmitting}
                         className="w-full mt-5 btn-primary rounded-full py-3.5 font-extrabold text-base disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <span className="inline-flex items-center gap-2">
-                            <CreditCard className="w-4 h-4" />
-                            Finalizar compra
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                            {isSubmitting ? 'Procesando...' : 'Finalizar compra'}
                         </span>
                     </button>
+
+                    {submitError && (
+                        <p className="mt-3 text-sm text-red-500 font-semibold text-center">{submitError}</p>
+                    )}
 
                     <label className="mt-4 inline-flex items-start gap-2 text-xs text-slate-500">
                         <input
@@ -242,19 +374,24 @@ export default function CheckoutPage() {
 
 function InputField({
     label,
-    defaultValue,
+    value,
+    onChange,
     icon,
+    className,
 }: {
     label: string;
-    defaultValue?: string;
+    value?: string;
+    onChange?: (v: string) => void;
     icon?: ReactNode;
+    className?: string;
 }) {
     return (
-        <label className="block">
+        <label className={`block ${className || ''}`}>
             <span className="text-[11px] uppercase tracking-wide text-slate-400 font-bold">{label}</span>
             <span className="mt-1.5 flex items-center gap-2 bg-white/80 border border-slate-200 rounded-xl px-3.5 py-3 focus-within:ring-2 focus-within:ring-veci-secondary/50">
                 <input
-                    defaultValue={defaultValue}
+                    value={value ?? ''}
+                    onChange={onChange ? (e) => onChange(e.target.value) : undefined}
                     className="w-full bg-transparent outline-none text-sm font-medium text-slate-700 placeholder:text-slate-400"
                 />
                 {icon}
@@ -376,21 +513,26 @@ function PayButton({
     active,
     onClick,
     label,
+    description,
 }: {
     active: boolean;
     onClick: () => void;
     label: string;
+    description?: string;
 }) {
     return (
         <button
             onClick={onClick}
-            className={`rounded-xl border py-3 px-3 text-sm font-extrabold transition-colors ${
+            className={`rounded-xl border py-3 px-4 text-left transition-colors ${
                 active
-                    ? 'bg-blue-50 border-blue-300 text-blue-700'
-                    : 'bg-white/80 border-slate-200 text-slate-600 hover:bg-slate-50'
+                    ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200'
+                    : 'bg-white/80 border-slate-200 hover:bg-slate-50'
             }`}
         >
-            {label}
+            <span className={`text-sm font-extrabold ${active ? 'text-blue-700' : 'text-slate-700'}`}>{label}</span>
+            {description && (
+                <p className={`text-xs mt-0.5 ${active ? 'text-blue-500' : 'text-slate-400'}`}>{description}</p>
+            )}
         </button>
     );
 }
