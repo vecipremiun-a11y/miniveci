@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { AccountSidebar } from '@/components/account/AccountSidebar';
-import { Package, ChevronRight, Clock, MapPin, CreditCard, ArrowLeft, ShoppingBag } from 'lucide-react';
+import { Package, ChevronRight, Clock, MapPin, CreditCard, ArrowLeft, ShoppingBag, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
@@ -60,6 +60,23 @@ const paymentLabels: Record<string, string> = {
 };
 
 export default function PedidosPage() {
+    return (
+        <Suspense fallback={
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                <div className="lg:col-span-3"><AccountSidebar /></div>
+                <div className="lg:col-span-9">
+                    <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl p-8 shadow-xl flex items-center justify-center py-16">
+                        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                    </div>
+                </div>
+            </div>
+        }>
+            <PedidosContent />
+        </Suspense>
+    );
+}
+
+function PedidosContent() {
     const { data: session } = useSession();
     const searchParams = useSearchParams();
     const selectedOrderId = searchParams.get('id');
