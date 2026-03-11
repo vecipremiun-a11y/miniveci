@@ -33,7 +33,7 @@ export const customers = sqliteTable("customers", {
     phone: text("phone").notNull(),
     rut: text("rut"),
 
-    // Dirección principal
+    // Dirección principal (legacy, se mantiene por compatibilidad)
     address: text("address"),
     comuna: text("comuna"),
     city: text("city").default("Santiago"),
@@ -44,6 +44,21 @@ export const customers = sqliteTable("customers", {
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
     customerEmailIdx: index("customer_email_idx_unique").on(table.email),
+}));
+
+export const customerAddresses = sqliteTable("customer_addresses", {
+    id: text("id").primaryKey(),
+    customerId: text("customer_id").references(() => customers.id, { onDelete: "cascade" }).notNull(),
+    label: text("label").notNull().default("Casa"),
+    address: text("address").notNull(),
+    comuna: text("comuna").notNull(),
+    city: text("city").notNull().default("Santiago"),
+    addressNotes: text("address_notes"),
+    isDefault: integer("is_default", { mode: "boolean" }).default(false),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    customerIdIdx: index("customer_address_customer_id_idx").on(table.customerId),
 }));
 
 // --- CATALOG ---
@@ -236,4 +251,9 @@ export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one 
 
 export const customersRelations = relations(customers, ({ many }) => ({
     orders: many(orders),
+    addresses: many(customerAddresses),
+}));
+
+export const customerAddressesRelations = relations(customerAddresses, ({ one }) => ({
+    customer: one(customers, { fields: [customerAddresses.customerId], references: [customers.id] }),
 }));

@@ -162,8 +162,12 @@ export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: s
                             <div className="divide-y">
                                 {order.items?.map((item: any) => (
                                     <div key={item.id} className="p-4 flex gap-4 items-center">
-                                        <div className="w-12 h-12 bg-gray-100 rounded-md flex-shrink-0 flex items-center justify-center border border-gray-200">
-                                            <ShoppingBag className="w-5 h-5 text-gray-400" />
+                                        <div className="w-12 h-12 bg-gray-100 rounded-md flex-shrink-0 flex items-center justify-center border border-gray-200 overflow-hidden">
+                                            {item.imageUrl ? (
+                                                <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <ShoppingBag className="w-5 h-5 text-gray-400" />
+                                            )}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="font-medium text-sm text-gray-900 truncate">{item.productName}</p>

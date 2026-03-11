@@ -265,7 +265,7 @@ export function Navbar() {
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-teal-300 flex items-center justify-center text-white font-bold text-xl shadow-lg">
               N
             </div>
-            <span className="text-xl font-bold text-veci-dark tracking-tight hidden sm:block">VeciMarket</span>
+            <span className="text-xl font-bold text-veci-dark tracking-tight hidden sm:block">MiniVeci</span>
           </div>
 
           {/* Centered Search Bar - Desktop */}

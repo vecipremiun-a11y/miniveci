@@ -21,7 +21,7 @@ export function Footer() {
 
             </div>
             <div className="text-center text-xs text-slate-400 mt-4">
-                VeciMarket © 2026 - Todos los derechos reservados.
+                MiniVeci © 2026 - Todos los derechos reservados.
             </div>
         </footer>
     );

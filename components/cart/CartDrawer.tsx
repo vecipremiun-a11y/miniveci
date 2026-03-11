@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Minus, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
 import { useCart } from './CartProvider';
@@ -15,6 +15,9 @@ const PLACEHOLDER = '/placeholder-product.svg';
 export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const { items, totalItems, subtotal, updateQuantity, removeItem } = useCart();
   const drawerRef = useRef<HTMLDivElement>(null);
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => { setHasMounted(true); }, []);
 
   // Close on Escape
   useEffect(() => {
@@ -63,7 +66,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
           <div className="flex items-center gap-2">
             <ShoppingCart className="w-5 h-5 text-veci-primary" />
             <h2 className="text-lg font-extrabold text-veci-dark">Mi Carrito</h2>
-            {totalItems > 0 && (
+            {hasMounted && totalItems > 0 && (
               <span className="bg-veci-primary/10 text-veci-primary text-xs font-bold px-2 py-0.5 rounded-full">
                 {totalItems}
               </span>

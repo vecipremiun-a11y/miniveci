@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders, orderItems, orderStatusHistory } from "@/lib/db/schema";
+import { orders, orderItems, orderStatusHistory, productImages } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray, and } from "drizzle-orm";
 
 export async function GET(
     req: NextRequest,
@@ -22,16 +22,28 @@ export async function GET(
 
         const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
 
-        // It's possible we want to join product data to get images, 
-        // but the actual product info is snapshotted in orderItems. 
-        // We can fetch product images if needed on the client or here if we join products.
-        // For now, orderItems has productName, etc.
+        // Fetch primary images for each product in the order
+        const productIds = items.map(i => i.productId).filter(Boolean) as string[];
+        const images = productIds.length > 0
+            ? await db.select().from(productImages).where(
+                and(
+                    inArray(productImages.productId, productIds),
+                    eq(productImages.isPrimary, true)
+                )
+            )
+            : [];
+
+        const imageMap = new Map(images.map(img => [img.productId, img.url]));
+        const itemsWithImages = items.map(item => ({
+            ...item,
+            imageUrl: item.productId ? imageMap.get(item.productId) || null : null,
+        }));
 
         const history = await db.select().from(orderStatusHistory)
             .where(eq(orderStatusHistory.orderId, id))
             .orderBy(desc(orderStatusHistory.createdAt));
 
-        return NextResponse.json({ ...order, items, history });
+        return NextResponse.json({ ...order, items: itemsWithImages, history });
     } catch (error) {
         if (error instanceof AuthError) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -48,17 +48,21 @@ export async function PUT(req: NextRequest) {
 
         const body = await req.json();
 
-        await db.update(customers).set({
-            firstName: body.firstName?.trim(),
-            lastName: body.lastName?.trim(),
-            phone: body.phone?.trim(),
-            rut: body.rut?.trim() || null,
-            address: body.address?.trim() || null,
-            comuna: body.comuna?.trim() || null,
-            city: body.city?.trim() || null,
-            addressNotes: body.addressNotes?.trim() || null,
+        const updateData: Record<string, string | null> = {
             updatedAt: new Date().toISOString(),
-        }).where(eq(customers.id, session.user.id));
+        };
+
+        // Solo actualizar campos que vienen explícitamente en el body
+        if ('firstName' in body) updateData.firstName = body.firstName?.trim();
+        if ('lastName' in body) updateData.lastName = body.lastName?.trim();
+        if ('phone' in body) updateData.phone = body.phone?.trim();
+        if ('rut' in body) updateData.rut = body.rut?.trim() || null;
+        if ('address' in body) updateData.address = body.address?.trim() || null;
+        if ('comuna' in body) updateData.comuna = body.comuna?.trim() || null;
+        if ('city' in body) updateData.city = body.city?.trim() || null;
+        if ('addressNotes' in body) updateData.addressNotes = body.addressNotes?.trim() || null;
+
+        await db.update(customers).set(updateData).where(eq(customers.id, session.user.id));
 
         return NextResponse.json({ message: "Perfil actualizado" });
     } catch (error) {
