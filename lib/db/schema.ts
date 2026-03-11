@@ -92,7 +92,7 @@ export const products = sqliteTable("products", {
 
     // Datos Web (Editable)
     webPrice: integer("web_price"), // CLP (pesos)
-    webStock: integer("web_stock"),
+    webStock: real("web_stock"),
     webTitle: text("web_title"),
     webDescription: text("web_description"),
     seoTitle: text("seo_title"),

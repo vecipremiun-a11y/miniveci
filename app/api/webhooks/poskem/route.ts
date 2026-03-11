@@ -32,6 +32,17 @@ function verifySignature(secret: string, timestamp: string, rawBody: string, sig
 
 // --- Helpers ---
 
+/** Normaliza stock: negativos → 0, unidades enteras → floor, kg/lt → 2 decimales */
+function normalizeStock(stock: number | undefined, unit?: string): number | undefined {
+    if (stock === undefined) return undefined;
+    if (stock < 0) stock = 0;
+    const u = (unit ?? "un").toLowerCase();
+    if (u === "kg" || u === "lt") {
+        return Math.round(stock * 100) / 100;
+    }
+    return Math.floor(stock);
+}
+
 function generateSlug(name: string): string {
     return name
         .toLowerCase()
@@ -70,6 +81,9 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
     const taxRate = typeof payload.tax_rate === "number" ? payload.tax_rate : undefined;
     const imageUrl = payload.image_url ? String(payload.image_url) : undefined;
 
+    // Normalizar stock según unidad
+    const normalizedStock = normalizeStock(stock, unit);
+
     let categoryId: string | null = null;
     if (category) categoryId = await resolveCategory(category);
 
@@ -91,7 +105,7 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
         const updateFields: Record<string, unknown> = { updatedAt: now };
         if (name !== undefined) updateFields.name = name;
         if (categoryId !== null) updateFields.categoryId = categoryId;
-        if (stock !== undefined) updateFields.webStock = stock;
+        if (stock !== undefined) updateFields.webStock = normalizedStock;
         if (salePrice !== undefined) updateFields.webPrice = salePrice;
         if (offerPrice !== undefined) updateFields.offerPrice = offerPrice;
         if (isOffer !== undefined) updateFields.isOffer = isOffer;
@@ -119,7 +133,7 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
             slug,
             categoryId,
             webPrice: salePrice ?? 0,
-            webStock: stock ?? 0,
+            webStock: normalizedStock ?? 0,
             offerPrice: offerPrice ?? null,
             isOffer: isOffer ?? false,
             unit: unit ?? "Und",

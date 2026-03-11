@@ -13,7 +13,7 @@ const syncProductSchema = z.object({
   sku: z.string().trim().min(1, "sku es requerido"),
   name: z.string().trim().min(1).optional(),
   category: z.string().trim().min(1).optional(),
-  stock: z.number().int().min(0).optional(),
+  stock: z.number().optional(),
   sale_price: z.number().min(0).optional(),
   offer_price: z.number().min(0).optional().nullable(),
   is_offer: z.boolean().optional(),
@@ -22,6 +22,17 @@ const syncProductSchema = z.object({
   image_url: z.string().url().optional().nullable(),
   image_base64: z.string().optional().nullable(),
 });
+
+/** Normaliza stock: negativos → 0, unidades enteras → floor, kg/lt → 2 decimales */
+function normalizeStock(stock: number | undefined, unit?: string): number | undefined {
+  if (stock === undefined) return undefined;
+  if (stock < 0) stock = 0;
+  const u = (unit ?? "un").toLowerCase();
+  if (u === "kg" || u === "lt") {
+    return Math.round(stock * 100) / 100; // 2 decimales
+  }
+  return Math.floor(stock); // unidades enteras
+}
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -197,6 +208,9 @@ async function handleProductSync(req: NextRequest) {
 
     const skuUpper = data.sku.toUpperCase();
 
+    // Normalizar stock según unidad
+    const normalizedStock = normalizeStock(data.stock, data.unit);
+
     // Resolve category if provided
     let categoryId: string | null = null;
     if (data.category) {
@@ -233,7 +247,7 @@ async function handleProductSync(req: NextRequest) {
         updateFields.categoryId = categoryId;
       }
       if (data.stock !== undefined) {
-        updateFields.webStock = data.stock;
+        updateFields.webStock = normalizedStock;
       }
       if (webPrice !== undefined) {
         updateFields.webPrice = webPrice;
@@ -277,7 +291,7 @@ async function handleProductSync(req: NextRequest) {
         slug,
         categoryId,
         webPrice: webPrice ?? 0,
-        webStock: data.stock ?? 0,
+        webStock: normalizedStock ?? 0,
         offerPrice: data.offer_price != null ? Math.round(data.offer_price) : null,
         isOffer: data.is_offer ?? false,
         unit: data.unit ?? "Und",

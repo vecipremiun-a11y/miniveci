@@ -9,8 +9,18 @@ export const dynamic = "force-dynamic";
 
 const syncStockSchema = z.object({
     sku: z.string().min(1, "SKU requerido"),
-    stock: z.number().int().min(0, "Stock inválido"),
+    stock: z.number(),
 });
+
+/** Normaliza stock: negativos → 0, unidades enteras → floor, kg/lt → 2 decimales */
+function normalizeStock(stock: number, unit?: string | null): number {
+    if (stock < 0) stock = 0;
+    const u = (unit ?? "un").toLowerCase();
+    if (u === "kg" || u === "lt") {
+        return Math.round(stock * 100) / 100;
+    }
+    return Math.floor(stock);
+}
 
 function extractCredentials(req: NextRequest) {
     const apiKey =
@@ -49,10 +59,22 @@ export async function PUT(req: NextRequest) {
         const body = await req.json();
         const { sku, stock } = syncStockSchema.parse(body);
 
+        // Buscar producto para obtener unidad y normalizar stock
+        const existing = await db.query.products.findFirst({
+            where: eq(products.sku, sku),
+            columns: { unit: true },
+        });
+
+        if (!existing) {
+            return NextResponse.json({ error: "Product not found" }, { status: 404 });
+        }
+
+        const normalizedStock = normalizeStock(stock, existing.unit);
+
         const updated = await db
             .update(products)
             .set({
-                webStock: stock,
+                webStock: normalizedStock,
                 updatedAt: new Date().toISOString(),
             })
             .where(eq(products.sku, sku))
