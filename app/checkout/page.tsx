@@ -565,12 +565,10 @@ export default function CheckoutPage() {
                                         </div>
                                     </div>
                                 </PayButton>
-                                <PayButton
-                                    active={paymentMethod === 'mercadopago'}
-                                    onClick={() => setPaymentMethod('mercadopago')}
-                                    label="💳 Mercado Pago"
-                                    description="Paga con tarjeta de crédito, débito o cuenta Mercado Pago"
-                                />
+                                <div className="rounded-xl border border-slate-200 bg-slate-50/80 py-3 px-4 opacity-50 cursor-not-allowed">
+                                    <span className="text-sm font-extrabold text-slate-400">💳 Mercado Pago</span>
+                                    <p className="text-xs mt-0.5 text-slate-400">Próximamente</p>
+                                </div>
                             </div>
                         </div>
                     </div>
