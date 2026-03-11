@@ -227,7 +227,25 @@ async function handleProductSync(req: NextRequest) {
     }
 
     const body = await req.json();
+    console.log("[POS_SYNC] Raw body keys:", Object.keys(body));
+    console.log("[POS_SYNC] Raw offer/price fields:", {
+      price: body.price,
+      sale_price: body.sale_price,
+      offerPrice: body.offerPrice,
+      offer_price: body.offer_price,
+      isOffer: body.isOffer,
+      is_offer: body.is_offer,
+      taxRate: body.taxRate,
+      tax_rate: body.tax_rate,
+    });
     const data = syncProductRawSchema.parse(body);
+    console.log("[POS_SYNC] Transformed data:", {
+      sale_price: data.sale_price,
+      offer_price: data.offer_price,
+      is_offer: data.is_offer,
+      tax_rate: data.tax_rate,
+      unit: data.unit,
+    });
 
     const skuUpper = data.sku.toUpperCase();
 
@@ -288,6 +306,7 @@ async function handleProductSync(req: NextRequest) {
         updateFields.taxRate = data.tax_rate;
       }
 
+      console.log("[POS_SYNC] Update fields for", skuUpper, ":", JSON.stringify(updateFields));
       await db.update(products).set(updateFields).where(eq(products.id, productId));
       action = "updated";
     } else {
