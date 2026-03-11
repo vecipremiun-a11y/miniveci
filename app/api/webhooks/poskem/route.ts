@@ -74,12 +74,16 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
     const name = payload.name ? String(payload.name) : undefined;
     const category = payload.category ? String(payload.category) : undefined;
     const stock = typeof payload.stock === "number" ? payload.stock : undefined;
-    const salePrice = typeof payload.sale_price === "number" ? Math.round(payload.sale_price) : undefined;
-    const offerPrice = typeof payload.offer_price === "number" ? Math.round(payload.offer_price) : (payload.offer_price === null ? null : undefined);
-    const isOffer = typeof payload.is_offer === "boolean" ? payload.is_offer : undefined;
+    // Aceptar snake_case y camelCase (POSKEM envía camelCase)
+    const rawSalePrice = payload.sale_price ?? payload.price;
+    const salePrice = typeof rawSalePrice === "number" ? Math.round(rawSalePrice) : undefined;
+    const rawOfferPrice = payload.offer_price ?? payload.offerPrice;
+    const offerPrice = typeof rawOfferPrice === "number" ? Math.round(rawOfferPrice) : (rawOfferPrice === null ? null : undefined);
+    const isOffer = typeof payload.is_offer === "boolean" ? payload.is_offer : (typeof payload.isOffer === "boolean" ? payload.isOffer : undefined);
     const unit = payload.unit ? String(payload.unit) : undefined;
-    const taxRate = typeof payload.tax_rate === "number" ? payload.tax_rate : undefined;
-    const imageUrl = payload.image_url ? String(payload.image_url) : undefined;
+    const rawTaxRate = payload.tax_rate ?? payload.taxRate;
+    const taxRate = typeof rawTaxRate === "number" ? rawTaxRate : undefined;
+    const imageUrl = (payload.image_url ?? payload.imageUrl) ? String(payload.image_url ?? payload.imageUrl) : undefined;
 
     // Normalizar stock según unidad
     const normalizedStock = normalizeStock(stock, unit);

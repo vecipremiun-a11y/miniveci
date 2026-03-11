@@ -9,19 +9,42 @@ import { emitProductChange } from "@/lib/product-live-updates";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-const syncProductSchema = z.object({
+// Schema acepta snake_case y camelCase (POSKEM envía camelCase)
+const syncProductRawSchema = z.object({
   sku: z.string().trim().min(1, "sku es requerido"),
   name: z.string().trim().min(1).optional(),
   category: z.string().trim().min(1).optional(),
   stock: z.number().optional(),
+  // snake_case
   sale_price: z.number().min(0).optional(),
   offer_price: z.number().min(0).optional().nullable(),
   is_offer: z.boolean().optional(),
-  unit: z.string().trim().optional(),
   tax_rate: z.number().min(0).optional(),
   image_url: z.string().url().optional().nullable(),
   image_base64: z.string().optional().nullable(),
-});
+  // camelCase (POSKEM)
+  price: z.number().min(0).optional(),
+  offerPrice: z.number().min(0).optional().nullable(),
+  isOffer: z.boolean().optional(),
+  taxRate: z.number().min(0).optional(),
+  imageUrl: z.string().url().optional().nullable(),
+  imageBase64: z.string().optional().nullable(),
+  unit: z.string().trim().optional(),
+}).transform((d) => ({
+  sku: d.sku,
+  name: d.name,
+  category: d.category,
+  stock: d.stock,
+  sale_price: d.sale_price ?? d.price,
+  offer_price: d.offer_price ?? d.offerPrice,
+  is_offer: d.is_offer ?? d.isOffer,
+  unit: d.unit,
+  tax_rate: d.tax_rate ?? d.taxRate,
+  image_url: d.image_url ?? d.imageUrl,
+  image_base64: d.image_base64 ?? d.imageBase64,
+}));
+
+type SyncProductData = z.output<typeof syncProductRawSchema>;
 
 /** Normaliza stock: negativos → 0, unidades enteras → floor, kg/lt → 2 decimales */
 function normalizeStock(stock: number | undefined, unit?: string): number | undefined {
@@ -204,7 +227,7 @@ async function handleProductSync(req: NextRequest) {
     }
 
     const body = await req.json();
-    const data = syncProductSchema.parse(body);
+    const data = syncProductRawSchema.parse(body);
 
     const skuUpper = data.sku.toUpperCase();
 
