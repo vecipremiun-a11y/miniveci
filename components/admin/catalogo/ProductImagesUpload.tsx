@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Trash, UploadCloud, Link as LinkIcon } from "lucide-react";
+import { Loader2, Trash, UploadCloud, Link as LinkIcon, ImagePlus } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -25,6 +25,8 @@ export function ProductImagesUpload({ productId, initialImages = [] }: ProductIm
     const [images, setImages] = useState<ImageProps[]>(initialImages);
     const [isLoading, setIsLoading] = useState(false);
     const [newUrl, setNewUrl] = useState("");
+    const [isDragging, setIsDragging] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleAddUrl = async () => {
         if (!newUrl) return;
@@ -50,6 +52,47 @@ export function ProductImagesUpload({ productId, initialImages = [] }: ProductIm
         }
     };
 
+    const uploadFile = async (file: File) => {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch(`/api/admin/products/${productId}/images/upload`, {
+            method: "POST",
+            body: formData,
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: "Error al subir imagen" }));
+            throw new Error(err.error || "Error al subir imagen");
+        }
+
+        return res.json();
+    };
+
+    const handleFileUpload = async (files: FileList | File[]) => {
+        const fileArray = Array.from(files).slice(0, 10);
+        if (fileArray.length === 0) return;
+
+        setIsLoading(true);
+        let successCount = 0;
+
+        for (const file of fileArray) {
+            try {
+                const addedImage = await uploadFile(file);
+                setImages((prev) => [...prev, addedImage]);
+                successCount++;
+            } catch (error: any) {
+                toast.error(`${file.name}: ${error.message}`);
+            }
+        }
+
+        if (successCount > 0) {
+            toast.success(`${successCount} imagen${successCount > 1 ? "es subidas" : " subida"}`);
+            router.refresh();
+        }
+        setIsLoading(false);
+    };
+
     const handleDelete = async (imageId: string) => {
         if (!confirm("¿Eliminar esta imagen?")) return;
         setIsLoading(true);
@@ -70,16 +113,27 @@ export function ProductImagesUpload({ productId, initialImages = [] }: ProductIm
         }
     };
 
-    const handleSetPrimary = async (imageId: string) => {
-        // Find the image, and try to POST it again forcing it to be primary
-        // A more correct way would be a PUT endpoint, but since the POST does the un-set mechanism 
-        // we can theoretically use it if the schema allows overriding.
-        // For brevity in Phase 5 we can map the "Star" button to it.
-        toast.info("Función de marcado principal en desarrollo");
-    };
+    const onDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+    }, []);
+
+    const onDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+    }, []);
+
+    const onDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        if (e.dataTransfer.files.length > 0) {
+            handleFileUpload(e.dataTransfer.files);
+        }
+    }, []);
 
     return (
         <div className="space-y-4">
+            {/* URL input */}
             <div className="flex gap-2">
                 <div className="relative flex-1">
                     <LinkIcon className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -88,6 +142,7 @@ export function ProductImagesUpload({ productId, initialImages = [] }: ProductIm
                         className="pl-9"
                         value={newUrl}
                         onChange={(e) => setNewUrl(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddUrl(); } }}
                         disabled={isLoading}
                     />
                 </div>
@@ -97,14 +152,45 @@ export function ProductImagesUpload({ productId, initialImages = [] }: ProductIm
                 </Button>
             </div>
 
-            {images.length > 0 ? (
+            {/* File upload drop zone */}
+            <div
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                    isDragging
+                        ? "border-blue-400 bg-blue-50"
+                        : "border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100"
+                }`}
+            >
+                <ImagePlus className={`h-8 w-8 mb-2 ${isDragging ? "text-blue-500" : "text-gray-400"}`} />
+                <p className="text-sm font-medium text-gray-600">
+                    {isLoading ? "Subiendo..." : "Arrastra imágenes aquí o haz clic para seleccionar"}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP — Máx 5MB por archivo</p>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                        if (e.target.files) handleFileUpload(e.target.files);
+                        e.target.value = "";
+                    }}
+                />
+            </div>
+
+            {/* Image grid */}
+            {images.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
                     {images.map((img) => (
-                        <div key={img.id} className="relative group border rounded-lg overflow-hidden aspect-square bg-gray-50 flex items-center justify-center">
+                        <div key={img.id || img.url} className="relative group border rounded-lg overflow-hidden aspect-square bg-gray-50 flex items-center justify-center">
                             <img src={img.url} alt={img.altText || "Product image"} className="max-w-full max-h-full object-contain" />
                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                 {img.id && (
-                                    <Button size="icon" variant="destructive" type="button" onClick={() => handleDelete(img.id as string)}>
+                                    <Button size="icon" variant="destructive" type="button" onClick={(e) => { e.stopPropagation(); handleDelete(img.id as string); }}>
                                         <Trash className="h-4 w-4" />
                                     </Button>
                                 )}
@@ -116,11 +202,6 @@ export function ProductImagesUpload({ productId, initialImages = [] }: ProductIm
                             )}
                         </div>
                     ))}
-                </div>
-            ) : (
-                <div className="border-2 border-dashed rounded-lg p-10 flex flex-col items-center justify-center text-muted-foreground bg-gray-50">
-                    <UploadCloud className="h-10 w-10 mb-2 opacity-50" />
-                    <p className="text-sm">No hay imágenes. Añade una URL arriba.</p>
                 </div>
             )}
         </div>
