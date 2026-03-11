@@ -14,12 +14,11 @@ async function getProduct(id: string) {
         where: eq(products.id, id),
     });
 
-    // We assume images are fetched or we fetch them if needed for the form
-    // The form currently doesn't manage images deep logic yet, but for completeness:
-    // const images = await db.select().from(productImages).where(eq(productImages.productId, id));
-
     if (!product) return null;
-    return product;
+
+    const images = await db.select().from(productImages).where(eq(productImages.productId, id));
+
+    return { ...product, images };
 }
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
