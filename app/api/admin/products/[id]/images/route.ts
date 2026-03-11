@@ -125,3 +125,59 @@ export async function DELETE(
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }
+
+export async function PUT(
+    req: NextRequest,
+    context: any
+) {
+    try {
+        await requireAuth();
+        const { params } = context;
+        const resolvedParams = await params;
+        const { id: productId } = resolvedParams;
+
+        const body = await req.json();
+        const { imageId } = body;
+
+        if (!imageId) {
+            return NextResponse.json({ error: "imageId is required" }, { status: 400 });
+        }
+
+        // Verify the image belongs to this product
+        const image = await db.query.productImages.findFirst({
+            where: and(
+                eq(productImages.id, imageId),
+                eq(productImages.productId, productId)
+            ),
+        });
+
+        if (!image) {
+            return NextResponse.json({ error: "Image not found" }, { status: 404 });
+        }
+
+        // Unset all, then set the chosen one
+        await db.update(productImages)
+            .set({ isPrimary: false })
+            .where(eq(productImages.productId, productId));
+
+        await db.update(productImages)
+            .set({ isPrimary: true })
+            .where(eq(productImages.id, imageId));
+
+        const product = await db.query.products.findFirst({
+            where: eq(products.id, productId),
+            columns: { slug: true },
+        });
+
+        await emitProductChange(productId, {
+            slug: product?.slug ?? null,
+            reason: "image-primary-changed",
+            changedFields: ["images"],
+        });
+
+        return NextResponse.json({ message: "Primary image updated", imageId });
+    } catch (error) {
+        console.error("[PRODUCT_IMAGES_PUT]", error);
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    }
+}

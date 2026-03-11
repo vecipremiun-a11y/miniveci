@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Trash, UploadCloud, Link as LinkIcon, ImagePlus } from "lucide-react";
+import { Loader2, Trash2, UploadCloud, Link as LinkIcon, ImagePlus, Star } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -113,6 +113,29 @@ export function ProductImagesUpload({ productId, initialImages = [] }: ProductIm
         }
     };
 
+    const handleSetPrimary = async (imageId: string) => {
+        setIsLoading(true);
+        try {
+            const res = await fetch(`/api/admin/products/${productId}/images`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ imageId }),
+            });
+
+            if (!res.ok) throw new Error("Error al cambiar imagen principal");
+
+            setImages((prev) =>
+                prev.map((img) => ({ ...img, isPrimary: img.id === imageId }))
+            );
+            toast.success("Imagen principal actualizada");
+            router.refresh();
+        } catch (error: any) {
+            toast.error(error.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const onDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(true);
@@ -186,18 +209,36 @@ export function ProductImagesUpload({ productId, initialImages = [] }: ProductIm
             {images.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
                     {images.map((img) => (
-                        <div key={img.id || img.url} className="relative group border rounded-lg overflow-hidden aspect-square bg-gray-50 flex items-center justify-center">
+                        <div key={img.id || img.url} className={`relative border-2 rounded-lg overflow-hidden aspect-square bg-gray-50 flex items-center justify-center ${img.isPrimary ? 'border-yellow-400' : 'border-gray-200'}`}>
                             <img src={img.url} alt={img.altText || "Product image"} className="max-w-full max-h-full object-contain" />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                {img.id && (
-                                    <Button size="icon" variant="destructive" type="button" onClick={(e) => { e.stopPropagation(); handleDelete(img.id as string); }}>
-                                        <Trash className="h-4 w-4" />
-                                    </Button>
-                                )}
-                            </div>
                             {img.isPrimary && (
-                                <div className="absolute top-2 left-2 bg-yellow-500 text-white text-[10px] px-2 py-1 rounded font-bold uppercase">
+                                <div className="absolute top-2 left-2 bg-yellow-500 text-white text-[10px] px-2 py-1 rounded font-bold uppercase shadow">
                                     Principal
+                                </div>
+                            )}
+                            {/* Action buttons - always visible */}
+                            {img.id && (
+                                <div className="absolute bottom-2 right-2 flex gap-1.5">
+                                    {!img.isPrimary && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); handleSetPrimary(img.id as string); }}
+                                            disabled={isLoading}
+                                            className="p-1.5 rounded-md bg-white shadow-md border border-gray-200 hover:bg-yellow-50 hover:border-yellow-300 transition-colors"
+                                            title="Marcar como principal"
+                                        >
+                                            <Star className="h-4 w-4 text-yellow-500" />
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); handleDelete(img.id as string); }}
+                                        disabled={isLoading}
+                                        className="p-1.5 rounded-md bg-white shadow-md border border-gray-200 hover:bg-red-50 hover:border-red-300 transition-colors"
+                                        title="Eliminar imagen"
+                                    >
+                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                    </button>
                                 </div>
                             )}
                         </div>
