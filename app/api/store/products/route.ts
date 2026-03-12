@@ -133,6 +133,7 @@ export async function GET(req: NextRequest) {
                 offerPrice: raw.isOffer && raw.offerPrice ? raw.offerPrice : null,
                 isOffer: Boolean(raw.isOffer),
                 stock: resolvedStock,
+                unit: raw.unit || "Und",
                 category: cat ? {
                     id: cat.id,
                     name: cat.name,

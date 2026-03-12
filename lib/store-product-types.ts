@@ -22,6 +22,7 @@ export interface StoreProductPayload {
     offerPrice: number | null;
     isOffer: boolean;
     stock: number;
+    unit: string;
     category: StoreProductCategory | null;
     images: StoreProductImage[];
     badges: string[] | null;

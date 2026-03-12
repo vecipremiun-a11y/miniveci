@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
-import { useCart } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit } from '@/components/cart/CartProvider';
 import { ArrowLeft, CalendarDays, Clock3, CreditCard, MapPin, Store, Loader2, ChevronDown, Clock, Phone as PhoneIcon, Navigation, Upload, Copy, Check, X, ImageIcon, Pencil, User, Mail, Phone, FileText } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -595,7 +595,7 @@ export default function CheckoutPage() {
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <p className="font-bold text-slate-800 leading-tight line-clamp-2">{item.name}</p>
-                                            <p className="text-sm text-slate-500 mt-1">Cant: {item.quantity}</p>
+                                            <p className="text-sm text-slate-500 mt-1">Cant: {isWeightUnit(item.unit) ? `${item.quantity.toFixed(1)} ${(item.unit ?? 'kg').toLowerCase()}` : item.quantity}</p>
                                             <p className="text-base font-extrabold text-slate-700 mt-1">
                                                 {money.format(item.price * item.quantity)}
                                             </p>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
-import { useCart } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit } from '@/components/cart/CartProvider';
 
 export default function CarritoPage() {
     const { items, subtotal, updateQuantity, removeItem, clearCart } = useCart();
@@ -45,12 +45,16 @@ export default function CarritoPage() {
                     <div className="grid gap-6">
                         <div className="bg-white/50 backdrop-blur-md border border-white rounded-3xl overflow-hidden">
                             {items.map((item) => {
+                                const isWeight = isWeightUnit(item.unit);
+                                const stepVal = isWeight ? 0.1 : 1;
+                                const minQty = isWeight ? 0.1 : 1;
                                 const lineTotal = item.price * item.quantity;
                                 const formattedLineTotal = new Intl.NumberFormat('es-CL', {
                                     style: 'currency',
                                     currency: 'CLP',
                                     maximumFractionDigits: 0,
                                 }).format(lineTotal);
+                                const qtyLabel = isWeight ? item.quantity.toFixed(1) : item.quantity;
 
                                 return (
                                     <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-5 border-b border-slate-200/70 last:border-b-0">
@@ -69,20 +73,21 @@ export default function CarritoPage() {
                                                     style: 'currency',
                                                     currency: 'CLP',
                                                     maximumFractionDigits: 0,
-                                                }).format(item.price)} x {item.quantity}
+                                                }).format(item.price)} x {qtyLabel}{isWeight ? ` ${(item.unit ?? 'kg').toLowerCase()}` : ''}
                                             </p>
                                         </div>
 
                                         <div className="flex items-center gap-3">
                                             <button
-                                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                                className="w-8 h-8 rounded-full bg-white border border-slate-200 font-bold text-slate-600"
+                                                onClick={() => updateQuantity(item.id, Math.round((item.quantity - stepVal) * 100) / 100)}
+                                                disabled={item.quantity <= minQty}
+                                                className="w-8 h-8 rounded-full bg-white border border-slate-200 font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
                                             >
                                                 -
                                             </button>
-                                            <span className="w-6 text-center font-bold text-slate-700">{item.quantity}</span>
+                                            <span className="min-w-[2.5rem] text-center font-bold text-slate-700">{qtyLabel}</span>
                                             <button
-                                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                                onClick={() => updateQuantity(item.id, Math.round((item.quantity + stepVal) * 100) / 100)}
                                                 className="w-8 h-8 rounded-full bg-white border border-slate-200 font-bold text-slate-600"
                                             >
                                                 +

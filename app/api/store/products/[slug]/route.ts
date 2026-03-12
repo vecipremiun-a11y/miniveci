@@ -46,7 +46,10 @@ export async function GET(req: NextRequest, context: any) {
             seoTitle: rawProduct.seoTitle,
             seoDescription: rawProduct.seoDescription,
             price: resolved.resolved_price,
+            offerPrice: rawProduct.isOffer && rawProduct.offerPrice ? rawProduct.offerPrice : null,
+            isOffer: Boolean(rawProduct.isOffer),
             stock: resolved.resolved_stock,
+            unit: rawProduct.unit || "Und",
             category: rawProduct.category ? {
                 id: (rawProduct.category as any).id,
                 name: (rawProduct.category as any).name,

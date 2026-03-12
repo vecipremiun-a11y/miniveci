@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Footer } from '@/components/Footer';
-import { useCart } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit } from '@/components/cart/CartProvider';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
 import { ChevronRight, Loader2, Minus, Plus, Star } from 'lucide-react';
 
@@ -30,6 +30,17 @@ export default function ProductDetailPage() {
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState(0);
     const [quantity, setQuantity] = useState(1);
+
+    // Reset quantity when product loads/changes unit
+    useEffect(() => {
+        if (product) {
+            setQuantity(isWeightUnit(product.unit) ? 0.1 : 1);
+        }
+    }, [product?.unit]);
+
+    const isWeight = product ? isWeightUnit(product.unit) : false;
+    const step = isWeight ? 0.1 : 1;
+    const minQty = isWeight ? 0.1 : 1;
 
     useEffect(() => {
         if (!slug) return;
@@ -281,22 +292,22 @@ export default function ProductDetailPage() {
                         <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
                             <p className="text-sm text-slate-500">Disponibilidad</p>
                             <p className="font-bold text-slate-700">
-                                {product.stock > 0 ? `Stock disponible: ${product.stock}` : 'Sin stock'}
+                                {product.stock > 0 ? `Stock disponible: ${product.stock} ${isWeight ? (product.unit ?? 'Kg').toUpperCase() : 'UND'}` : 'Sin stock'}
                             </p>
                         </div>
 
                         <div className="mt-6">
-                            <p className="text-sm font-semibold text-slate-500 mb-3">Cantidad</p>
+                            <p className="text-sm font-semibold text-slate-500 mb-3">Cantidad{isWeight ? ` (${(product.unit ?? 'Kg').toLowerCase()})` : ''}</p>
                             <div className="flex items-center gap-3">
                                 <button
-                                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                                    onClick={() => setQuantity((q) => Math.max(minQty, Math.round((q - step) * 100) / 100))}
                                     className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-700 font-bold"
                                 >
                                     <Minus className="w-4 h-4 mx-auto" />
                                 </button>
-                                <span className="w-10 text-center font-extrabold text-slate-700">{quantity}</span>
+                                <span className="w-14 text-center font-extrabold text-slate-700">{isWeight ? quantity.toFixed(1) : quantity}</span>
                                 <button
-                                    onClick={() => setQuantity((q) => q + 1)}
+                                    onClick={() => setQuantity((q) => Math.min(product.stock, Math.round((q + step) * 100) / 100))}
                                     disabled={quantity >= product.stock}
                                     className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
@@ -306,7 +317,7 @@ export default function ProductDetailPage() {
                         </div>
 
                         <button
-                            onClick={() => addItem({ id: product.id, name: product.name, price: displayPrice, image: currentImage, slug: product.slug }, quantity)}
+                            onClick={() => addItem({ id: product.id, name: product.name, price: displayPrice, image: currentImage, slug: product.slug, unit: product.unit }, quantity)}
                             disabled={product.stock <= 0}
                             className="mt-8 w-full btn-primary rounded-full py-3.5 text-base font-extrabold disabled:opacity-50 disabled:cursor-not-allowed"
                         >

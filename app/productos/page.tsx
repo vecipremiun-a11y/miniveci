@@ -341,6 +341,7 @@ function ProductsPageContent() {
                                         offerPrice={product.offerPrice}
                                         isOffer={product.isOffer}
                                         stock={product.stock}
+                                        unit={product.unit}
                                         image={getPrimaryImage(product)}
                                         isPopular={product.badges?.includes('popular') || product.tags?.includes('popular') || false}
                                         slug={product.slug}

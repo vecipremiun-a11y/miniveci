@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Minus, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
-import { useCart } from './CartProvider';
+import { useCart, isWeightUnit } from './CartProvider';
 
 interface CartDrawerProps {
   open: boolean;
@@ -97,6 +97,9 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
           ) : (
             <ul className="space-y-4">
               {items.map((item) => {
+                const isWeight = isWeightUnit(item.unit);
+                const stepVal = isWeight ? 0.1 : 1;
+                const minQty = isWeight ? 0.1 : 1;
                 const itemTotal = new Intl.NumberFormat('es-CL', {
                   style: 'currency',
                   currency: 'CLP',
@@ -115,15 +118,15 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                       <p className="text-xs text-slate-500 mt-0.5">{itemTotal}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          disabled={item.quantity <= 1}
+                          onClick={() => updateQuantity(item.id, Math.round((item.quantity - stepVal) * 100) / 100)}
+                          disabled={item.quantity <= minQty}
                           className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-500 hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
-                        <span className="text-sm font-bold text-slate-700 w-6 text-center">{item.quantity}</span>
+                        <span className="text-sm font-bold text-slate-700 min-w-[2rem] text-center">{isWeight ? item.quantity.toFixed(1) : item.quantity}</span>
                         <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                          onClick={() => updateQuantity(item.id, Math.round((item.quantity + stepVal) * 100) / 100)}
                           className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-500 hover:border-slate-300"
                         >
                           <Plus className="w-3 h-3" />

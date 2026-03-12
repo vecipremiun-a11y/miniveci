@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { Plus, Minus, Percent } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { useCart } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit } from '@/components/cart/CartProvider';
 import { useRouter } from 'next/navigation';
 
 const PLACEHOLDER_IMAGE = '/placeholder-product.svg';
@@ -15,15 +15,19 @@ interface ProductCardProps {
     offerPrice?: number | null;
     isOffer?: boolean;
     stock: number;
+    unit?: string;
     image?: string | null;
     isPopular?: boolean;
     slug?: string;
 }
 
-export function ProductCard({ id, name, price, offerPrice, isOffer, stock, image, isPopular, slug }: ProductCardProps) {
+export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, image, isPopular, slug }: ProductCardProps) {
     const { addItem } = useCart();
     const router = useRouter();
-    const [quantity, setQuantity] = useState(1);
+    const isWeight = isWeightUnit(unit);
+    const step = isWeight ? 0.1 : 1;
+    const minQty = isWeight ? 0.1 : 1;
+    const [quantity, setQuantity] = useState(minQty);
     const imageSrc = image || PLACEHOLDER_IMAGE;
 
     const hasOffer = Boolean(isOffer && offerPrice && offerPrice < price);
@@ -38,11 +42,11 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, image
         hasOffer ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(price) : '',
         [hasOffer, price]
     );
-    const stockLabel = `${stock} UND`;
+    const stockLabel = isWeight ? `${stock} ${(unit ?? 'Kg').toUpperCase()}` : `${stock} UND`;
 
     const handleAdd = () => {
-        addItem({ id, name, price: displayPrice, image: imageSrc, slug }, quantity);
-        setQuantity(1);
+        addItem({ id, name, price: displayPrice, image: imageSrc, slug, unit }, quantity);
+        setQuantity(minQty);
     };
 
     const goToDetail = () => {
@@ -117,17 +121,17 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, image
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                setQuantity((q) => Math.max(1, q - 1));
+                                setQuantity((q) => Math.max(minQty, Math.round((q - step) * 100) / 100));
                             }}
                             className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
                         >
                             <Minus className="w-3 h-3" />
                         </button>
-                        <span className="text-sm font-bold text-slate-700">{quantity}</span>
+                        <span className="text-sm font-bold text-slate-700 min-w-[2rem] text-center">{isWeight ? quantity.toFixed(1) : quantity}</span>
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                setQuantity((q) => Math.min(stock, q + 1));
+                                setQuantity((q) => Math.min(stock, Math.round((q + step) * 100) / 100));
                             }}
                             disabled={quantity >= stock}
                             className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
