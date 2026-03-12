@@ -228,6 +228,7 @@ async function handleProductSync(req: NextRequest) {
 
     const body = await req.json();
     console.log("[POS_SYNC] Raw body keys:", Object.keys(body));
+    console.log("[POS_SYNC] stock value:", body.stock, "type:", typeof body.stock);
     console.log("[POS_SYNC] Raw offer/price fields:", {
       price: body.price,
       sale_price: body.sale_price,
@@ -238,7 +239,15 @@ async function handleProductSync(req: NextRequest) {
       taxRate: body.taxRate,
       tax_rate: body.tax_rate,
     });
-    const data = syncProductRawSchema.parse(body);
+
+    let data: SyncProductData;
+    try {
+      data = syncProductRawSchema.parse(body);
+    } catch (zodErr: any) {
+      console.error("[POS_SYNC] Zod validation failed:", JSON.stringify(zodErr.errors));
+      console.error("[POS_SYNC] Full body was:", JSON.stringify(body));
+      throw zodErr;
+    }
     console.log("[POS_SYNC] Transformed data:", {
       sale_price: data.sale_price,
       offer_price: data.offer_price,
@@ -363,6 +372,7 @@ async function handleProductSync(req: NextRequest) {
         {
           success: true,
           action,
+          _build: "20260312a",
           message: action === "created" ? "Product created" : "Product updated",
           product: {
             id: productId,
@@ -377,7 +387,7 @@ async function handleProductSync(req: NextRequest) {
     if (error?.name === "ZodError") {
       return withCors(
         NextResponse.json(
-          { error: "Validation Error", details: error.errors },
+          { error: "Validation Error", details: error.errors, _build: "20260312a" },
           { status: 400 }
         )
       );
