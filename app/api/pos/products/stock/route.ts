@@ -10,13 +10,24 @@ export const dynamic = "force-dynamic";
 const syncStockSchema = z.object({
     sku: z.string().trim().min(1).transform((value) => value.toUpperCase()).optional(),
     product_id: z.string().trim().min(1).optional(),
-    stock: z.number().int().min(0, "Stock inválido").optional(),
-    cantidad_vendida: z.number().int().positive("cantidad_vendida inválida").optional(),
+    stock: z.number().optional(),
+    cantidad_vendida: z.number().positive("cantidad_vendida inválida").optional(),
+    unit: z.string().trim().optional(),
 }).refine((payload) => Boolean(payload.sku || payload.product_id), {
     message: "Debe enviar sku o product_id",
 }).refine((payload) => payload.stock !== undefined || payload.cantidad_vendida !== undefined, {
     message: "Debe enviar stock o cantidad_vendida",
 });
+
+/** Normaliza stock: negativos → 0, unidades enteras → floor, kg/lt → 3 decimales */
+function normalizeStock(stock: number, unit?: string | null): number {
+    if (stock < 0) stock = 0;
+    const u = (unit ?? "un").toLowerCase();
+    if (u === "kg" || u === "lt") {
+        return Math.round(stock * 1000) / 1000;
+    }
+    return Math.floor(stock);
+}
 
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -72,7 +83,7 @@ async function handleStockSync(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { sku, product_id, stock, cantidad_vendida } = syncStockSchema.parse(body);
+        const { sku, product_id, stock: rawStock, cantidad_vendida, unit: payloadUnit } = syncStockSchema.parse(body);
 
         let targetProduct = null as null | { id: string; sku: string; slug: string | null };
 
@@ -99,6 +110,14 @@ async function handleStockSync(req: NextRequest) {
         if (!targetProduct) {
             return withCors(NextResponse.json({ error: "Product not found" }, { status: 404 }));
         }
+
+        // Obtener unit del producto si no viene en el payload
+        const existingProduct = await db.query.products.findFirst({
+            where: eq(products.id, targetProduct.id),
+            columns: { unit: true },
+        });
+        const effectiveUnit = payloadUnit ?? existingProduct?.unit ?? "un";
+        const stock = rawStock !== undefined ? normalizeStock(rawStock, effectiveUnit) : undefined;
 
         const updated = stock !== undefined
             ? await db
