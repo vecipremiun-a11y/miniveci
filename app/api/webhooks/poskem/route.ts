@@ -197,7 +197,7 @@ async function handleProductDeactivated(payload: Record<string, unknown>) {
     await emitProductChange(existing[0].id, {
         slug: existing[0].slug,
         reason: "webhook:product.deactivated",
-        changedFields: ["status"],
+        changedFields: ["stock"],
     });
 
     return { action: "deactivated", productId: existing[0].id };
@@ -225,7 +225,7 @@ async function handleProductDeleted(payload: Record<string, unknown>) {
     await emitProductChange(existing[0].id, {
         slug: existing[0].slug,
         reason: "webhook:product.deleted",
-        changedFields: ["status", "stock"],
+        changedFields: ["stock"],
     });
 
     return { action: "soft-deleted", productId: existing[0].id };
