@@ -17,7 +17,7 @@ function normalizeStock(stock: number, unit?: string | null): number {
     if (stock < 0) stock = 0;
     const u = (unit ?? "un").toLowerCase();
     if (u === "kg" || u === "lt") {
-        return Math.round(stock * 100) / 100;
+        return Math.round(stock * 1000) / 1000;
     }
     return Math.floor(stock);
 }

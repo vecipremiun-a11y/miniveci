@@ -148,7 +148,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
         </div>
 
         {/* Footer */}
-        {items.length > 0 && (
+        {hasMounted && items.length > 0 && (
           <div className="border-t border-slate-100 px-6 py-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-slate-500">Subtotal</span>

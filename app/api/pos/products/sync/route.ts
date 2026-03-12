@@ -46,13 +46,13 @@ const syncProductRawSchema = z.object({
 
 type SyncProductData = z.output<typeof syncProductRawSchema>;
 
-/** Normaliza stock: negativos → 0, unidades enteras → floor, kg/lt → 2 decimales */
+/** Normaliza stock: negativos → 0, unidades enteras → floor, kg/lt → 3 decimales */
 function normalizeStock(stock: number | undefined, unit?: string): number | undefined {
   if (stock === undefined) return undefined;
   if (stock < 0) stock = 0;
   const u = (unit ?? "un").toLowerCase();
   if (u === "kg" || u === "lt") {
-    return Math.round(stock * 100) / 100; // 2 decimales
+    return Math.round(stock * 1000) / 1000; // 3 decimales
   }
   return Math.floor(stock); // unidades enteras
 }
