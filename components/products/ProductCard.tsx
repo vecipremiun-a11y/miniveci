@@ -42,7 +42,8 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
         hasOffer ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(price) : '',
         [hasOffer, price]
     );
-    const stockLabel = isWeight ? `${stock} ${(unit ?? 'Kg').toUpperCase()}` : `${stock} UND`;
+    const stockLabel = stock <= 0 ? 'Sin stock' : (isWeight ? `${stock} ${(unit ?? 'Kg').toUpperCase()}` : `${stock} UND`);
+    const outOfStock = stock <= 0;
 
     const handleAdd = () => {
         addItem({ id, name, price: displayPrice, image: imageSrc, slug, unit }, quantity);
@@ -108,7 +109,7 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                             <p className="text-sm text-slate-400 line-through font-medium">{formattedOriginal}</p>
                         )}
                     </div>
-                    <div className="shrink-0 inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-100">
+                    <div className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ring-1 ${outOfStock ? 'bg-red-50 text-red-600 ring-red-100' : 'bg-emerald-50 text-emerald-700 ring-emerald-100'}`}>
                         {stockLabel}
                     </div>
                 </div>
@@ -146,9 +147,10 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                             e.stopPropagation();
                             handleAdd();
                         }}
-                        className="flex-1 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-sm font-bold py-2.5 px-4 rounded-full shadow-lg hover:shadow-xl hover:shadow-purple-200 transition-all flex items-center justify-center"
+                        disabled={outOfStock}
+                        className="flex-1 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-sm font-bold py-2.5 px-4 rounded-full shadow-lg hover:shadow-xl hover:shadow-purple-200 transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                     >
-                        Agregar
+                        {outOfStock ? 'Sin stock' : 'Agregar'}
                     </button>
 
                 </div>

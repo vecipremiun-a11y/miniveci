@@ -32,14 +32,7 @@ export async function GET(req: NextRequest) {
         // Build WHERE conditions — all filtering at SQL level
         const conditions: any[] = [eq(products.isPublished, true)];
 
-        // Effective stock > 0 (handles "reserved" stock source at SQL level)
-        conditions.push(sql`(
-            CASE
-                WHEN ${products.stockSource} = 'reserved' THEN COALESCE(${products.webStock}, 0) - COALESCE(${products.reservedQty}, 0)
-                WHEN (${products.stockSource} = 'global' OR ${products.stockSource} IS NULL) AND ${categories.syncStockSource} = 'reserved' THEN COALESCE(${products.webStock}, 0) - COALESCE(${products.reservedQty}, 0)
-                ELSE COALESCE(${products.webStock}, 0)
-            END > 0
-        )`);
+        // Products with stock 0 are shown but with "Sin stock" label
 
         if (categoryIdFilter) {
             conditions.push(eq(products.categoryId, categoryIdFilter));

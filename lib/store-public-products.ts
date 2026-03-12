@@ -26,7 +26,7 @@ export async function getPublicStoreProductById(productId: string): Promise<Stor
         rawProduct.category as CategoryInput | null,
     );
 
-    if (!resolved.is_available || resolved.resolved_stock <= 0) {
+    if (!resolved.is_available) {
         return null;
     }
 

@@ -34,8 +34,8 @@ export async function GET(req: NextRequest, context: any) {
             rawProduct.category as CategoryInput | null
         );
 
-        if (!resolved.is_available || resolved.resolved_stock <= 0) {
-            return NextResponse.json({ error: "Product not found or out of stock" }, { status: 404 });
+        if (!resolved.is_available) {
+            return NextResponse.json({ error: "Product not found" }, { status: 404 });
         }
 
         const publicProduct = {
