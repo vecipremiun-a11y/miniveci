@@ -127,6 +127,8 @@ export async function GET(req: NextRequest) {
                 isOffer: Boolean(raw.isOffer),
                 stock: resolvedStock,
                 unit: raw.unit || "Und",
+                equivLabel: raw.equivLabel || null,
+                equivWeight: raw.equivWeight || null,
                 category: cat ? {
                     id: cat.id,
                     name: cat.name,

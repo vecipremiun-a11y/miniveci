@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
-import { useCart, isWeightUnit } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv } from '@/components/cart/CartProvider';
 
 export default function CarritoPage() {
     const { items, subtotal, updateQuantity, removeItem, clearCart } = useCart();
@@ -45,16 +45,20 @@ export default function CarritoPage() {
                     <div className="grid gap-6">
                         <div className="bg-white/50 backdrop-blur-md border border-white rounded-3xl overflow-hidden">
                             {items.map((item) => {
-                                const isWeight = isWeightUnit(item.unit);
-                                const stepVal = isWeight ? 0.1 : 1;
-                                const minQty = isWeight ? 0.1 : 1;
-                                const lineTotal = item.price * item.quantity;
+                                const equiv = hasEquiv(item);
+                                const isWeight = !equiv && isWeightUnit(item.unit);
+                                const isKgDirect = !equiv && item.id.endsWith('__kg');
+                                const stepVal = equiv ? 1 : ((isWeight || isKgDirect) ? 0.5 : 1);
+                                const minQty = equiv ? 1 : ((isWeight || isKgDirect) ? 0.5 : 1);
+                                const lineTotal = equiv
+                                    ? Math.round(item.price * item.equivWeight! * item.quantity)
+                                    : item.price * item.quantity;
                                 const formattedLineTotal = new Intl.NumberFormat('es-CL', {
                                     style: 'currency',
                                     currency: 'CLP',
                                     maximumFractionDigits: 0,
                                 }).format(lineTotal);
-                                const qtyLabel = isWeight ? item.quantity.toFixed(1) : item.quantity;
+                                const qtyLabel = (isWeight || isKgDirect) ? item.quantity.toFixed(1) : item.quantity;
 
                                 return (
                                     <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-5 border-b border-slate-200/70 last:border-b-0">
@@ -69,11 +73,9 @@ export default function CarritoPage() {
                                         <div className="flex-1 min-w-0">
                                             <p className="font-bold text-slate-800 truncate">{item.name}</p>
                                             <p className="text-sm text-slate-500">
-                                                {new Intl.NumberFormat('es-CL', {
-                                                    style: 'currency',
-                                                    currency: 'CLP',
-                                                    maximumFractionDigits: 0,
-                                                }).format(item.price)} x {qtyLabel}{isWeight ? ` ${(item.unit ?? 'kg').toLowerCase()}` : ''}
+                                                {equiv
+                                                    ? <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Math.round(item.price * item.equivWeight!))} x {qtyLabel} {item.equivLabel}</>
+                                                    : <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(item.price)} x {qtyLabel}{isWeight ? ` ${(item.unit ?? 'kg').toLowerCase()}` : ''}</>}
                                             </p>
                                         </div>
 

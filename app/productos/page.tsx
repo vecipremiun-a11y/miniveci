@@ -342,6 +342,8 @@ function ProductsPageContent() {
                                         isOffer={product.isOffer}
                                         stock={product.stock}
                                         unit={product.unit}
+                                        equivLabel={product.equivLabel}
+                                        equivWeight={product.equivWeight}
                                         image={getPrimaryImage(product)}
                                         isPopular={product.badges?.includes('popular') || product.tags?.includes('popular') || false}
                                         slug={product.slug}

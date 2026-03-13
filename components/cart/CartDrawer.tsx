@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Minus, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
-import { useCart, isWeightUnit } from './CartProvider';
+import { useCart, isWeightUnit, hasEquiv } from './CartProvider';
 
 interface CartDrawerProps {
   open: boolean;
@@ -97,14 +97,19 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
           ) : (
             <ul className="space-y-4">
               {items.map((item) => {
-                const isWeight = isWeightUnit(item.unit);
-                const stepVal = isWeight ? 0.1 : 1;
-                const minQty = isWeight ? 0.1 : 1;
+                const equiv = hasEquiv(item);
+                const isWeight = !equiv && isWeightUnit(item.unit);
+                const isKgDirect = !equiv && item.id.endsWith('__kg');
+                const stepVal = equiv ? 1 : (isWeight || isKgDirect ? 0.5 : 1);
+                const minQty = equiv ? 1 : (isWeight || isKgDirect ? 0.5 : 1);
+                const lineTotal = equiv
+                  ? Math.round(item.price * item.equivWeight! * item.quantity)
+                  : item.price * item.quantity;
                 const itemTotal = new Intl.NumberFormat('es-CL', {
                   style: 'currency',
                   currency: 'CLP',
                   maximumFractionDigits: 0,
-                }).format(item.price * item.quantity);
+                }).format(lineTotal);
 
                 return (
                   <li key={item.id} className="flex gap-3 bg-slate-50 rounded-2xl p-3">
@@ -115,7 +120,10 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-slate-800 truncate">{item.name}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{itemTotal}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {equiv && <span>{item.quantity} {item.equivLabel} &middot; </span>}
+                        {itemTotal}
+                      </p>
                       <div className="flex items-center gap-2 mt-2">
                         <button
                           onClick={() => updateQuantity(item.id, Math.round((item.quantity - stepVal) * 100) / 100)}
@@ -124,7 +132,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                         >
                           <Minus className="w-3 h-3" />
                         </button>
-                        <span className="text-sm font-bold text-slate-700 min-w-[2rem] text-center">{isWeight ? item.quantity.toFixed(1) : item.quantity}</span>
+                        <span className="text-sm font-bold text-slate-700 min-w-[2rem] text-center">{(isWeight || isKgDirect) ? item.quantity.toFixed(1) : item.quantity}</span>
                         <button
                           onClick={() => updateQuantity(item.id, Math.round((item.quantity + stepVal) * 100) / 100)}
                           className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-500 hover:border-slate-300"

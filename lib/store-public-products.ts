@@ -42,6 +42,8 @@ export async function getPublicStoreProductById(productId: string): Promise<Stor
         isOffer: Boolean(rawProduct.isOffer),
         stock: resolved.resolved_stock,
         unit: rawProduct.unit || "Und",
+        equivLabel: rawProduct.equivLabel || null,
+        equivWeight: rawProduct.equivWeight || null,
         category: rawProduct.category
             ? {
                 id: rawProduct.category.id,

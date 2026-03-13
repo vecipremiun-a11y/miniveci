@@ -26,6 +26,8 @@ export const productSchema = z.object({
     offerPrice: z.coerce.number().min(0).optional().nullable(),
     isOffer: z.boolean().default(false),
     unit: z.string().optional().default("Und"),
+    equivLabel: z.string().optional().nullable(),
+    equivWeight: z.coerce.number().min(0).optional().nullable(),
     taxRate: z.coerce.number().min(0).optional().nullable(),
 
     // Status

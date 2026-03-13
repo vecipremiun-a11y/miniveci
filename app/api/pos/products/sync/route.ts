@@ -30,6 +30,11 @@ const syncProductRawSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   imageBase64: z.string().optional().nullable(),
   unit: z.string().trim().optional(),
+  // Equivalencia de peso (opcional)
+  equiv_label: z.string().trim().optional().nullable(),
+  equiv_weight: z.number().min(0).optional().nullable(),
+  equivLabel: z.string().trim().optional().nullable(),
+  equivWeight: z.number().min(0).optional().nullable(),
 }).transform((d) => ({
   sku: d.sku,
   name: d.name,
@@ -39,6 +44,8 @@ const syncProductRawSchema = z.object({
   offer_price: d.offer_price ?? d.offerPrice,
   is_offer: d.is_offer ?? d.isOffer,
   unit: d.unit,
+  equiv_label: d.equiv_label ?? d.equivLabel,
+  equiv_weight: d.equiv_weight ?? d.equivWeight,
   tax_rate: d.tax_rate ?? d.taxRate,
   image_url: d.image_url ?? d.imageUrl,
   image_base64: d.image_base64 ?? d.imageBase64,
@@ -314,6 +321,12 @@ async function handleProductSync(req: NextRequest) {
       if (data.tax_rate !== undefined) {
         updateFields.taxRate = data.tax_rate;
       }
+      if (data.equiv_label !== undefined) {
+        updateFields.equivLabel = data.equiv_label;
+      }
+      if (data.equiv_weight !== undefined) {
+        updateFields.equivWeight = data.equiv_weight;
+      }
 
       console.log("[POS_SYNC] Update fields for", skuUpper, ":", JSON.stringify(updateFields));
       await db.update(products).set(updateFields).where(eq(products.id, productId));
@@ -346,6 +359,8 @@ async function handleProductSync(req: NextRequest) {
         offerPrice: data.offer_price != null ? Math.round(data.offer_price) : null,
         isOffer: data.is_offer ?? false,
         unit: data.unit ?? "Und",
+        equivLabel: data.equiv_label ?? null,
+        equivWeight: data.equiv_weight ?? null,
         taxRate: data.tax_rate ?? null,
         isPublished: false,
         createdAt: now,

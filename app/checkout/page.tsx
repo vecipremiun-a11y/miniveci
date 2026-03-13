@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
-import { useCart, isWeightUnit } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv } from '@/components/cart/CartProvider';
 import { ArrowLeft, CalendarDays, Clock3, CreditCard, MapPin, Store, Loader2, ChevronDown, Clock, Phone as PhoneIcon, Navigation, Upload, Copy, Check, X, ImageIcon, Pencil, User, Mail, Phone, FileText } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -257,13 +257,26 @@ export default function CheckoutPage() {
                     discount,
                     shippingCost: shipping,
                     total,
-                    items: items.map(i => ({
-                        id: i.id,
-                        name: i.name,
-                        sku: i.id,
-                        quantity: i.quantity,
-                        price: i.price,
-                    })),
+                    items: items.map(i => {
+                        const equiv = hasEquiv(i);
+                        const realId = i.id.replace(/__kg$/, '');
+                        // For equiv products, send weight in kg to POS (qty × equivWeight)
+                        const posQuantity = equiv
+                            ? Math.round(i.quantity * i.equivWeight! * 1000) / 1000
+                            : i.quantity;
+                        const unitPrice = equiv
+                            ? Math.round(i.price * i.equivWeight!)
+                            : i.price;
+                        return {
+                            id: realId,
+                            name: i.name,
+                            sku: realId,
+                            quantity: posQuantity,
+                            price: unitPrice,
+                            displayQuantity: equiv ? i.quantity : undefined,
+                            equivLabel: equiv ? i.equivLabel : undefined,
+                        };
+                    }),
                 }),
             });
 
@@ -595,9 +608,13 @@ export default function CheckoutPage() {
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <p className="font-bold text-slate-800 leading-tight line-clamp-2">{item.name}</p>
-                                            <p className="text-sm text-slate-500 mt-1">Cant: {isWeightUnit(item.unit) ? `${item.quantity.toFixed(1)} ${(item.unit ?? 'kg').toLowerCase()}` : item.quantity}</p>
+                                            <p className="text-sm text-slate-500 mt-1">
+                                                {hasEquiv(item)
+                                                    ? `Cant: ${item.quantity} ${item.equivLabel}`
+                                                    : `Cant: ${isWeightUnit(item.unit) ? `${item.quantity.toFixed(1)} ${(item.unit ?? 'kg').toLowerCase()}` : item.quantity}`}
+                                            </p>
                                             <p className="text-base font-extrabold text-slate-700 mt-1">
-                                                {money.format(item.price * item.quantity)}
+                                                {money.format(hasEquiv(item) ? Math.round(item.price * item.equivWeight! * item.quantity) : item.price * item.quantity)}
                                             </p>
                                         </div>
                                     </div>

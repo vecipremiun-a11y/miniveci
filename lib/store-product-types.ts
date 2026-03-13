@@ -23,6 +23,8 @@ export interface StoreProductPayload {
     isOffer: boolean;
     stock: number;
     unit: string;
+    equivLabel: string | null;
+    equivWeight: number | null;
     category: StoreProductCategory | null;
     images: StoreProductImage[];
     badges: string[] | null;

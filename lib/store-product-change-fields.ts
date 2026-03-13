@@ -16,6 +16,8 @@ const mutationKeyMap: Record<string, StoreProductField[]> = {
     stockSource: ["stock"],
     reservedQty: ["stock"],
     unit: ["unit"],
+    equivLabel: ["equivLabel"],
+    equivWeight: ["equivWeight"],
 };
 
 export function mapMutationKeysToStoreFields(keys: string[]): StoreProductField[] {

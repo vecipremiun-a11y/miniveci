@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Footer } from '@/components/Footer';
-import { useCart, isWeightUnit } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv } from '@/components/cart/CartProvider';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
-import { ChevronRight, Loader2, Minus, Plus, Star } from 'lucide-react';
+import { ChevronRight, Loader2, Minus, Plus, Scale, ShoppingCart, Star } from 'lucide-react';
 
 type ProductDetail = StoreProductPayload;
 
@@ -30,17 +30,34 @@ export default function ProductDetailPage() {
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState(0);
     const [quantity, setQuantity] = useState(1);
+    const [buyMode, setBuyMode] = useState<'unit' | 'kg'>('unit');
 
     // Reset quantity when product loads/changes unit
     useEffect(() => {
         if (product) {
-            setQuantity(isWeightUnit(product.unit) ? 0.1 : 1);
+            const equiv = hasEquiv(product);
+            setBuyMode('unit');
+            setQuantity(equiv ? 1 : (isWeightUnit(product.unit) ? 0.1 : 1));
         }
-    }, [product?.unit]);
+    }, [product?.unit, product?.equivLabel]);
 
-    const isWeight = product ? isWeightUnit(product.unit) : false;
-    const step = isWeight ? 0.1 : 1;
-    const minQty = isWeight ? 0.1 : 1;
+    const equiv = product ? hasEquiv(product) : false;
+    const kgMode = equiv && buyMode === 'kg';
+    const isWeight = product ? (!equiv && isWeightUnit(product.unit)) : false;
+    const step = kgMode ? 0.5 : (equiv ? 1 : (isWeight ? 0.1 : 1));
+    const minQty = kgMode ? 0.5 : (equiv ? 1 : (isWeight ? 0.1 : 1));
+    const equivW = product?.equivWeight ?? 1;
+    const availableStock = product ? (equiv ? Math.floor(product.stock / equivW) : product.stock) : 0;
+    const maxQty = kgMode ? (product?.stock ?? 0) : availableStock;
+
+    // Format price per kg for equiv products
+    const equivUnitLabel = product?.equivLabel && !/^\d+$/.test(product.equivLabel.trim()) ? product.equivLabel : 'und';
+
+    const handleBuyModeChange = (mode: 'unit' | 'kg') => {
+        if (mode === buyMode) return;
+        setBuyMode(mode);
+        setQuantity(mode === 'kg' ? 0.5 : 1);
+    };
 
     useEffect(() => {
         if (!slug) return;
@@ -141,7 +158,8 @@ export default function ProductDetailPage() {
     }, [product?.id]);
 
     const hasOffer = Boolean(product?.isOffer && product?.offerPrice && product.offerPrice < product.price);
-    const displayPrice = hasOffer ? product!.offerPrice! : product?.price ?? 0;
+    const rawPrice = hasOffer ? product!.offerPrice! : product?.price ?? 0;
+    const displayPrice = equiv ? Math.round(rawPrice * equivW) : rawPrice;
     const discountPercent = hasOffer ? Math.round(((product!.price - product!.offerPrice!) / product!.price) * 100) : 0;
 
     const priceText = useMemo(() => {
@@ -161,6 +179,22 @@ export default function ProductDetailPage() {
             maximumFractionDigits: 0,
         }).format(product.price);
     }, [product, hasOffer]);
+
+    const kgPriceText = useMemo(() => {
+        if (!product) return '';
+        return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rawPrice);
+    }, [product, rawPrice]);
+
+    const subtotal = useMemo(() => {
+        if (!product) return 0;
+        if (kgMode) return Math.round(quantity * rawPrice);
+        if (equiv) return quantity * displayPrice;
+        return Math.round(quantity * rawPrice);
+    }, [product, equiv, kgMode, quantity, displayPrice, rawPrice]);
+
+    const subtotalText = useMemo(() => {
+        return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(subtotal);
+    }, [subtotal]);
 
     const currentImage = useMemo(() => {
         if (!product || product.images.length === 0) return '/placeholder-product.svg';
@@ -277,51 +311,137 @@ export default function ProductDetailPage() {
                             <span className="text-sm font-semibold text-slate-600">{rating.toFixed(1)} / 5</span>
                         </div>
 
-                        <div className="mt-6 flex items-baseline gap-3">
-                            <p className={`text-4xl font-extrabold ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>{priceText}</p>
-                            {hasOffer && (
-                                <p className="text-xl text-slate-400 line-through font-semibold">{originalPriceText}</p>
-                            )}
-                        </div>
-                        {hasOffer && (
-                            <p className="mt-1.5 text-sm font-bold text-emerald-600">
-                                Ahorras {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(product.price - product.offerPrice!)}
-                            </p>
+                        {/* --- Pricing --- */}
+                        {equiv ? (
+                            <div className="mt-6">
+                                <div className="flex items-baseline gap-3">
+                                    <p className={`text-4xl font-extrabold ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>
+                                        {kgPriceText}<span className="text-xl font-bold text-slate-400">/kg</span>
+                                    </p>
+                                    {hasOffer && (
+                                        <p className="text-xl text-slate-400 line-through font-semibold">{originalPriceText}/kg</p>
+                                    )}
+                                </div>
+                                {hasOffer && (
+                                    <p className="mt-1.5 text-sm font-bold text-emerald-600">
+                                        Ahorras {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(product.price - product.offerPrice!)}/kg
+                                    </p>
+                                )}
+                                <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 border border-amber-200">
+                                    <span className="text-sm font-bold text-amber-800">Cada {equivUnitLabel} ≈ {priceText}</span>
+                                    <span className="text-xs text-amber-600/80">({equivW} kg aprox.)</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="mt-6 flex items-baseline gap-3">
+                                    <p className={`text-4xl font-extrabold ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>
+                                        {priceText}
+                                    </p>
+                                    {hasOffer && (
+                                        <p className="text-xl text-slate-400 line-through font-semibold">{originalPriceText}</p>
+                                    )}
+                                </div>
+                                {hasOffer && (
+                                    <p className="mt-1.5 text-sm font-bold text-emerald-600">
+                                        Ahorras {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(product.price - product.offerPrice!)}
+                                    </p>
+                                )}
+                            </>
                         )}
 
-                        <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                        {/* --- Availability --- */}
+                        <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
                             <p className="text-sm text-slate-500">Disponibilidad</p>
                             <p className="font-bold text-slate-700">
-                                {product.stock > 0 ? `Stock disponible: ${product.stock} ${isWeight ? (product.unit ?? 'Kg').toUpperCase() : 'UND'}` : 'Sin stock'}
+                                {product.stock > 0
+                                    ? `${product.stock} ${isWeightUnit(product.unit) ? (product.unit ?? 'Kg').toUpperCase() : 'UND'} en stock`
+                                    : 'Sin stock'}
                             </p>
+                            {equiv && availableStock > 0 && (
+                                <p className="text-sm font-semibold text-emerald-700 pt-1 border-t border-slate-200">
+                                    ≈ {availableStock} {equivUnitLabel} disponibles
+                                </p>
+                            )}
                         </div>
 
+                        {/* --- Buy Mode Toggle (only for equiv products) --- */}
+                        {equiv && (
+                            <div className="mt-5">
+                                <p className="text-sm font-semibold text-slate-500 mb-2">¿Cómo prefieres comprar?</p>
+                                <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-slate-100">
+                                    <button
+                                        onClick={() => handleBuyModeChange('unit')}
+                                        className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold transition-all ${
+                                            buyMode === 'unit'
+                                                ? 'bg-white text-veci-dark shadow-sm ring-1 ring-slate-200'
+                                                : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                        Por unidad
+                                    </button>
+                                    <button
+                                        onClick={() => handleBuyModeChange('kg')}
+                                        className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-bold transition-all ${
+                                            buyMode === 'kg'
+                                                ? 'bg-white text-veci-dark shadow-sm ring-1 ring-slate-200'
+                                                : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        <Scale className="w-4 h-4" />
+                                        Por kilogramo
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- Quantity --- */}
                         <div className="mt-6">
-                            <p className="text-sm font-semibold text-slate-500 mb-3">Cantidad{isWeight ? ` (${(product.unit ?? 'Kg').toLowerCase()})` : ''}</p>
+                            <p className="text-sm font-semibold text-slate-500 mb-3">
+                                {kgMode ? 'Cantidad (kg)' : equiv ? `Cantidad (${equivUnitLabel})` : isWeight ? `Cantidad (${(product.unit ?? 'Kg').toLowerCase()})` : 'Cantidad'}
+                            </p>
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => setQuantity((q) => Math.max(minQty, Math.round((q - step) * 100) / 100))}
-                                    className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-700 font-bold"
+                                    className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-colors"
                                 >
                                     <Minus className="w-4 h-4 mx-auto" />
                                 </button>
-                                <span className="w-14 text-center font-extrabold text-slate-700">{isWeight ? quantity.toFixed(1) : quantity}</span>
+                                <span className="w-14 text-center font-extrabold text-lg text-slate-700">{(kgMode || isWeight) ? quantity.toFixed(1) : quantity}</span>
                                 <button
-                                    onClick={() => setQuantity((q) => Math.min(product.stock, Math.round((q + step) * 100) / 100))}
-                                    disabled={quantity >= product.stock}
-                                    className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                                    onClick={() => setQuantity((q) => Math.min(maxQty, Math.round((q + step) * 100) / 100))}
+                                    disabled={quantity >= maxQty}
+                                    className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                     <Plus className="w-4 h-4 mx-auto" />
                                 </button>
                             </div>
+                            {equiv && quantity > 0 && (
+                                <p className="mt-2 text-sm text-slate-500">
+                                    {kgMode
+                                        ? `${quantity.toFixed(1)} kg ≈ ${Math.round(quantity / equivW)} ${equivUnitLabel}`
+                                        : `${quantity} ${equivUnitLabel} ≈ ${(quantity * equivW).toFixed(3)} kg`
+                                    }
+                                </p>
+                            )}
                         </div>
 
+                        {/* --- Add to Cart with running total --- */}
                         <button
-                            onClick={() => addItem({ id: product.id, name: product.name, price: displayPrice, image: currentImage, slug: product.slug, unit: product.unit }, quantity)}
-                            disabled={product.stock <= 0}
-                            className="mt-8 w-full btn-primary rounded-full py-3.5 text-base font-extrabold disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => {
+                                if (kgMode) {
+                                    addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit }, quantity);
+                                } else {
+                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight }, quantity);
+                                }
+                            }}
+                            disabled={maxQty <= 0}
+                            className="mt-8 w-full btn-primary rounded-full py-4 text-base font-extrabold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                            Agregar al carrito
+                            <ShoppingCart className="w-5 h-5" />
+                            <span>Agregar al carrito</span>
+                            <span className="ml-1 px-2.5 py-0.5 rounded-full bg-white/20 text-sm font-bold">{subtotalText}</span>
                         </button>
 
                         <div className="mt-8 pt-6 border-t border-slate-200/70">

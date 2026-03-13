@@ -60,6 +60,8 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
             offerPrice: initialData?.offerPrice ?? null,
             isOffer: initialData?.isOffer ?? false,
             unit: initialData?.unit || "Und",
+            equivLabel: initialData?.equivLabel ?? null,
+            equivWeight: initialData?.equivWeight ?? null,
             taxRate: initialData?.taxRate ?? null,
             priceSource: initialData?.priceSource || "global",
             stockSource: initialData?.stockSource || "global",
@@ -432,6 +434,45 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                         </FormItem>
                                     )}
                                 />
+
+                                {/* Equivalencia de peso — solo visible para Kg */}
+                                {form.watch("unit") === "Kg" && (
+                                    <div className="mt-2 p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-3">
+                                        <div className="flex items-center gap-2 text-amber-700">
+                                            <Info className="h-4 w-4" />
+                                            <span className="text-xs font-bold uppercase tracking-wide">Venta por unidad equivalente</span>
+                                        </div>
+                                        <p className="text-xs text-amber-600">Si este producto se vende por unidad (ej: 1 Palta), define la etiqueta y el peso promedio. El cliente comprará unidades y el stock se descontará en kg.</p>
+                                        <FormField
+                                            control={form.control}
+                                            name="equivLabel"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Etiqueta de venta</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="Ej: Palta, Pechuga, Malla" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value || null)} />
+                                                    </FormControl>
+                                                    <FormDescription>Nombre de la unidad que verá el cliente</FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="equivWeight"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Peso por unidad (kg)</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" step="0.001" min="0.001" placeholder="Ej: 0.365" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormDescription>Cuánto pesa una unidad en kg (3 decimales)</FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
 

@@ -20,7 +20,14 @@ export interface CartItem {
     image?: string | null;
     slug?: string;
     unit?: string;
+    equivLabel?: string | null;
+    equivWeight?: number | null;
     quantity: number;
+}
+
+/** True when the product is sold in kg but displayed as equivalent units */
+export function hasEquiv(item: { equivLabel?: string | null; equivWeight?: number | null }): boolean {
+    return Boolean(item.equivLabel && item.equivWeight && item.equivWeight > 0);
 }
 
 interface CartContextValue {
@@ -59,15 +66,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, [items]);
 
     const addItem = (item: Omit<CartItem, 'quantity'>, quantity?: number) => {
-        const isWeight = isWeightUnit(item.unit);
-        const minQty = isWeight ? 0.1 : 1;
-        const safeQuantity = Math.max(minQty, quantity ?? minQty);
+        const equiv = hasEquiv(item);
+        const isWeight = !equiv && isWeightUnit(item.unit);
+        const isKgDirect = !equiv && item.id.endsWith('__kg');
+        const minQty = (isWeight || isKgDirect) ? 0.5 : 1;
+        const safeQuantity = equiv
+            ? Math.max(1, Math.round(quantity ?? 1))
+            : Math.max(minQty, quantity ?? minQty);
         setItems((prev) => {
             const existing = prev.find((p) => p.id === item.id);
             if (existing) {
                 return prev.map((p) =>
                     p.id === item.id
-                        ? { ...p, quantity: round2(p.quantity + safeQuantity) }
+                        ? { ...p, quantity: equiv ? p.quantity + safeQuantity : round2(p.quantity + safeQuantity) }
                         : p
                 );
             }
@@ -77,13 +88,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const updateQuantity = (id: string, quantity: number) => {
         const item = items.find((i) => i.id === id);
-        const isWeight = isWeightUnit(item?.unit);
-        const minQty = isWeight ? 0.1 : 1;
+        const equiv = item ? hasEquiv(item) : false;
+        const isWeight = !equiv && isWeightUnit(item?.unit);
+        const isKgDirect = !equiv && id.endsWith('__kg');
+        const minQty = (isWeight || isKgDirect) ? 0.5 : (equiv ? 1 : 1);
         if (quantity < minQty) {
             removeItem(id);
             return;
         }
-        const safeQuantity = round2(Math.max(minQty, quantity));
+        const safeQuantity = equiv ? Math.max(1, Math.round(quantity)) : round2(Math.max(minQty, quantity));
         setItems((prev) => prev.map((item) => (item.id === id ? { ...item, quantity: safeQuantity } : item)));
     };
 
@@ -95,7 +108,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const value = useMemo<CartContextValue>(() => {
         const totalItems = items.length;
-        const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const subtotal = items.reduce((sum, item) => {
+            if (hasEquiv(item)) {
+                // precio por kg × peso unitario × cantidad de unidades
+                return sum + Math.round(item.price * item.equivWeight! * item.quantity);
+            }
+            return sum + item.price * item.quantity;
+        }, 0);
         return { items, totalItems, subtotal, addItem, updateQuantity, removeItem, clearCart };
     }, [items]);
 

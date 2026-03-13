@@ -107,6 +107,8 @@ export const products = sqliteTable("products", {
     offerPrice: integer("offer_price"),           // CLP (pesos) — precio de oferta
     isOffer: integer("is_offer", { mode: "boolean" }).default(false),
     unit: text("unit").default("Und"),              // Und, Kg, Lt, etc.
+    equivLabel: text("equiv_label"),                  // Etiqueta de venta por unidad (ej: "Palta", "Pechuga")
+    equivWeight: real("equiv_weight"),                // Peso equivalente en kg (ej: 0.365)
     taxRate: real("tax_rate"),                       // ej: 19 para 19%
 
     // Status

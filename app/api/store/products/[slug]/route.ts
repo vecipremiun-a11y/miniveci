@@ -50,6 +50,8 @@ export async function GET(req: NextRequest, context: any) {
             isOffer: Boolean(rawProduct.isOffer),
             stock: resolved.resolved_stock,
             unit: rawProduct.unit || "Und",
+            equivLabel: rawProduct.equivLabel || null,
+            equivWeight: rawProduct.equivWeight || null,
             category: rawProduct.category ? {
                 id: (rawProduct.category as any).id,
                 name: (rawProduct.category as any).name,
