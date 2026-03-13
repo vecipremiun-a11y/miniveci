@@ -50,22 +50,24 @@ export function BannerCarousel() {
   const hasLink = !!currentBanner.linkUrl;
 
   const slideContent = (
-    <div className="relative block w-full aspect-[3.2/1] md:aspect-[3.5/1]">
+    <div className="relative block w-full">
       {banners.map((banner, i) => (
-        <div
+        <Image
           key={banner.id}
-          className="absolute inset-0 transition-opacity duration-700"
-          style={{ opacity: i === current ? 1 : 0 }}
-        >
-          <Image
-            src={banner.imageUrl}
-            alt={banner.title || "Banner promocional"}
-            fill
-            className="object-cover"
-            priority={i === 0}
-            sizes="100vw"
-          />
-        </div>
+          src={banner.imageUrl}
+          alt={banner.title || "Banner promocional"}
+          width={1920}
+          height={600}
+          className="w-full h-auto transition-opacity duration-700"
+          style={{
+            opacity: i === current ? 1 : 0,
+            position: i === 0 ? "relative" : "absolute",
+            top: 0,
+            left: 0,
+          }}
+          priority={i === 0}
+          sizes="100vw"
+        />
       ))}
     </div>
   );

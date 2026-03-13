@@ -225,7 +225,7 @@ export default function ContenidoPage() {
         </div>
 
         {preview && (
-          <div className="relative w-full aspect-[3.2/1] rounded-lg overflow-hidden border bg-gray-50">
+          <div className="relative w-full aspect-[2.5/1] rounded-lg overflow-hidden border bg-gray-50">
             <Image
               src={preview}
               alt="Preview"
@@ -294,7 +294,7 @@ export default function ContenidoPage() {
                 </div>
 
                 {/* Thumbnail */}
-                <div className="relative w-40 aspect-[3.2/1] rounded overflow-hidden bg-gray-200 shrink-0">
+                <div className="relative w-40 aspect-[2.5/1] rounded overflow-hidden bg-gray-200 shrink-0">
                   <Image
                     src={banner.imageUrl}
                     alt={banner.title || "Banner"}
