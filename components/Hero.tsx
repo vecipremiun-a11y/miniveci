@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 export function Hero() {
     return (
-        <section className="relative pt-32 pb-20 px-6 md:px-12 flex flex-col items-center justify-center min-h-[85vh] text-center overflow-hidden">
+        <section className="relative pt-16 pb-20 px-6 md:px-12 flex flex-col items-center justify-center min-h-[85vh] text-center overflow-hidden">
             {/* Background Decorative Blobs */}
             <div className="absolute top-20 left-10 w-64 h-64 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
             <div className="absolute top-20 right-10 w-64 h-64 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>

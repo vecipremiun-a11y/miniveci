@@ -8,8 +8,8 @@ import { Footer } from "@/components/Footer";
 export default function Home() {
   return (
     <main className="min-h-screen relative font-[family-name:var(--font-geist-sans)] selection:bg-veci-primary selection:text-white">
-      <Hero />
       <BannerCarousel />
+      <Hero />
       <CategoryCards />
       <Deals />
       <Features />
