@@ -63,6 +63,18 @@ export const customerAddresses = sqliteTable("customer_addresses", {
 
 // --- CATALOG ---
 
+// --- BANNERS (Homepage Carousel) ---
+
+export const banners = sqliteTable("banners", {
+    id: text("id").primaryKey(),
+    title: text("title"),
+    imageUrl: text("image_url").notNull(),
+    linkUrl: text("link_url"),
+    sortOrder: integer("sort_order").default(0),
+    isActive: integer("is_active", { mode: "boolean" }).default(true),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const categories = sqliteTable("categories", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),

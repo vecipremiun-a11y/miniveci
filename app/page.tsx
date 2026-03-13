@@ -1,4 +1,5 @@
 import { Hero } from "@/components/Hero";
+import { BannerCarousel } from "@/components/BannerCarousel";
 import { CategoryCards } from "@/components/CategoryCards";
 import { Deals } from "@/components/Deals";
 import { Features } from "@/components/Features";
@@ -8,6 +9,7 @@ export default function Home() {
   return (
     <main className="min-h-screen relative font-[family-name:var(--font-geist-sans)] selection:bg-veci-primary selection:text-white">
       <Hero />
+      <BannerCarousel />
       <CategoryCards />
       <Deals />
       <Features />
