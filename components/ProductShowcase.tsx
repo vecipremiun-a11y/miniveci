@@ -25,6 +25,7 @@ interface Product {
   equivLabel: string | null;
   equivWeight: number | null;
   images: { url: string; isPrimary: boolean }[];
+  priceTiers?: { minQty: number; maxQty: number | null; price: number }[];
 }
 
 type FilterKey = "new" | "featured" | "best";
@@ -247,6 +248,7 @@ export function ProductShowcase() {
                     equivLabel={p.equivLabel}
                     equivWeight={p.equivWeight}
                     image={primaryImage(p)}
+                    priceTiers={p.priceTiers}
                   />
                 </div>
               ))}

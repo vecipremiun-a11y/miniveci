@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Footer } from '@/components/Footer';
-import { useCart, isWeightUnit, hasEquiv } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from '@/components/cart/CartProvider';
+import type { PriceTier } from '@/components/cart/CartProvider';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
-import { ChevronRight, Loader2, Minus, Plus, Scale, ShoppingCart, Star } from 'lucide-react';
+import { ChevronRight, Loader2, Minus, Plus, Scale, ShoppingCart, Star, Tag, Zap, Check } from 'lucide-react';
 
 type ProductDetail = StoreProductPayload;
 
@@ -159,7 +160,8 @@ export default function ProductDetailPage() {
 
     const hasOffer = Boolean(product?.isOffer && product?.offerPrice && product.offerPrice < product.price);
     const rawPrice = hasOffer ? product!.offerPrice! : product?.price ?? 0;
-    const displayPrice = equiv ? Math.round(rawPrice * equivW) : rawPrice;
+    const tieredPrice = getTieredPrice(rawPrice, (product as any)?.priceTiers, quantity);
+    const displayPrice = equiv ? Math.round(tieredPrice * equivW) : tieredPrice;
     const discountPercent = hasOffer ? Math.round(((product!.price - product!.offerPrice!) / product!.price) * 100) : 0;
 
     const priceText = useMemo(() => {
@@ -182,15 +184,15 @@ export default function ProductDetailPage() {
 
     const kgPriceText = useMemo(() => {
         if (!product) return '';
-        return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rawPrice);
-    }, [product, rawPrice]);
+        return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(tieredPrice);
+    }, [product, tieredPrice]);
 
     const subtotal = useMemo(() => {
         if (!product) return 0;
-        if (kgMode) return Math.round(quantity * rawPrice);
+        if (kgMode) return Math.round(quantity * tieredPrice);
         if (equiv) return quantity * displayPrice;
-        return Math.round(quantity * rawPrice);
-    }, [product, equiv, kgMode, quantity, displayPrice, rawPrice]);
+        return Math.round(quantity * tieredPrice);
+    }, [product, equiv, kgMode, quantity, displayPrice, tieredPrice]);
 
     const subtotalText = useMemo(() => {
         return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(subtotal);
@@ -350,6 +352,70 @@ export default function ProductDetailPage() {
                             </>
                         )}
 
+                        {/* --- Price Tiers Table --- */}
+                        {(product as any).priceTiers && (product as any).priceTiers.length > 0 && (
+                            <div className="mt-5 rounded-2xl overflow-hidden border border-purple-200 shadow-sm">
+                                {/* Header */}
+                                <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500 px-4 py-3 flex items-center gap-2">
+                                    <Tag className="h-4 w-4 text-white" />
+                                    <p className="text-sm font-bold text-white">Ahorra comprando más</p>
+                                </div>
+                                {/* Tiers */}
+                                <div className="bg-gradient-to-b from-purple-50/60 to-white divide-y divide-purple-100">
+                                    {((product as any).priceTiers as PriceTier[]).map((tier, idx) => {
+                                        const fmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
+                                        const isActive = quantity >= tier.minQty && (tier.maxQty === null || quantity <= tier.maxQty);
+                                        const tierColors = [
+                                            { bg: 'bg-blue-500', light: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+                                            { bg: 'bg-emerald-500', light: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+                                            { bg: 'bg-amber-500', light: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+                                            { bg: 'bg-rose-500', light: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
+                                            { bg: 'bg-violet-500', light: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200' },
+                                        ];
+                                        const c = tierColors[idx % tierColors.length];
+                                        const isLastTier = tier.maxQty === null;
+                                        return (
+                                            <div
+                                                key={idx}
+                                                className={`flex items-center gap-3 px-4 py-3 transition-all ${
+                                                    isActive
+                                                        ? 'bg-gradient-to-r from-purple-100 to-fuchsia-50 ring-2 ring-inset ring-purple-300'
+                                                        : 'hover:bg-purple-50/40'
+                                                }`}
+                                            >
+                                                {/* Color dot + quantity */}
+                                                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                                    <span className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${c.bg} ${isActive ? 'ring-2 ring-offset-1 ring-purple-400' : ''}`} />
+                                                    <span className={`text-sm font-semibold ${isActive ? 'text-purple-800' : 'text-slate-700'}`}>
+                                                        {isLastTier
+                                                            ? <>{tier.minQty}+ unidades</>
+                                                            : <>{tier.minQty} – {tier.maxQty} unidades</>
+                                                        }
+                                                    </span>
+                                                    {isLastTier && (
+                                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-amber-400 to-orange-400 text-white">
+                                                            <Zap className="h-2.5 w-2.5" />
+                                                            MEJOR
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* Price */}
+                                                <span className={`text-sm font-black tabular-nums ${isActive ? 'text-purple-700' : 'text-slate-800'}`}>
+                                                    {fmt.format(tier.price)} <span className="font-medium text-xs text-slate-400">c/u</span>
+                                                </span>
+                                                {/* Active indicator */}
+                                                {isActive && (
+                                                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center">
+                                                        <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {/* --- Availability --- */}
                         <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
                             <p className="text-sm text-slate-500">Disponibilidad</p>
@@ -431,9 +497,9 @@ export default function ProductDetailPage() {
                         <button
                             onClick={() => {
                                 if (kgMode) {
-                                    addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit }, quantity);
+                                    addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, priceTiers: (product as any).priceTiers }, quantity);
                                 } else {
-                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight }, quantity);
+                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight, priceTiers: (product as any).priceTiers }, quantity);
                                 }
                             }}
                             disabled={maxQty <= 0}

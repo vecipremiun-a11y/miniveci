@@ -16,6 +16,7 @@ interface Product {
   equivLabel: string | null;
   equivWeight: number | null;
   images: { url: string; isPrimary: boolean }[];
+  priceTiers?: { minQty: number; maxQty: number | null; price: number }[];
 }
 
 export function OfferCarousel() {
@@ -121,6 +122,7 @@ export function OfferCarousel() {
                   equivLabel={p.equivLabel}
                   equivWeight={p.equivWeight}
                   image={primaryImage(p)}
+                  priceTiers={p.priceTiers}
                 />
               </div>
             ))}

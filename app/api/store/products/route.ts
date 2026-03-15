@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { products, categories, productImages } from "@/lib/db/schema";
-import { eq, and, or, like, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, or, like, desc, asc, inArray, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
         const onlyOffer = searchParams.get("offer") === "true";
         const maxPriceParam = searchParams.get("maxPrice");
         const maxPrice = maxPriceParam ? parseInt(maxPriceParam) || null : null;
+        const sortParam = searchParams.get("sort") || "newest";
         const page = parseInt(searchParams.get("page") || "1") || 1;
         const limit = Math.min(parseInt(searchParams.get("limit") || "20") || 20, 100);
         const offset = (page - 1) * limit;
@@ -85,7 +86,14 @@ export async function GET(req: NextRequest) {
             .from(products)
             .leftJoin(categories, eq(products.categoryId, categories.id))
             .where(whereClause)
-            .orderBy(desc(products.createdAt))
+            .orderBy(
+                // Out-of-stock products always go last
+                asc(sql`CASE WHEN COALESCE(${products.webStock}, 0) <= 0 THEN 1 ELSE 0 END`),
+                ...(sortParam === 'price_asc' ? [asc(products.webPrice)] :
+                    sortParam === 'price_desc' ? [desc(products.webPrice)] :
+                    sortParam === 'featured' ? [desc(products.isFeatured), desc(products.createdAt)] :
+                    [desc(products.createdAt)])
+            )
             .limit(limit)
             .offset(offset);
 
@@ -137,6 +145,7 @@ export async function GET(req: NextRequest) {
                 images: itemImages,
                 badges: raw.badges,
                 tags: raw.tags,
+                priceTiers: (raw.priceTiers as any[]) ?? [],
             };
         });
 

@@ -35,6 +35,21 @@ const syncProductRawSchema = z.object({
   equiv_weight: z.number().min(0).optional().nullable(),
   equivLabel: z.string().trim().optional().nullable(),
   equivWeight: z.number().min(0).optional().nullable(),
+  // Price tiers (escala de precios)
+  price_tiers: z.array(z.object({
+    minQty: z.number().min(1).optional(),
+    min_qty: z.number().min(1).optional(),
+    maxQty: z.number().min(1).nullable().optional(),
+    max_qty: z.number().min(1).nullable().optional(),
+    price: z.number().min(0),
+  })).optional().nullable(),
+  priceTiers: z.array(z.object({
+    minQty: z.number().min(1).optional(),
+    min_qty: z.number().min(1).optional(),
+    maxQty: z.number().min(1).nullable().optional(),
+    max_qty: z.number().min(1).nullable().optional(),
+    price: z.number().min(0),
+  })).optional().nullable(),
 }).transform((d) => ({
   sku: d.sku,
   name: d.name,
@@ -46,6 +61,7 @@ const syncProductRawSchema = z.object({
   unit: d.unit,
   equiv_label: d.equiv_label ?? d.equivLabel,
   equiv_weight: d.equiv_weight ?? d.equivWeight,
+  price_tiers: d.price_tiers ?? d.priceTiers,
   tax_rate: d.tax_rate ?? d.taxRate,
   image_url: d.image_url ?? d.imageUrl,
   image_base64: d.image_base64 ?? d.imageBase64,
@@ -268,6 +284,21 @@ async function handleProductSync(req: NextRequest) {
     // Normalizar stock según unidad
     const normalizedStock = normalizeStock(data.stock, data.unit);
 
+    // Normalize price tiers
+    let priceTiers: null | { minQty: number; maxQty: number | null; price: number }[] | undefined;
+    if (data.price_tiers === null) {
+      priceTiers = null;
+    } else if (Array.isArray(data.price_tiers)) {
+      priceTiers = data.price_tiers
+        .filter((t) => typeof t.price === 'number')
+        .map((t) => ({
+          minQty: Math.max(1, Math.round(t.minQty ?? t.min_qty ?? 1)),
+          maxQty: (t.maxQty === null || t.maxQty === undefined) ? ((t.max_qty === null || t.max_qty === undefined) ? null : Math.round(t.max_qty)) : Math.round(t.maxQty),
+          price: Math.round(t.price),
+        }));
+      if (priceTiers.length === 0) priceTiers = null;
+    }
+
     // Resolve category if provided
     let categoryId: string | null = null;
     if (data.category) {
@@ -327,6 +358,9 @@ async function handleProductSync(req: NextRequest) {
       if (data.equiv_weight !== undefined) {
         updateFields.equivWeight = data.equiv_weight;
       }
+      if (priceTiers !== undefined) {
+        updateFields.priceTiers = priceTiers;
+      }
 
       console.log("[POS_SYNC] Update fields for", skuUpper, ":", JSON.stringify(updateFields));
       await db.update(products).set(updateFields).where(eq(products.id, productId));
@@ -362,6 +396,7 @@ async function handleProductSync(req: NextRequest) {
         equivLabel: data.equiv_label ?? null,
         equivWeight: data.equiv_weight ?? null,
         taxRate: data.tax_rate ?? null,
+        priceTiers: priceTiers ?? null,
         isPublished: false,
         createdAt: now,
         updatedAt: now,
@@ -379,7 +414,7 @@ async function handleProductSync(req: NextRequest) {
     await emitProductChange(productId, {
       slug: productSlug,
       reason: "sync-product-pos",
-      changedFields: ["name", "price", "stock", "category", "images"],
+      changedFields: ["name", "price", "stock", "category", "images", "priceTiers"],
     });
 
     return withCors(

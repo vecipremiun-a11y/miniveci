@@ -109,6 +109,7 @@ function ProductsPageContent() {
             if (search) params.set('search', search);
             if (inOffer) params.set('offer', 'true');
             if (debouncedMaxPrice < 50000) params.set('maxPrice', String(debouncedMaxPrice));
+            if (sortBy !== 'newest') params.set('sort', sortBy);
 
             const res = await fetch(`/api/store/products?${params.toString()}`, {
                 signal: controller.signal,
@@ -279,11 +280,33 @@ function ProductsPageContent() {
 
                         <div className="flex items-center gap-4 self-end xl:self-auto">
                             {/* Sort */}
-                            <div className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
-                                <span>Ordenar por: <span className="text-veci-dark">
-                                    {sortBy === 'featured' ? 'Destacados' : sortBy === 'newest' ? 'Nuevos' : sortBy === 'price_asc' ? 'Menor precio' : 'Mayor precio'}
-                                </span></span>
-                                <ChevronDown className="w-4 h-4" />
+                            <div className="relative group">
+                                <button className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer hover:text-veci-purple transition-colors">
+                                    <span>Ordenar por: <span className="text-veci-dark">
+                                        {sortBy === 'featured' ? 'Destacados' : sortBy === 'newest' ? 'Nuevos' : sortBy === 'price_asc' ? 'Menor precio' : 'Mayor precio'}
+                                    </span></span>
+                                    <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />
+                                </button>
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                    {[
+                                        { value: 'newest' as const, label: 'Nuevos' },
+                                        { value: 'featured' as const, label: 'Destacados' },
+                                        { value: 'price_asc' as const, label: 'Menor precio' },
+                                        { value: 'price_desc' as const, label: 'Mayor precio' },
+                                    ].map((opt) => (
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => { setSortBy(opt.value); updateURL({ page: null }); }}
+                                            className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                                                sortBy === opt.value
+                                                    ? 'bg-purple-50 text-purple-700 font-bold'
+                                                    : 'text-slate-600 hover:bg-slate-50 font-medium'
+                                            }`}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
                             <div className="h-6 w-px bg-slate-300"></div>
@@ -347,6 +370,7 @@ function ProductsPageContent() {
                                         image={getPrimaryImage(product)}
                                         isPopular={product.badges?.includes('popular') || product.tags?.includes('popular') || false}
                                         slug={product.slug}
+                                        priceTiers={product.priceTiers}
                                     />
                                 ))}
                             </div>

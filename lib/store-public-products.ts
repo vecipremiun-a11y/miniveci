@@ -59,5 +59,6 @@ export async function getPublicStoreProductById(productId: string): Promise<Stor
         })),
         badges: (rawProduct.badges as string[] | null) ?? null,
         tags: (rawProduct.tags as string[] | null) ?? null,
+        priceTiers: (rawProduct.priceTiers as any[]) ?? [],
     };
 }

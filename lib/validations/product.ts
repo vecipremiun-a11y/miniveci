@@ -38,6 +38,13 @@ export const productSchema = z.object({
     tags: z.array(z.string()).default([]),
     badges: z.array(z.string()).default([]),
 
+    // Price tiers (quantity discounts)
+    priceTiers: z.array(z.object({
+        minQty: z.coerce.number().min(1),
+        maxQty: z.coerce.number().min(1).nullable(),
+        price: z.coerce.number().min(0),
+    })).default([]),
+
     // Images are handled via separate endpoint or specific logic, 
     // but form might submit URLs
     images: z.array(z.object({

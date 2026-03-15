@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
-import { useCart, isWeightUnit, hasEquiv } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from '@/components/cart/CartProvider';
 
 export default function CarritoPage() {
     const { items, subtotal, updateQuantity, removeItem, clearCart } = useCart();
@@ -51,8 +51,8 @@ export default function CarritoPage() {
                                 const stepVal = equiv ? 1 : ((isWeight || isKgDirect) ? 0.5 : 1);
                                 const minQty = equiv ? 1 : ((isWeight || isKgDirect) ? 0.5 : 1);
                                 const lineTotal = equiv
-                                    ? Math.round(item.price * item.equivWeight! * item.quantity)
-                                    : item.price * item.quantity;
+                                    ? Math.round(getTieredPrice(item.price, item.priceTiers, item.quantity) * item.equivWeight! * item.quantity)
+                                    : getTieredPrice(item.price, item.priceTiers, item.quantity) * item.quantity;
                                 const formattedLineTotal = new Intl.NumberFormat('es-CL', {
                                     style: 'currency',
                                     currency: 'CLP',
@@ -74,8 +74,8 @@ export default function CarritoPage() {
                                             <p className="font-bold text-slate-800 truncate">{item.name}</p>
                                             <p className="text-sm text-slate-500">
                                                 {equiv
-                                                    ? <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Math.round(item.price * item.equivWeight!))} x {qtyLabel} {item.equivLabel}</>
-                                                    : <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(item.price)} x {qtyLabel}{isWeight ? ` ${(item.unit ?? 'kg').toLowerCase()}` : ''}</>}
+                                                    ? <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Math.round(getTieredPrice(item.price, item.priceTiers, item.quantity) * item.equivWeight!))} x {qtyLabel} {item.equivLabel}</>
+                                                    : <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(getTieredPrice(item.price, item.priceTiers, item.quantity))} x {qtyLabel}{isWeight ? ` ${(item.unit ?? 'kg').toLowerCase()}` : ''}</>}
                                             </p>
                                         </div>
 

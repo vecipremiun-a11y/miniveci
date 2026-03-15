@@ -27,7 +27,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, X, UploadCloud, Info } from "lucide-react";
+import { Loader2, Plus, X, UploadCloud, Info, Trash2, TrendingDown, Infinity, ArrowRight, Zap, Tag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -70,6 +70,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
             isFeatured: initialData?.isFeatured ?? false,
             tags: initialData?.tags || [],
             badges: initialData?.badges || [],
+            priceTiers: initialData?.priceTiers || [],
             images: initialData?.images || [],
         },
     });
@@ -361,7 +362,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                         <Card>
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-base flex items-center gap-2">
-                                    <Info className="h-4 w-4" /> Datos POS
+                                    <Info className="h-4 w-4" /> Promoción y Detalles
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -478,7 +479,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
 
                         <Card>
                             <CardHeader>
-                                <CardTitle>Control de Precios</CardTitle>
+                                <CardTitle>Precio</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <FormField
@@ -486,7 +487,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                     name="priceSource"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel className="text-xs text-muted-foreground">Fuente de Precio</FormLabel>
+                                            <FormLabel className="text-xs text-muted-foreground">Modo de precio</FormLabel>
                                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                                                 <FormControl>
                                                     <SelectTrigger>
@@ -494,8 +495,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    <SelectItem value="global">Configuración Global</SelectItem>
-                                                    <SelectItem value="pos">Precio POS</SelectItem>
+                                                    <SelectItem value="global">Automático</SelectItem>
                                                     <SelectItem value="manual">Manual</SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -507,7 +507,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                     name="webPrice"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Precio Web</FormLabel>
+                                            <FormLabel>Precio</FormLabel>
                                             <FormControl>
                                                 <div className="relative">
                                                     <span className="absolute left-3 top-2.5 text-gray-500">$</span>
@@ -521,9 +521,187 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                             </CardContent>
                         </Card>
 
+                        {/* Escala de Precios */}
+                        <Card className="overflow-hidden border-0 shadow-lg shadow-purple-100/50">
+                            <CardHeader className="pb-4 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500 text-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-xl bg-white/20 backdrop-blur-sm">
+                                        <Tag className="h-5 w-5 text-white" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-base text-white">Escala de Precios por Cantidad</CardTitle>
+                                        <CardDescription className="text-purple-100">Define precios especiales según la cantidad que compre el cliente</CardDescription>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="pt-5 bg-gradient-to-b from-purple-50/40 to-white">
+                                <FormField
+                                    control={form.control}
+                                    name="priceTiers"
+                                    render={({ field }) => {
+                                        const tiers = field.value || [];
+
+                                        const tierColors = [
+                                            { bg: 'from-blue-50 to-sky-50', border: 'border-blue-200', badge: 'bg-blue-500', badgeText: 'text-white', accent: 'text-blue-600', label: 'bg-blue-100 text-blue-700', ring: 'ring-blue-200' },
+                                            { bg: 'from-emerald-50 to-teal-50', border: 'border-emerald-200', badge: 'bg-emerald-500', badgeText: 'text-white', accent: 'text-emerald-600', label: 'bg-emerald-100 text-emerald-700', ring: 'ring-emerald-200' },
+                                            { bg: 'from-amber-50 to-orange-50', border: 'border-amber-200', badge: 'bg-amber-500', badgeText: 'text-white', accent: 'text-amber-600', label: 'bg-amber-100 text-amber-700', ring: 'ring-amber-200' },
+                                            { bg: 'from-rose-50 to-pink-50', border: 'border-rose-200', badge: 'bg-rose-500', badgeText: 'text-white', accent: 'text-rose-600', label: 'bg-rose-100 text-rose-700', ring: 'ring-rose-200' },
+                                            { bg: 'from-violet-50 to-purple-50', border: 'border-violet-200', badge: 'bg-violet-500', badgeText: 'text-white', accent: 'text-violet-600', label: 'bg-violet-100 text-violet-700', ring: 'ring-violet-200' },
+                                        ];
+
+                                        const addTier = () => {
+                                            const updated = [...tiers];
+                                            if (updated.length > 0 && updated[updated.length - 1].maxQty === null) {
+                                                const prevMin = updated[updated.length - 1].minQty ?? 1;
+                                                updated[updated.length - 1] = { ...updated[updated.length - 1], maxQty: prevMin + 9 };
+                                            }
+                                            const lastMax = updated.length > 0 ? (updated[updated.length - 1].maxQty ?? 0) : 0;
+                                            field.onChange([...updated, { minQty: lastMax + 1, maxQty: null, price: 0 }]);
+                                        };
+
+                                        const updateTier = (index: number, key: string, value: number | null) => {
+                                            const updated = [...tiers];
+                                            updated[index] = { ...updated[index], [key]: value };
+                                            field.onChange(updated);
+                                        };
+
+                                        const removeTier = (index: number) => {
+                                            field.onChange(tiers.filter((_: any, i: number) => i !== index));
+                                        };
+
+                                        return (
+                                            <FormItem>
+                                                {tiers.length > 0 && (
+                                                    <div className="space-y-3">
+                                                        {tiers.map((tier: any, i: number) => {
+                                                            const isLast = tier.maxQty === null;
+                                                            const colors = tierColors[i % tierColors.length];
+                                                            return (
+                                                                <div
+                                                                    key={i}
+                                                                    className={`relative rounded-2xl border-2 ${colors.border} bg-gradient-to-r ${colors.bg} p-4 transition-all hover:shadow-md hover:scale-[1.01]`}
+                                                                >
+                                                                    {/* Left color stripe */}
+                                                                    <div className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${colors.badge}`} />
+
+                                                                    {/* Header */}
+                                                                    <div className="flex items-center justify-between mb-4 pl-3">
+                                                                        <div className="flex items-center gap-2.5">
+                                                                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-black ${colors.badge} ${colors.badgeText} shadow-sm`}>
+                                                                                {i + 1}
+                                                                            </span>
+                                                                            <div>
+                                                                                <span className="text-sm font-bold text-slate-800 block">
+                                                                                    {isLast
+                                                                                        ? `Compra ${tier.minQty}+ unidades`
+                                                                                        : `Compra ${tier.minQty} a ${tier.maxQty} unidades`
+                                                                                    }
+                                                                                </span>
+                                                                                {isLast && (
+                                                                                    <span className={`inline-flex items-center gap-1 mt-0.5 text-[11px] font-bold ${colors.accent}`}>
+                                                                                        <Zap className="h-3 w-3" />
+                                                                                        Mejor precio — sin límite de cantidad
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => removeTier(i)}
+                                                                            className="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-100 transition-all"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {/* Inputs */}
+                                                                    <div className="grid grid-cols-3 gap-3 pl-3">
+                                                                        {/* Min Qty */}
+                                                                        <div>
+                                                                            <label className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 block ${colors.accent}`}>Desde</label>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min={1}
+                                                                                className={`h-11 text-center text-base font-bold bg-white border-2 ${colors.border} focus:${colors.ring} rounded-xl`}
+                                                                                value={tier.minQty}
+                                                                                onChange={(e) => updateTier(i, 'minQty', Number(e.target.value))}
+                                                                            />
+                                                                        </div>
+
+                                                                        {/* Max Qty */}
+                                                                        <div>
+                                                                            <label className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 block ${colors.accent}`}>Hasta</label>
+                                                                            {isLast ? (
+                                                                                <div className={`h-11 rounded-xl border-2 border-dashed ${colors.border} bg-white/60 flex items-center justify-center gap-2`}>
+                                                                                    <Infinity className={`h-5 w-5 ${colors.accent}`} />
+                                                                                    <span className={`text-sm font-bold ${colors.accent}`}>∞</span>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <Input
+                                                                                    type="number"
+                                                                                    min={tier.minQty}
+                                                                                    className={`h-11 text-center text-base font-bold bg-white border-2 ${colors.border} rounded-xl`}
+                                                                                    value={tier.maxQty ?? ''}
+                                                                                    placeholder="∞"
+                                                                                    onChange={(e) => updateTier(i, 'maxQty', e.target.value === '' ? null : Number(e.target.value))}
+                                                                                />
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Price */}
+                                                                        <div>
+                                                                            <label className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 block ${colors.accent}`}>Precio c/u</label>
+                                                                            <div className="relative">
+                                                                                <span className={`absolute left-3 top-1/2 -translate-y-1/2 font-black text-sm ${colors.accent}`}>$</span>
+                                                                                <Input
+                                                                                    type="number"
+                                                                                    min={0}
+                                                                                    className={`h-11 pl-7 text-base font-black bg-white border-2 ${colors.border} rounded-xl ${colors.accent}`}
+                                                                                    value={tier.price}
+                                                                                    onChange={(e) => updateTier(i, 'price', Number(e.target.value))}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={addTier}
+                                                    className="mt-4 w-full border-dashed border-2 border-purple-300 hover:border-purple-400 hover:bg-purple-50 hover:text-purple-700 text-purple-500 font-semibold rounded-xl h-11 transition-all hover:shadow-md"
+                                                >
+                                                    <Plus className="h-4 w-4 mr-2" />
+                                                    Agregar rango de precio
+                                                </Button>
+                                                {tiers.length === 0 && (
+                                                    <div className="text-center py-8">
+                                                        <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-100 to-fuchsia-100 flex items-center justify-center mb-3 shadow-inner">
+                                                            <Tag className="h-7 w-7 text-purple-400" />
+                                                        </div>
+                                                        <p className="text-sm font-semibold text-slate-600">
+                                                            Sin escala de precios
+                                                        </p>
+                                                        <p className="text-xs text-slate-400 mt-1 max-w-[250px] mx-auto">
+                                                            Agrega rangos para ofrecer mejores precios por mayor cantidad
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                <FormMessage />
+                                            </FormItem>
+                                        );
+                                    }}
+                                />
+                            </CardContent>
+                        </Card>
+
                         <Card>
                             <CardHeader>
-                                <CardTitle>Control de Stock</CardTitle>
+                                <CardTitle>Inventario</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <FormField
@@ -531,7 +709,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                     name="stockSource"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel className="text-xs text-muted-foreground">Fuente de Stock</FormLabel>
+                                            <FormLabel className="text-xs text-muted-foreground">Modo de inventario</FormLabel>
                                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                                                 <FormControl>
                                                     <SelectTrigger>
@@ -539,8 +717,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    <SelectItem value="global">Configuración Global</SelectItem>
-                                                    <SelectItem value="pos">Stock POS</SelectItem>
+                                                    <SelectItem value="global">Automático</SelectItem>
                                                     <SelectItem value="manual">Manual</SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -552,7 +729,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                     name="webStock"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Stock Web</FormLabel>
+                                            <FormLabel>Stock</FormLabel>
                                             <FormControl>
                                                 <Input type="number" {...field} />
                                             </FormControl>

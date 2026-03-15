@@ -1,9 +1,10 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Plus, Minus, Percent } from 'lucide-react';
+import { Plus, Minus, Percent, Tag, Zap } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { useCart, isWeightUnit, hasEquiv } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from '@/components/cart/CartProvider';
+import type { PriceTier } from '@/components/cart/CartProvider';
 import { useRouter } from 'next/navigation';
 
 const PLACEHOLDER_IMAGE = '/placeholder-product.svg';
@@ -21,9 +22,10 @@ interface ProductCardProps {
     image?: string | null;
     isPopular?: boolean;
     slug?: string;
+    priceTiers?: PriceTier[];
 }
 
-export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug }: ProductCardProps) {
+export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers }: ProductCardProps) {
     const { addItem } = useCart();
     const router = useRouter();
     const equiv = hasEquiv({ equivLabel, equivWeight });
@@ -37,7 +39,8 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
     const hasOffer = Boolean(isOffer && offerPrice && offerPrice < price);
     const rawPrice = hasOffer ? offerPrice! : price;
-    const displayPrice = equiv ? Math.round(rawPrice * equivWeight!) : rawPrice;
+    const tieredPrice = getTieredPrice(rawPrice, priceTiers, quantity);
+    const displayPrice = equiv ? Math.round(tieredPrice * equivWeight!) : tieredPrice;
     const discountPercent = hasOffer ? Math.round(((price - offerPrice!) / price) * 100) : 0;
 
     const availableUnits = equiv ? Math.floor(stock / equivWeight!) : stock;
@@ -60,23 +63,23 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
         return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(price);
     }, [hasOffer, price]);
     const formattedKgPrice = useMemo(() =>
-        new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(rawPrice),
-        [rawPrice]
+        new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(tieredPrice),
+        [tieredPrice]
     );
     const cardSubtotal = useMemo(() => {
         const total = kgMode
-            ? Math.round(quantity * rawPrice)
-            : equiv ? quantity * displayPrice : Math.round(quantity * rawPrice);
+            ? Math.round(quantity * tieredPrice)
+            : equiv ? quantity * displayPrice : Math.round(quantity * tieredPrice);
         return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(total);
-    }, [equiv, kgMode, quantity, displayPrice, rawPrice]);
+    }, [equiv, kgMode, quantity, displayPrice, tieredPrice]);
     // Stock label always shows real kg for equiv products
     const stockLabel = outOfStock ? 'Sin stock' : (isWeightUnit(unit) ? `${stock} ${(unit ?? 'Kg').toUpperCase()}` : `${stock} UND`);
 
     const handleAdd = () => {
         if (kgMode) {
-            addItem({ id: `${id}__kg`, name, price: rawPrice, image: imageSrc, slug, unit }, quantity);
+            addItem({ id: `${id}__kg`, name, price: rawPrice, image: imageSrc, slug, unit, priceTiers }, quantity);
         } else {
-            addItem({ id, name, price: rawPrice, image: imageSrc, slug, unit, equivLabel, equivWeight }, quantity);
+            addItem({ id, name, price: rawPrice, image: imageSrc, slug, unit, equivLabel, equivWeight, priceTiers }, quantity);
         }
         setQuantity(minQty);
     };
@@ -159,6 +162,43 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                         {stockLabel}
                     </div>
                 </div>
+
+                {/* Mini Price Tiers */}
+                {priceTiers && priceTiers.length > 0 && (
+                    <div className="rounded-xl bg-gradient-to-r from-violet-50 to-fuchsia-50 border-2 border-purple-300 shadow-sm shadow-purple-100 p-2 space-y-1" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1.5 mb-1">
+                            <Tag className="h-3 w-3 text-purple-500" />
+                            <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Compra más, paga menos</span>
+                        </div>
+                        {priceTiers.map((tier, idx) => {
+                            const fmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
+                            const isActive = quantity >= tier.minQty && (tier.maxQty === null || quantity <= tier.maxQty);
+                            const isLastTier = tier.maxQty === null;
+                            const colors = ['bg-blue-400', 'bg-emerald-400', 'bg-amber-400', 'bg-rose-400', 'bg-violet-400'];
+                            return (
+                                <div
+                                    key={idx}
+                                    className={`flex items-center justify-between py-1 px-2 rounded-lg text-[11px] transition-all ${
+                                        isActive
+                                            ? 'bg-purple-100 ring-1 ring-purple-300 font-extrabold text-purple-800'
+                                            : 'text-slate-600'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <span className={`w-1.5 h-1.5 rounded-full ${colors[idx % colors.length]} ${isActive ? 'ring-1 ring-offset-1 ring-purple-400' : ''}`} />
+                                        <span>{isLastTier ? `${tier.minQty}+` : `${tier.minQty}-${tier.maxQty}`} und</span>
+                                        {isLastTier && (
+                                            <Zap className="h-2.5 w-2.5 text-amber-500" />
+                                        )}
+                                    </div>
+                                    <span className={`font-bold ${isActive ? 'text-purple-700' : 'text-slate-700'}`}>
+                                        {fmt.format(tier.price)}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
                 {equiv && !outOfStock && (
                     <div className="space-y-1.5">
                         <p className="text-xs font-semibold text-amber-700">c/u ≈ {formattedPrice} ({equivWeight} kg)</p>

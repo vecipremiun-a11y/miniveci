@@ -11,6 +11,12 @@ export interface StoreProductImage {
     isPrimary: boolean;
 }
 
+export interface PriceTier {
+    minQty: number;
+    maxQty: number | null;
+    price: number;
+}
+
 export interface StoreProductPayload {
     id: string;
     name: string;
@@ -29,6 +35,7 @@ export interface StoreProductPayload {
     images: StoreProductImage[];
     badges: string[] | null;
     tags: string[] | null;
+    priceTiers: PriceTier[];
 }
 
 export type StoreProductField = keyof StoreProductPayload;

@@ -160,6 +160,7 @@ export async function POST(req: NextRequest) {
             isFeatured: productData.isFeatured,
             tags: productData.tags,
             badges: productData.badges,
+            priceTiers: productData.priceTiers ?? null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         }).returning();

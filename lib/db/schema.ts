@@ -129,6 +129,7 @@ export const products = sqliteTable("products", {
     sortOrder: integer("sort_order").default(0),
     tags: text("tags", { mode: "json" }), // array of strings
     badges: text("badges", { mode: "json" }), // array of strings
+    priceTiers: text("price_tiers", { mode: "json" }), // [{minQty, maxQty, price}]
 
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),

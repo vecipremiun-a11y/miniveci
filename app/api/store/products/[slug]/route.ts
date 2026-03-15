@@ -64,7 +64,8 @@ export async function GET(req: NextRequest, context: any) {
                 isPrimary: img.isPrimary
             })),
             badges: rawProduct.badges,
-            tags: rawProduct.tags
+            tags: rawProduct.tags,
+            priceTiers: (rawProduct.priceTiers as any[]) ?? [],
         };
 
         return NextResponse.json(publicProduct);

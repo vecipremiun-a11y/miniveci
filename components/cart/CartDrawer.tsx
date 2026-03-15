@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Minus, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
-import { useCart, isWeightUnit, hasEquiv } from './CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from './CartProvider';
 
 interface CartDrawerProps {
   open: boolean;
@@ -103,8 +103,8 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                 const stepVal = equiv ? 1 : (isWeight || isKgDirect ? 0.5 : 1);
                 const minQty = equiv ? 1 : (isWeight || isKgDirect ? 0.5 : 1);
                 const lineTotal = equiv
-                  ? Math.round(item.price * item.equivWeight! * item.quantity)
-                  : item.price * item.quantity;
+                  ? Math.round(getTieredPrice(item.price, item.priceTiers, item.quantity) * item.equivWeight! * item.quantity)
+                  : getTieredPrice(item.price, item.priceTiers, item.quantity) * item.quantity;
                 const itemTotal = new Intl.NumberFormat('es-CL', {
                   style: 'currency',
                   currency: 'CLP',

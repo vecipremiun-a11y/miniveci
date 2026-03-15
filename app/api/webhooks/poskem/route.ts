@@ -85,6 +85,22 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
     const taxRate = typeof rawTaxRate === "number" ? rawTaxRate : undefined;
     const imageUrl = (payload.image_url ?? payload.imageUrl) ? String(payload.image_url ?? payload.imageUrl) : undefined;
 
+    // Price tiers (escala de precios por cantidad)
+    const rawPriceTiers = payload.price_tiers ?? payload.priceTiers;
+    let priceTiers: undefined | null | { minQty: number; maxQty: number | null; price: number }[];
+    if (rawPriceTiers === null) {
+        priceTiers = null; // Explicitly clear tiers
+    } else if (Array.isArray(rawPriceTiers)) {
+        priceTiers = rawPriceTiers
+            .filter((t: any) => typeof t === 'object' && t !== null && typeof t.minQty === 'number' && typeof t.price === 'number')
+            .map((t: any) => ({
+                minQty: Math.max(1, Math.round(t.minQty ?? t.min_qty ?? 1)),
+                maxQty: (t.maxQty === null || t.maxQty === undefined) ? ((t.max_qty === null || t.max_qty === undefined) ? null : Math.round(t.max_qty)) : Math.round(t.maxQty),
+                price: Math.round(t.price ?? 0),
+            }));
+        if (priceTiers.length === 0) priceTiers = null;
+    }
+
     // Normalizar stock según unidad
     const normalizedStock = normalizeStock(stock, unit);
 
@@ -115,6 +131,7 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
         if (isOffer !== undefined) updateFields.isOffer = isOffer;
         if (unit !== undefined) updateFields.unit = unit;
         if (taxRate !== undefined) updateFields.taxRate = taxRate;
+        if (priceTiers !== undefined) updateFields.priceTiers = priceTiers;
 
         await db.update(products).set(updateFields).where(eq(products.id, productId));
         action = "updated";
@@ -142,6 +159,7 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
             isOffer: isOffer ?? false,
             unit: unit ?? "Und",
             taxRate: taxRate ?? null,
+            priceTiers: priceTiers ?? null,
             isPublished: false,
             createdAt: now,
             updatedAt: now,
@@ -171,7 +189,7 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
     await emitProductChange(productId, {
         slug: productSlug,
         reason: `webhook:product.${action}`,
-        changedFields: ["name", "price", "stock", "category", "images"],
+        changedFields: ["name", "price", "stock", "category", "images", "priceTiers"],
     });
 
     return { action, productId, sku };

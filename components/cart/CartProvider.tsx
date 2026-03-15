@@ -13,6 +13,12 @@ function round2(n: number): number {
     return Math.round(n * 100) / 100;
 }
 
+export interface PriceTier {
+    minQty: number;
+    maxQty: number | null;
+    price: number;
+}
+
 export interface CartItem {
     id: string;
     name: string;
@@ -23,6 +29,16 @@ export interface CartItem {
     equivLabel?: string | null;
     equivWeight?: number | null;
     quantity: number;
+    priceTiers?: PriceTier[];
+}
+
+/** Returns the effective unit price for a given quantity based on price tiers */
+export function getTieredPrice(basePrice: number, priceTiers: PriceTier[] | undefined, quantity: number): number {
+    if (!priceTiers || priceTiers.length === 0) return basePrice;
+    const tier = priceTiers.find(t =>
+        quantity >= t.minQty && (t.maxQty === null || quantity <= t.maxQty)
+    );
+    return tier ? tier.price : basePrice;
 }
 
 /** True when the product is sold in kg but displayed as equivalent units */
@@ -109,11 +125,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const value = useMemo<CartContextValue>(() => {
         const totalItems = items.length;
         const subtotal = items.reduce((sum, item) => {
+            const effectivePrice = getTieredPrice(item.price, item.priceTiers, item.quantity);
             if (hasEquiv(item)) {
                 // precio por kg × peso unitario × cantidad de unidades
-                return sum + Math.round(item.price * item.equivWeight! * item.quantity);
+                return sum + Math.round(effectivePrice * item.equivWeight! * item.quantity);
             }
-            return sum + item.price * item.quantity;
+            return sum + effectivePrice * item.quantity;
         }, 0);
         return { items, totalItems, subtotal, addItem, updateQuantity, removeItem, clearCart };
     }, [items]);
