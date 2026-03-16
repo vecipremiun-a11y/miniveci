@@ -30,6 +30,10 @@ export const productSchema = z.object({
     equivWeight: z.coerce.number().min(0).optional().nullable(),
     taxRate: z.coerce.number().min(0).optional().nullable(),
 
+    // Cost & Margin
+    costPrice: z.coerce.number().min(0).optional().nullable(),
+    profitMargin: z.coerce.number().min(0).optional().nullable(),
+
     // Status
     isPublished: z.boolean().default(false),
     isFeatured: z.boolean().default(false),

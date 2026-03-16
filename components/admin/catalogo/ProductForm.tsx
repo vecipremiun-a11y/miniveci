@@ -27,7 +27,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, X, UploadCloud, Info, Trash2, TrendingDown, Infinity, ArrowRight, Zap, Tag } from "lucide-react";
+import { Loader2, Plus, X, UploadCloud, Info, Trash2, TrendingDown, Infinity, ArrowRight, Zap, Tag, DollarSign, TrendingUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -63,6 +63,8 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
             equivLabel: initialData?.equivLabel ?? null,
             equivWeight: initialData?.equivWeight ?? null,
             taxRate: initialData?.taxRate ?? null,
+            costPrice: initialData?.costPrice ?? null,
+            profitMargin: initialData?.profitMargin ?? null,
             priceSource: initialData?.priceSource || "global",
             stockSource: initialData?.stockSource || "global",
             reservedQty: initialData?.reservedQty || 0,
@@ -518,6 +520,101 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                         </FormItem>
                                     )}
                                 />
+                            </CardContent>
+                        </Card>
+
+                        {/* Costo del Producto */}
+                        <Card className="overflow-hidden border-0 shadow-lg shadow-emerald-100/50">
+                            <CardHeader className="pb-3 bg-gradient-to-r from-emerald-600 to-teal-500 text-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-xl bg-white/20 backdrop-blur-sm">
+                                        <DollarSign className="h-5 w-5 text-white" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-base text-white">Costo del Producto</CardTitle>
+                                        <CardDescription className="text-emerald-100">Precio de costo y margen de ganancia</CardDescription>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="pt-5 bg-gradient-to-b from-emerald-50/40 to-white space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="costPrice"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Precio de Costo</FormLabel>
+                                                <FormControl>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-sm">$</span>
+                                                        <Input
+                                                            type="number"
+                                                            min={0}
+                                                            className="pl-7 h-11 border-2 border-emerald-200 rounded-xl font-bold text-emerald-800 focus:border-emerald-400"
+                                                            value={field.value ?? ''}
+                                                            onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                                                        />
+                                                    </div>
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="profitMargin"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Margen de Ganancia</FormLabel>
+                                                <FormControl>
+                                                    <div className="relative">
+                                                        <Input
+                                                            type="number"
+                                                            min={0}
+                                                            step={0.1}
+                                                            className="pr-8 h-11 border-2 border-emerald-200 rounded-xl font-bold text-emerald-800 focus:border-emerald-400"
+                                                            value={field.value ?? ''}
+                                                            onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                                                        />
+                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-sm">%</span>
+                                                    </div>
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                                {/* Calculated profit summary */}
+                                {(() => {
+                                    const cost = form.watch('costPrice');
+                                    const price = form.watch('webPrice');
+                                    if (!cost || !price || cost <= 0) return null;
+                                    const profit = price - cost;
+                                    const margin = ((profit / cost) * 100).toFixed(1);
+                                    const fmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
+                                    return (
+                                        <div className="rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50/60 p-3">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <TrendingUp className="h-4 w-4 text-emerald-600" />
+                                                <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Resumen</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-3 text-center">
+                                                <div>
+                                                    <p className="text-[10px] text-emerald-600 font-semibold uppercase">Costo</p>
+                                                    <p className="text-sm font-black text-emerald-800">{fmt.format(cost)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] text-emerald-600 font-semibold uppercase">Ganancia</p>
+                                                    <p className={`text-sm font-black ${profit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt.format(profit)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] text-emerald-600 font-semibold uppercase">Margen real</p>
+                                                    <p className={`text-sm font-black ${profit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{margin}%</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </CardContent>
                         </Card>
 

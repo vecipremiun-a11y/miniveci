@@ -83,6 +83,8 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
     const unit = payload.unit ? String(payload.unit) : undefined;
     const rawTaxRate = payload.tax_rate ?? payload.taxRate;
     const taxRate = typeof rawTaxRate === "number" ? rawTaxRate : undefined;
+    const rawCostPrice = payload.cost_price ?? payload.costPrice;
+    const costPrice = typeof rawCostPrice === "number" ? Math.round(rawCostPrice) : undefined;
     const imageUrl = (payload.image_url ?? payload.imageUrl) ? String(payload.image_url ?? payload.imageUrl) : undefined;
 
     // Price tiers (escala de precios por cantidad)
@@ -131,6 +133,7 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
         if (isOffer !== undefined) updateFields.isOffer = isOffer;
         if (unit !== undefined) updateFields.unit = unit;
         if (taxRate !== undefined) updateFields.taxRate = taxRate;
+        if (costPrice !== undefined) updateFields.costPrice = costPrice;
         if (priceTiers !== undefined) updateFields.priceTiers = priceTiers;
 
         await db.update(products).set(updateFields).where(eq(products.id, productId));
@@ -159,6 +162,7 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
             isOffer: isOffer ?? false,
             unit: unit ?? "Und",
             taxRate: taxRate ?? null,
+            costPrice: costPrice ?? null,
             priceTiers: priceTiers ?? null,
             isPublished: false,
             createdAt: now,

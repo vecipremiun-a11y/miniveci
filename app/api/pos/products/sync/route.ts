@@ -35,6 +35,9 @@ const syncProductRawSchema = z.object({
   equiv_weight: z.number().min(0).optional().nullable(),
   equivLabel: z.string().trim().optional().nullable(),
   equivWeight: z.number().min(0).optional().nullable(),
+  // Cost price
+  cost_price: z.number().min(0).optional().nullable(),
+  costPrice: z.number().min(0).optional().nullable(),
   // Price tiers (escala de precios)
   price_tiers: z.array(z.object({
     minQty: z.number().min(1).optional(),
@@ -61,6 +64,7 @@ const syncProductRawSchema = z.object({
   unit: d.unit,
   equiv_label: d.equiv_label ?? d.equivLabel,
   equiv_weight: d.equiv_weight ?? d.equivWeight,
+  cost_price: d.cost_price ?? d.costPrice,
   price_tiers: d.price_tiers ?? d.priceTiers,
   tax_rate: d.tax_rate ?? d.taxRate,
   image_url: d.image_url ?? d.imageUrl,
@@ -358,6 +362,9 @@ async function handleProductSync(req: NextRequest) {
       if (data.equiv_weight !== undefined) {
         updateFields.equivWeight = data.equiv_weight;
       }
+      if (data.cost_price !== undefined) {
+        updateFields.costPrice = data.cost_price !== null ? Math.round(data.cost_price) : null;
+      }
       if (priceTiers !== undefined) {
         updateFields.priceTiers = priceTiers;
       }
@@ -396,6 +403,7 @@ async function handleProductSync(req: NextRequest) {
         equivLabel: data.equiv_label ?? null,
         equivWeight: data.equiv_weight ?? null,
         taxRate: data.tax_rate ?? null,
+        costPrice: data.cost_price != null ? Math.round(data.cost_price) : null,
         priceTiers: priceTiers ?? null,
         isPublished: false,
         createdAt: now,
