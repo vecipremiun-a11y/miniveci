@@ -161,6 +161,7 @@ export async function POST(req: NextRequest) {
             tags: productData.tags,
             badges: productData.badges,
             priceTiers: productData.priceTiers ?? null,
+            subscriptionPrice: productData.subscriptionPrice ?? null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         }).returning();

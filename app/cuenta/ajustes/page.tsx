@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { AccountSidebar } from '@/components/account/AccountSidebar';
 import { Save, Loader2, User, Phone, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -131,11 +130,8 @@ export default function AjustesPage() {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-3"><AccountSidebar /></div>
-            <div className="lg:col-span-9">
-                <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl p-8 shadow-xl">
-                    <h2 className="text-xl font-bold text-slate-800 mb-2">Ajustes de Cuenta</h2>
+        <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl p-8 shadow-xl">
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Ajustes de Cuenta</h2>
                     <p className="text-slate-500 text-sm mb-8">Actualiza tu información personal y dirección</p>
 
                     {loading ? (
@@ -209,7 +205,5 @@ export default function AjustesPage() {
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
     );
 }

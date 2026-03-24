@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { ShoppingBag, Heart, CircleDollarSign, Pencil } from 'lucide-react';
+import { ShoppingBag, Heart, CircleDollarSign, Pencil, Crown } from 'lucide-react';
 import Link from 'next/link';
 
 interface CustomerProfile {
@@ -28,18 +28,24 @@ export function ProfileSummary() {
     const [profile, setProfile] = useState<CustomerProfile | null>(null);
     const [summary, setSummary] = useState<Summary | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isSubscriber, setIsSubscriber] = useState(false);
 
     useEffect(() => {
         if (!session?.user?.id) return;
 
         const fetchData = async () => {
             try {
-                const [profileRes, summaryRes] = await Promise.all([
+                const [profileRes, summaryRes, subRes] = await Promise.all([
                     fetch('/api/store/customer'),
                     fetch('/api/store/customer/summary'),
+                    fetch('/api/store/customer/subscription'),
                 ]);
                 if (profileRes.ok) setProfile(await profileRes.json());
                 if (summaryRes.ok) setSummary(await summaryRes.json());
+                if (subRes.ok) {
+                    const subData = await subRes.json();
+                    setIsSubscriber(subData.subscription?.status === 'active');
+                }
             } catch (error) {
                 console.error('Error loading profile:', error);
             } finally {
@@ -85,17 +91,24 @@ export function ProfileSummary() {
 
                 {/* User Info */}
                 <div className="flex items-center gap-6">
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-300 to-indigo-400 p-1 shadow-lg shrink-0">
+                    <div className={`w-24 h-24 rounded-full ${isSubscriber ? 'bg-gradient-to-br from-amber-400 via-yellow-300 to-amber-500 shadow-amber-200' : 'bg-gradient-to-br from-blue-300 to-indigo-400'} p-1 shadow-lg shrink-0`}>
                         <div className="w-full h-full rounded-full bg-slate-100 flex items-center justify-center overflow-hidden">
                             {session?.user?.image ? (
                                 <img src={session.user.image} alt="Avatar" className="w-full h-full object-cover" />
                             ) : (
-                                <span className="text-3xl font-bold text-indigo-500">{initials}</span>
+                                <span className={`text-3xl font-bold ${isSubscriber ? 'text-amber-600' : 'text-indigo-500'}`}>{initials}</span>
                             )}
                         </div>
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-800 mb-1">{displayName}</h1>
+                        <div className="flex items-center gap-2 mb-1">
+                            <h1 className="text-2xl font-bold text-slate-800">{displayName}</h1>
+                            {isSubscriber && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold uppercase bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 rounded-full border border-amber-200">
+                                    <Crown className="w-3 h-3" /> Premium
+                                </span>
+                            )}
+                        </div>
                         <p className="text-slate-500 mb-1">{displayEmail}</p>
                         {profile?.phone && <p className="text-slate-500 text-sm mb-4">{profile.phone}</p>}
 

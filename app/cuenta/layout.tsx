@@ -1,3 +1,5 @@
+import { AccountSidebar } from '@/components/account/AccountSidebar';
+
 export default function AccountLayout({
     children,
 }: {
@@ -19,7 +21,14 @@ export default function AccountLayout({
                     <span>›</span>
                     <span className="text-slate-800 font-medium">Mi cuenta</span>
                 </div>
-                {children}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    <div className="lg:col-span-3">
+                        <AccountSidebar />
+                    </div>
+                    <div className="lg:col-span-9">
+                        {children}
+                    </div>
+                </div>
             </div>
         </div>
     );

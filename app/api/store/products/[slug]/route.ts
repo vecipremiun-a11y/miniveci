@@ -34,10 +34,6 @@ export async function GET(req: NextRequest, context: any) {
             rawProduct.category as CategoryInput | null
         );
 
-        if (!resolved.is_available) {
-            return NextResponse.json({ error: "Product not found" }, { status: 404 });
-        }
-
         const publicProduct = {
             id: rawProduct.id,
             name: rawProduct.name,

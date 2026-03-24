@@ -42,6 +42,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [newTag, setNewTag] = useState("");
+    const [subscriptionUtility, setSubscriptionUtility] = useState(5);
 
     const form = useForm<ProductFormValues>({
         resolver: zodResolver(productSchema) as any,
@@ -65,6 +66,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
             taxRate: initialData?.taxRate ?? null,
             costPrice: initialData?.costPrice ?? null,
             profitMargin: initialData?.profitMargin ?? null,
+            subscriptionPrice: initialData?.subscriptionPrice ?? null,
             priceSource: initialData?.priceSource || "global",
             stockSource: initialData?.stockSource || "global",
             reservedQty: initialData?.reservedQty || 0,
@@ -424,19 +426,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                         </FormItem>
                                     )}
                                 />
-                                <FormField
-                                    control={form.control}
-                                    name="taxRate"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Tasa de Impuesto (%)</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" placeholder="Ej: 19" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+
 
                                 {/* Equivalencia de peso — solo visible para Kg */}
                                 {form.watch("unit") === "Kg" && (
@@ -562,16 +552,16 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                     />
                                     <FormField
                                         control={form.control}
-                                        name="profitMargin"
+                                        name="taxRate"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Margen de Ganancia</FormLabel>
+                                                <FormLabel className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Impuesto (%)</FormLabel>
                                                 <FormControl>
                                                     <div className="relative">
                                                         <Input
                                                             type="number"
                                                             min={0}
-                                                            step={0.1}
+                                                            placeholder="Ej: 19"
                                                             className="pr-8 h-11 border-2 border-emerald-200 rounded-xl font-bold text-emerald-800 focus:border-emerald-400"
                                                             value={field.value ?? ''}
                                                             onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
@@ -584,13 +574,17 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                         )}
                                     />
                                 </div>
-                                {/* Calculated profit summary */}
+                                {/* Calculated profit summary — discounts tax from price first */}
                                 {(() => {
                                     const cost = form.watch('costPrice');
                                     const price = form.watch('webPrice');
+                                    const taxRate = form.watch('taxRate');
                                     if (!cost || !price || cost <= 0) return null;
-                                    const profit = price - cost;
-                                    const margin = ((profit / cost) * 100).toFixed(1);
+                                    const tax = taxRate && taxRate > 0 ? taxRate : 0;
+                                    const priceWithoutTax = Math.round(price / (1 + tax / 100));
+                                    const taxAmount = price - priceWithoutTax;
+                                    const profit = priceWithoutTax - cost;
+                                    const margin = ((profit / priceWithoutTax) * 100).toFixed(1);
                                     const fmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
                                     return (
                                         <div className="rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50/60 p-3">
@@ -598,11 +592,17 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                                 <TrendingUp className="h-4 w-4 text-emerald-600" />
                                                 <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Resumen</span>
                                             </div>
-                                            <div className="grid grid-cols-3 gap-3 text-center">
+                                            <div className={`grid ${tax > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-3 text-center`}>
                                                 <div>
                                                     <p className="text-[10px] text-emerald-600 font-semibold uppercase">Costo</p>
                                                     <p className="text-sm font-black text-emerald-800">{fmt.format(cost)}</p>
                                                 </div>
+                                                {tax > 0 && (
+                                                    <div>
+                                                        <p className="text-[10px] text-emerald-600 font-semibold uppercase">Impuesto</p>
+                                                        <p className="text-sm font-black text-amber-600">{fmt.format(taxAmount)}</p>
+                                                    </div>
+                                                )}
                                                 <div>
                                                     <p className="text-[10px] text-emerald-600 font-semibold uppercase">Ganancia</p>
                                                     <p className={`text-sm font-black ${profit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>{fmt.format(profit)}</p>
@@ -613,6 +613,114 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                                 </div>
                                             </div>
                                         </div>
+                                    );
+                                })()}
+                            </CardContent>
+                        </Card>
+
+                        {/* Precio Suscripción */}
+                        <Card className="overflow-hidden border-0 shadow-lg shadow-blue-100/50">
+                            <CardHeader className="pb-3 bg-gradient-to-r from-blue-600 to-indigo-500 text-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-xl bg-white/20 backdrop-blur-sm">
+                                        <Zap className="h-5 w-5 text-white" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-base text-white">Precio Suscripción</CardTitle>
+                                        <CardDescription className="text-blue-100">Precio especial para clientes con suscripción activa</CardDescription>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="pt-5 bg-gradient-to-b from-blue-50/40 to-white space-y-4">
+                                {(() => {
+                                    const cost = form.watch('costPrice');
+                                    const taxRate = form.watch('taxRate');
+                                    const subscriptionPrice = form.watch('subscriptionPrice');
+                                    const webPrice = form.watch('webPrice');
+                                    const tax = taxRate && taxRate > 0 ? taxRate : 0;
+                                    const costPlusTax = cost && cost > 0 ? Math.round(cost * (1 + tax / 100)) : null;
+                                    const fmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
+                                    const savings = subscriptionPrice && webPrice ? webPrice - subscriptionPrice : null;
+                                    const savingsPercent = savings && webPrice ? ((savings / webPrice) * 100).toFixed(0) : null;
+
+                                    const [utilityPct, setUtilityPct] = [subscriptionUtility, setSubscriptionUtility];
+                                    const suggestedPrice = costPlusTax ? Math.round(costPlusTax * (1 + utilityPct / 100)) : null;
+
+                                    return (
+                                        <>
+                                            {costPlusTax && (
+                                                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 space-y-2">
+                                                    <div className="text-xs text-blue-700">
+                                                        <span className="font-semibold">Costo + IVA:</span> {fmt.format(costPlusTax)} <span className="text-blue-500">({fmt.format(cost!)} + {tax}%)</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-semibold text-blue-700">Utilidad:</span>
+                                                        <div className="relative w-24">
+                                                            <Input
+                                                                type="number"
+                                                                min={0}
+                                                                step={0.5}
+                                                                value={utilityPct}
+                                                                onChange={(e) => setUtilityPct(Number(e.target.value) || 0)}
+                                                                className="h-7 pr-7 text-xs font-bold text-blue-800 border-blue-200 rounded-lg"
+                                                            />
+                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 text-xs font-bold">%</span>
+                                                        </div>
+                                                        <ArrowRight className="h-3 w-3 text-blue-400" />
+                                                        <span className="text-xs font-bold text-blue-800">{suggestedPrice ? fmt.format(suggestedPrice) : '-'}</span>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-7 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+                                                            onClick={() => suggestedPrice && form.setValue('subscriptionPrice', suggestedPrice)}
+                                                        >
+                                                            Aplicar
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <FormField
+                                                control={form.control}
+                                                name="subscriptionPrice"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel className="text-xs font-bold text-blue-700 uppercase tracking-wider">Precio Suscriptor</FormLabel>
+                                                        <FormControl>
+                                                            <div className="relative">
+                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 font-bold text-sm">$</span>
+                                                                <Input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    className="pl-7 h-11 border-2 border-blue-200 rounded-xl font-bold text-blue-800 focus:border-blue-400"
+                                                                    value={field.value ?? ''}
+                                                                    onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                                                                />
+                                                            </div>
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                            {savings !== null && savings > 0 && (
+                                                <div className="rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/60 p-3">
+                                                    <div className="grid grid-cols-3 gap-3 text-center">
+                                                        <div>
+                                                            <p className="text-[10px] text-blue-600 font-semibold uppercase">Precio Normal</p>
+                                                            <p className="text-sm font-black text-gray-400 line-through">{fmt.format(webPrice!)}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] text-blue-600 font-semibold uppercase">Precio Suscriptor</p>
+                                                            <p className="text-sm font-black text-blue-700">{fmt.format(subscriptionPrice!)}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] text-blue-600 font-semibold uppercase">Ahorro</p>
+                                                            <p className="text-sm font-black text-green-600">{fmt.format(savings)} ({savingsPercent}%)</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
                                     );
                                 })()}
                             </CardContent>

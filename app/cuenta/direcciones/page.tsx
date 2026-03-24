@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { AccountSidebar } from '@/components/account/AccountSidebar';
 import { MapPin, Pencil, Save, X, Loader2, Plus, Trash2, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
@@ -181,10 +180,7 @@ export default function DireccionesPage() {
     );
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-3"><AccountSidebar /></div>
-            <div className="lg:col-span-9">
-                <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl p-8 shadow-xl">
+        <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl p-8 shadow-xl">
                     <div className="flex items-center justify-between mb-6">
                         <h2 className="text-xl font-bold text-slate-800">Mis Direcciones</h2>
                         {!adding && !editingId && (
@@ -265,7 +261,5 @@ export default function DireccionesPage() {
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
     );
 }

@@ -101,6 +101,7 @@ export const products = sqliteTable("products", {
     // Costos / Margen
     costPrice: integer("cost_price"), // CLP (pesos) — precio de costo del POS
     profitMargin: real("profit_margin"), // porcentaje de margen de ganancia
+    subscriptionPrice: integer("subscription_price"), // CLP — precio para suscriptores
 
     // Datos Web (Editable)
     webPrice: integer("web_price"), // CLP (pesos)
@@ -267,8 +268,32 @@ export const orderStatusHistoryRelations = relations(orderStatusHistory, ({ one 
 export const customersRelations = relations(customers, ({ many }) => ({
     orders: many(orders),
     addresses: many(customerAddresses),
+    subscriptions: many(subscriptions),
 }));
 
 export const customerAddressesRelations = relations(customerAddresses, ({ one }) => ({
     customer: one(customers, { fields: [customerAddresses.customerId], references: [customers.id] }),
+}));
+
+// --- SUBSCRIPTIONS ---
+
+export const subscriptions = sqliteTable("subscriptions", {
+    id: text("id").primaryKey(),
+    customerId: text("customer_id").references(() => customers.id, { onDelete: "cascade" }).notNull(),
+    plan: text("plan").notNull().default("premium"), // "premium"
+    status: text("status").notNull().default("active"), // "active", "expired", "cancelled"
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    price: integer("price").notNull(), // CLP pagado
+    paymentMethod: text("payment_method"),
+    paymentId: text("payment_id"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    customerIdIdx: index("subscription_customer_id_idx").on(table.customerId),
+    statusIdx: index("subscription_status_idx").on(table.status),
+}));
+
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+    customer: one(customers, { fields: [subscriptions.customerId], references: [customers.id] }),
 }));

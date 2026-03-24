@@ -33,6 +33,7 @@ export const productSchema = z.object({
     // Cost & Margin
     costPrice: z.coerce.number().min(0).optional().nullable(),
     profitMargin: z.coerce.number().min(0).optional().nullable(),
+    subscriptionPrice: z.coerce.number().min(0).optional().nullable(),
 
     // Status
     isPublished: z.boolean().default(false),
