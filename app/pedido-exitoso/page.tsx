@@ -9,6 +9,10 @@ import { Footer } from '@/components/Footer';
 function OrderSuccessContent() {
     const searchParams = useSearchParams();
     const orderNumber = searchParams.get('order') || '';
+    const source = searchParams.get('source');
+    const mpStatus = searchParams.get('status');
+    const isMercadoPago = source === 'mp';
+    const isPending = mpStatus === 'pending';
 
     return (
         <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white">
@@ -19,17 +23,22 @@ function OrderSuccessContent() {
                 <div className="bg-white/70 backdrop-blur-md border border-white rounded-3xl p-8 md:p-12 text-center">
                     {/* Animated Check */}
                     <div className="relative mx-auto w-24 h-24 mb-6">
-                        <div className="absolute inset-0 bg-emerald-100 rounded-full animate-ping opacity-20" />
-                        <div className="relative w-24 h-24 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg shadow-emerald-200">
+                        <div className={`absolute inset-0 ${isPending ? 'bg-amber-100' : 'bg-emerald-100'} rounded-full animate-ping opacity-20`} />
+                        <div className={`relative w-24 h-24 ${isPending ? 'bg-gradient-to-br from-amber-400 to-amber-600' : 'bg-gradient-to-br from-emerald-400 to-emerald-600'} rounded-full flex items-center justify-center shadow-lg ${isPending ? 'shadow-amber-200' : 'shadow-emerald-200'}`}>
                             <CheckCircle2 className="w-12 h-12 text-white" strokeWidth={2.5} />
                         </div>
                     </div>
 
                     <h1 className="text-3xl md:text-4xl font-extrabold text-slate-800 mb-3">
-                        ¡Pedido creado con éxito!
+                        {isPending ? '¡Pedido en proceso!' : '¡Pedido creado con éxito!'}
                     </h1>
                     <p className="text-slate-500 text-lg mb-8">
-                        Tu pedido ha sido registrado correctamente y será procesado pronto.
+                        {isPending
+                            ? 'Tu pago está siendo procesado por Mercado Pago. Te notificaremos cuando sea confirmado.'
+                            : isMercadoPago
+                                ? 'Tu pago fue aprobado y tu pedido será procesado pronto.'
+                                : 'Tu pedido ha sido registrado correctamente y será procesado pronto.'
+                        }
                     </p>
 
                     {/* Order Number */}
@@ -55,15 +64,22 @@ function OrderSuccessContent() {
                             </p>
                         </div>
 
-                        <div className="bg-amber-50/70 border border-amber-100 rounded-2xl p-4">
+                        <div className={`${isMercadoPago ? 'bg-purple-50/70 border-purple-100' : 'bg-amber-50/70 border-amber-100'} border rounded-2xl p-4`}>
                             <div className="flex items-center gap-3 mb-2">
-                                <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
-                                    <ShoppingBag className="w-4 h-4 text-amber-600" />
+                                <div className={`w-8 h-8 ${isMercadoPago ? 'bg-purple-100' : 'bg-amber-100'} rounded-full flex items-center justify-center`}>
+                                    <ShoppingBag className={`w-4 h-4 ${isMercadoPago ? 'text-purple-600' : 'text-amber-600'}`} />
                                 </div>
-                                <p className="font-bold text-amber-800 text-sm">Pago contra entrega</p>
+                                <p className={`font-bold ${isMercadoPago ? 'text-purple-800' : 'text-amber-800'} text-sm`}>
+                                    {isMercadoPago ? 'Pago con Mercado Pago' : 'Pago contra entrega'}
+                                </p>
                             </div>
-                            <p className="text-xs text-amber-600">
-                                Recuerda tener el pago listo cuando llegue tu pedido a domicilio.
+                            <p className={`text-xs ${isMercadoPago ? 'text-purple-600' : 'text-amber-600'}`}>
+                                {isPending
+                                    ? 'Tu pago está pendiente de confirmación. Recibirás una notificación cuando sea aprobado.'
+                                    : isMercadoPago
+                                        ? 'Tu pago fue procesado exitosamente a través de Mercado Pago.'
+                                        : 'Recuerda tener el pago listo cuando llegue tu pedido a domicilio.'
+                                }
                             </p>
                         </div>
                     </div>

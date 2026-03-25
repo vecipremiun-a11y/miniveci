@@ -269,6 +269,7 @@ export const customersRelations = relations(customers, ({ many }) => ({
     orders: many(orders),
     addresses: many(customerAddresses),
     subscriptions: many(subscriptions),
+    paymentMethods: many(customerPaymentMethods),
 }));
 
 export const customerAddressesRelations = relations(customerAddresses, ({ one }) => ({
@@ -296,4 +297,26 @@ export const subscriptions = sqliteTable("subscriptions", {
 
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
     customer: one(customers, { fields: [subscriptions.customerId], references: [customers.id] }),
+}));
+
+// --- CUSTOMER PAYMENT METHODS (Mercado Pago tokens) ---
+
+export const customerPaymentMethods = sqliteTable("customer_payment_methods", {
+    id: text("id").primaryKey(),
+    customerId: text("customer_id").references(() => customers.id, { onDelete: "cascade" }).notNull(),
+    mpCustomerId: text("mp_customer_id"), // Mercado Pago customer ID
+    mpCardId: text("mp_card_id"), // Mercado Pago card token ID
+    brand: text("brand"), // "visa", "mastercard", "amex"
+    lastFourDigits: text("last_four_digits"),
+    expirationMonth: integer("expiration_month"),
+    expirationYear: integer("expiration_year"),
+    cardholderName: text("cardholder_name"),
+    isDefault: integer("is_default", { mode: "boolean" }).default(false),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    customerIdIdx: index("cpm_customer_id_idx").on(table.customerId),
+}));
+
+export const customerPaymentMethodsRelations = relations(customerPaymentMethods, ({ one }) => ({
+    customer: one(customers, { fields: [customerPaymentMethods.customerId], references: [customers.id] }),
 }));

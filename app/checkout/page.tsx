@@ -233,51 +233,76 @@ export default function CheckoutPage() {
 
         setIsSubmitting(true);
         try {
+            const orderPayload = {
+                customerName: contactName,
+                customerLastName: contactLastName,
+                customerEmail: contactEmail,
+                customerPhone: contactPhone,
+                customerRut: contactRut,
+                customerId: session?.user?.role === 'customer' ? (session.user as any).id : null,
+                deliveryType: deliveryMethod === 'store' ? 'pickup' : 'delivery',
+                deliveryDate: deliveryDate?.toISOString().split('T')[0] || null,
+                deliveryTimeSlot: deliveryTime,
+                shippingAddress: contactAddress,
+                shippingComuna: contactComuna,
+                shippingCity: contactCity,
+                shippingNotes: contactNotes,
+                paymentMethod,
+                paymentId: paymentMethod === 'transferencia' ? receiptUrl : null,
+                couponCode: appliedCoupon || null,
+                subtotal,
+                discount,
+                shippingCost: shipping,
+                total,
+                items: items.map(i => {
+                    const equiv = hasEquiv(i);
+                    const realId = i.id.replace(/__kg$/, '');
+                    const posQuantity = equiv
+                        ? Math.round(i.quantity * i.equivWeight! * 1000) / 1000
+                        : i.quantity;
+                    const unitPrice = equiv
+                        ? Math.round(i.price * i.equivWeight!)
+                        : i.price;
+                    return {
+                        id: realId,
+                        name: i.name,
+                        sku: realId,
+                        quantity: posQuantity,
+                        price: unitPrice,
+                        displayQuantity: equiv ? i.quantity : undefined,
+                        equivLabel: equiv ? i.equivLabel : undefined,
+                    };
+                }),
+            };
+
+            // Mercado Pago flow: create order + preference, then redirect
+            if (paymentMethod === 'mercadopago') {
+                const res = await fetch('/api/store/payments/create-preference', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderPayload),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    setSubmitError(data.error || 'Error al crear el pago con Mercado Pago.');
+                    return;
+                }
+                // Redirect to Mercado Pago checkout
+                clearCart();
+                const redirectUrl = data.initPoint || data.sandboxInitPoint;
+                if (redirectUrl) {
+                    window.location.href = redirectUrl;
+                } else {
+                    setSubmitError('No se pudo obtener la URL de pago.');
+                }
+                return;
+            }
+
+            // Regular flow (contrarembolso / transferencia)
             const res = await fetch('/api/store/orders', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    customerName: contactName,
-                    customerLastName: contactLastName,
-                    customerEmail: contactEmail,
-                    customerPhone: contactPhone,
-                    customerRut: contactRut,
-                    customerId: session?.user?.role === 'customer' ? (session.user as any).id : null,
-                    deliveryType: deliveryMethod === 'store' ? 'pickup' : 'delivery',
-                    deliveryDate: deliveryDate?.toISOString().split('T')[0] || null,
-                    deliveryTimeSlot: deliveryTime,
-                    shippingAddress: contactAddress,
-                    shippingComuna: contactComuna,
-                    shippingCity: contactCity,
-                    shippingNotes: contactNotes,
-                    paymentMethod,
-                    paymentId: paymentMethod === 'transferencia' ? receiptUrl : null,
-                    couponCode: appliedCoupon || null,
-                    subtotal,
-                    discount,
-                    shippingCost: shipping,
-                    total,
-                    items: items.map(i => {
-                        const equiv = hasEquiv(i);
-                        const realId = i.id.replace(/__kg$/, '');
-                        // For equiv products, send weight in kg to POS (qty × equivWeight)
-                        const posQuantity = equiv
-                            ? Math.round(i.quantity * i.equivWeight! * 1000) / 1000
-                            : i.quantity;
-                        const unitPrice = equiv
-                            ? Math.round(i.price * i.equivWeight!)
-                            : i.price;
-                        return {
-                            id: realId,
-                            name: i.name,
-                            sku: realId,
-                            quantity: posQuantity,
-                            price: unitPrice,
-                            displayQuantity: equiv ? i.quantity : undefined,
-                            equivLabel: equiv ? i.equivLabel : undefined,
-                        };
-                    }),
-                }),
+                body: JSON.stringify(orderPayload),
             });
 
             const data = await res.json();
@@ -578,10 +603,12 @@ export default function CheckoutPage() {
                                         </div>
                                     </div>
                                 </PayButton>
-                                <div className="rounded-xl border border-slate-200 bg-slate-50/80 py-3 px-4 opacity-50 cursor-not-allowed">
-                                    <span className="text-sm font-extrabold text-slate-400">💳 Mercado Pago</span>
-                                    <p className="text-xs mt-0.5 text-slate-400">Próximamente</p>
-                                </div>
+                                <PayButton
+                                    active={paymentMethod === 'mercadopago'}
+                                    onClick={() => setPaymentMethod('mercadopago')}
+                                    label="💳 Mercado Pago"
+                                    description="Paga con tarjeta de crédito, débito o saldo de Mercado Pago"
+                                />
                             </div>
                         </div>
                     </div>
@@ -662,7 +689,7 @@ export default function CheckoutPage() {
                     >
                         <span className="inline-flex items-center gap-2">
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
-                            {isSubmitting ? 'Procesando...' : 'Finalizar compra'}
+                            {isSubmitting ? 'Procesando...' : paymentMethod === 'mercadopago' ? 'Pagar con Mercado Pago' : 'Finalizar compra'}
                         </span>
                     </button>
 
