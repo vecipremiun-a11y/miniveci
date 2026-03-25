@@ -251,7 +251,7 @@ function ProductsPageContent() {
         <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white pb-20">
 
             {/* Spacer for fixed navbar */}
-            <div className="h-32 md:h-40"></div>
+            <div className="h-36 md:h-44"></div>
 
             <div className="max-w-7xl mx-auto px-6 md:px-12 flex flex-col md:flex-row gap-8">
 
@@ -354,7 +354,7 @@ function ProductsPageContent() {
                     ) : (
                         /* Product Grid */
                         <>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                 {products.map((product) => (
                                     <ProductCard
                                         key={product.id}

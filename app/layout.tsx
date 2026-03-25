@@ -16,6 +16,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "MiniVeci - Tu minimarket de barrio online",
   description: "Compra productos frescos y de calidad desde la comodidad de tu hogar.",
+  icons: {
+    icon: "/logo%20veci.png",
+    apple: "/logo%20veci.png",
+  },
 };
 
 import { Navbar } from "@/components/Navbar";

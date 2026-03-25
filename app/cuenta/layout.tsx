@@ -14,7 +14,7 @@ export default function AccountLayout({
                 <div className="absolute -bottom-20 left-1/3 w-[800px] h-[800px] bg-indigo-200/20 rounded-full blur-[150px]" />
             </div>
 
-            <div className="relative z-10 pt-28 pb-12 px-4 md:px-8 max-w-7xl mx-auto">
+            <div className="relative z-10 pt-36 pb-12 px-4 md:px-8 max-w-7xl mx-auto">
                 <h1 className="text-3xl font-bold text-slate-800 mb-2">Mi Cuenta</h1>
                 <div className="flex items-center gap-2 text-sm text-slate-500 mb-8">
                     <span>Inicio</span>

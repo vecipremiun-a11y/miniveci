@@ -143,7 +143,7 @@ export default function RegisterPage() {
     };
 
     return (
-        <div className="min-h-screen pt-24 pb-12 flex items-center justify-center bg-veci-blue-900/5 relative overflow-hidden">
+        <div className="min-h-screen pt-32 pb-12 flex items-center justify-center bg-veci-blue-900/5 relative overflow-hidden">
             {/* Background Elements */}
             <div className="absolute top-20 left-20 w-72 h-72 bg-veci-primary/20 rounded-full blur-3xl" />
             <div className="absolute bottom-20 right-20 w-80 h-80 bg-veci-secondary/20 rounded-full blur-3xl" />

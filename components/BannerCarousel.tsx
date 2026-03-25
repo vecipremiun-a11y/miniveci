@@ -73,7 +73,7 @@ export function BannerCarousel() {
   );
 
   return (
-    <section className="relative w-full overflow-hidden bg-gray-100 pt-24 md:pt-28">
+    <section className="relative w-full overflow-hidden bg-gray-100 pt-32 md:pt-36">
       {/* Slides */}
       {hasLink ? (
         <Link href={currentBanner.linkUrl!}>{slideContent}</Link>
