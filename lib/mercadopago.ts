@@ -1,6 +1,6 @@
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 
-const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN?.trim();
 
 if (!accessToken) {
     console.warn('⚠ MERCADOPAGO_ACCESS_TOKEN no configurado. Los pagos con Mercado Pago no funcionarán.');
