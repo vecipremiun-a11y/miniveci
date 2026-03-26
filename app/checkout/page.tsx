@@ -296,9 +296,9 @@ export default function CheckoutPage() {
                     setSubmitError(data.error || 'Error al crear el pago con Mercado Pago.');
                     return;
                 }
-                // Redirect to Mercado Pago checkout
+                // Redirect to Mercado Pago checkout (use sandbox for testing)
                 clearCart();
-                const redirectUrl = data.initPoint || data.sandboxInitPoint;
+                const redirectUrl = data.sandboxInitPoint || data.initPoint;
                 if (redirectUrl) {
                     window.location.href = redirectUrl;
                 } else {
