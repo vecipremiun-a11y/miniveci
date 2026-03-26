@@ -298,7 +298,7 @@ export default function CheckoutPage() {
                 }
                 // Redirect to Mercado Pago checkout
                 clearCart();
-                const redirectUrl = data.sandboxInitPoint || data.initPoint;
+                const redirectUrl = data.initPoint || data.sandboxInitPoint;
                 if (redirectUrl) {
                     window.location.href = redirectUrl;
                 } else {
