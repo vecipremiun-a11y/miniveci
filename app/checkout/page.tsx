@@ -32,12 +32,21 @@ export default function CheckoutPage() {
     const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('delivery');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('contrarembolso');
     const [acceptedTerms, setAcceptedTerms] = useState(true);
-    const [deliveryDate, setDeliveryDate] = useState<Date | undefined>(new Date());
+    const [deliveryDate, setDeliveryDate] = useState<Date | undefined>(undefined);
+    const [hasMounted, setHasMounted] = useState(false);
     const [deliveryTime, setDeliveryTime] = useState<string>('15:00 - 18:00');
     const [couponCode, setCouponCode] = useState('');
     const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
     const [couponMessage, setCouponMessage] = useState<string | null>(null);
     const [couponError, setCouponError] = useState<string | null>(null);
+
+    // Set initial date after mount to avoid hydration mismatch
+    useEffect(() => {
+        if (!hasMounted) {
+            setDeliveryDate(new Date());
+            setHasMounted(true);
+        }
+    }, [hasMounted]);
 
     // Contact section collapsed when logged in
     const [contactExpanded, setContactExpanded] = useState(false);
@@ -788,7 +797,11 @@ function DatePickerField({
                         mode="single"
                         selected={value}
                         onSelect={onChange}
-                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                        disabled={(date) => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            return date < today;
+                        }}
                     />
                 </PopoverContent>
             </Popover>
