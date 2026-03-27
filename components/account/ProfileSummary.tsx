@@ -15,6 +15,7 @@ interface CustomerProfile {
     address: string | null;
     comuna: string | null;
     city: string | null;
+    avatarUrl: string | null;
 }
 
 interface Summary {
@@ -93,8 +94,8 @@ export function ProfileSummary() {
                 <div className="flex items-center gap-6">
                     <div className={`w-24 h-24 rounded-full ${isSubscriber ? 'bg-gradient-to-br from-amber-400 via-yellow-300 to-amber-500 shadow-amber-200' : 'bg-gradient-to-br from-blue-300 to-indigo-400'} p-1 shadow-lg shrink-0`}>
                         <div className="w-full h-full rounded-full bg-slate-100 flex items-center justify-center overflow-hidden">
-                            {session?.user?.image ? (
-                                <img src={session.user.image} alt="Avatar" className="w-full h-full object-cover" />
+                            {(profile?.avatarUrl || session?.user?.image) ? (
+                                <img src={profile?.avatarUrl || session!.user!.image!} alt="Avatar" className="w-full h-full object-cover" />
                             ) : (
                                 <span className={`text-3xl font-bold ${isSubscriber ? 'text-amber-600' : 'text-indigo-500'}`}>{initials}</span>
                             )}

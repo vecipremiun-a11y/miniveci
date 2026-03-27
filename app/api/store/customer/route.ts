@@ -19,6 +19,7 @@ export async function GET() {
                 lastName: customers.lastName,
                 phone: customers.phone,
                 rut: customers.rut,
+                avatarUrl: customers.avatarUrl,
                 address: customers.address,
                 comuna: customers.comuna,
                 city: customers.city,
@@ -61,6 +62,7 @@ export async function PUT(req: NextRequest) {
         if ('comuna' in body) updateData.comuna = body.comuna?.trim() || null;
         if ('city' in body) updateData.city = body.city?.trim() || null;
         if ('addressNotes' in body) updateData.addressNotes = body.addressNotes?.trim() || null;
+        if ('avatarUrl' in body) updateData.avatarUrl = body.avatarUrl || null;
 
         await db.update(customers).set(updateData).where(eq(customers.id, session.user.id));
 

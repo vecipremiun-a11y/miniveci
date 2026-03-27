@@ -16,18 +16,36 @@ import {
     BarChart3,
     UserCog,
     Settings,
-    X
+    X,
+    Crown,
+    ChevronDown,
+    UsersRound,
 } from "lucide-react";
+import { useState, useEffect } from "react";
 
 interface SidebarProps {
     className?: string;
 }
 
-const menuItems = [
+interface MenuItem {
+    name: string;
+    href: string;
+    icon: React.ComponentType<{ size?: number }>;
+    children?: { name: string; href: string; icon: React.ComponentType<{ size?: number }> }[];
+}
+
+const menuItems: MenuItem[] = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { name: "Catálogo", href: "/admin/catalogo", icon: Package },
     { name: "Pedidos", href: "/admin/pedidos", icon: ShoppingCart },
     { name: "Clientes", href: "/admin/clientes", icon: Users },
+    {
+        name: "Membresías", href: "/admin/membresias", icon: Crown,
+        children: [
+            { name: "Panel", href: "/admin/membresias", icon: BarChart3 },
+            { name: "Suscriptores", href: "/admin/membresias/suscriptores", icon: UsersRound },
+        ],
+    },
     { name: "Promociones", href: "/admin/promociones", icon: Tag },
     { name: "Contenido", href: "/admin/contenido", icon: Palette },
     { name: "Envíos", href: "/admin/envios", icon: Truck },
@@ -40,6 +58,17 @@ const menuItems = [
 export default function Sidebar({ className }: SidebarProps) {
     const pathname = usePathname();
     const { sidebarOpen, setSidebarOpen, isMobile } = useAdmin();
+    const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
+
+    // Auto-expand submenu when navigating to a child route
+    useEffect(() => {
+        for (const item of menuItems) {
+            if (item.children && pathname.startsWith(item.href)) {
+                setOpenSubmenu(item.href);
+                return;
+            }
+        }
+    }, [pathname]);
 
     return (
         <>
@@ -74,8 +103,73 @@ export default function Sidebar({ className }: SidebarProps) {
                 <nav className="flex-1 overflow-y-auto py-4">
                     <ul className="space-y-1 px-2">
                         {menuItems.map((item) => {
-                            const isActive = pathname === item.href;
+                            const isActive = item.children
+                                ? pathname.startsWith(item.href)
+                                : pathname === item.href;
                             const Icon = item.icon;
+                            const isSubmenuOpen = openSubmenu === item.href;
+
+                            if (item.children) {
+                                return (
+                                    <li key={item.href}>
+                                        <button
+                                            onClick={() => {
+                                                if (!sidebarOpen) return;
+                                                setOpenSubmenu(isSubmenuOpen ? null : item.href);
+                                            }}
+                                            className={cn(
+                                                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors w-full cursor-pointer",
+                                                isActive
+                                                    ? "bg-slate-800 text-white"
+                                                    : "text-slate-400 hover:bg-slate-800 hover:text-white",
+                                                !sidebarOpen && "justify-center px-2"
+                                            )}
+                                            title={!sidebarOpen ? item.name : undefined}
+                                        >
+                                            <Icon size={20} />
+                                            <span
+                                                className={cn(
+                                                    "flex-1 text-left transition-all duration-300",
+                                                    !sidebarOpen && "w-0 overflow-hidden opacity-0 lg:hidden"
+                                                )}
+                                            >
+                                                {item.name}
+                                            </span>
+                                            {sidebarOpen && (
+                                                <ChevronDown
+                                                    size={16}
+                                                    className={cn("transition-transform", isSubmenuOpen && "rotate-180")}
+                                                />
+                                            )}
+                                        </button>
+                                        {sidebarOpen && isSubmenuOpen && (
+                                            <ul className="mt-1 ml-4 space-y-1 border-l border-slate-700 pl-3">
+                                                {item.children.map((child) => {
+                                                    const isChildActive = pathname === child.href;
+                                                    const ChildIcon = child.icon;
+                                                    return (
+                                                        <li key={child.href}>
+                                                            <Link
+                                                                href={child.href}
+                                                                onClick={() => isMobile && setSidebarOpen(false)}
+                                                                className={cn(
+                                                                    "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                                                                    isChildActive
+                                                                        ? "bg-slate-800 text-white"
+                                                                        : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                                                                )}
+                                                            >
+                                                                <ChildIcon size={16} />
+                                                                {child.name}
+                                                            </Link>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )}
+                                    </li>
+                                );
+                            }
 
                             return (
                                 <li key={item.href}>

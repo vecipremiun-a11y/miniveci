@@ -23,12 +23,17 @@ export function AccountSidebar() {
     const pathname = usePathname();
     const { data: session } = useSession();
     const [isSubscriber, setIsSubscriber] = useState(false);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
     useEffect(() => {
         if (!session?.user?.id || session.user.role !== 'customer') return;
         fetch('/api/store/customer/subscription')
             .then(r => r.json())
             .then(d => setIsSubscriber(d.subscription?.status === 'active'))
+            .catch(() => {});
+        fetch('/api/store/customer')
+            .then(r => r.json())
+            .then(d => { if (d.avatarUrl) setAvatarUrl(d.avatarUrl); })
             .catch(() => {});
     }, [session?.user?.id, session?.user?.role]);
 
@@ -44,9 +49,9 @@ export function AccountSidebar() {
             <div className="flex flex-col items-center mb-8">
                 <div className={`w-20 h-20 rounded-full ${isSubscriber ? 'bg-gradient-to-br from-amber-400 via-yellow-300 to-amber-500 shadow-amber-200' : 'bg-gradient-to-br from-blue-300 to-indigo-400'} p-1 shadow-lg mb-3`}>
                     <div className="w-full h-full rounded-full bg-slate-100 flex items-center justify-center overflow-hidden">
-                        {session?.user?.image ? (
+                        {(avatarUrl || session?.user?.image) ? (
                             <img
-                                src={session.user.image}
+                                src={avatarUrl || session!.user!.image!}
                                 alt="User Avatar"
                                 className="w-full h-full object-cover"
                             />

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Save, Loader2, User, Phone, FileText } from 'lucide-react';
+import { Save, Loader2, User, Phone, FileText, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ProfileForm {
@@ -49,6 +49,8 @@ export default function AjustesPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [rutError, setRutError] = useState('');
+    const [avatarUrl, setAvatarUrl] = useState('');
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [form, setForm] = useState<ProfileForm>({
         firstName: '', lastName: '', phone: '', rut: '',
     });
@@ -66,6 +68,7 @@ export default function AjustesPage() {
                         phone: data.phone || '',
                         rut: data.rut ? formatRut(data.rut) : '',
                     });
+                    if (data.avatarUrl) setAvatarUrl(data.avatarUrl);
                 }
             } catch (error) {
                 console.error('Error loading profile:', error);
@@ -114,6 +117,37 @@ export default function AjustesPage() {
         setForm(f => ({ ...f, [field]: e.target.value }));
     };
 
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            toast.error('Formato no válido. Sube JPG, PNG o WebP.');
+            return;
+        }
+        if (file.size > 3 * 1024 * 1024) {
+            toast.error('La imagen es muy grande. Máximo 3MB.');
+            return;
+        }
+        setUploadingAvatar(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/store/customer/avatar', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (!res.ok) {
+                toast.error(data.error || 'Error al subir la foto');
+                return;
+            }
+            setAvatarUrl(data.url);
+            toast.success('Foto de perfil actualizada');
+        } catch {
+            toast.error('Error de conexión');
+        } finally {
+            setUploadingAvatar(false);
+        }
+    };
+
     const handleRutChange = (value: string) => {
         const formatted = formatRut(value);
         setForm(f => ({ ...f, rut: formatted }));
@@ -140,6 +174,42 @@ export default function AjustesPage() {
                         </div>
                     ) : (
                         <div className="space-y-8">
+                            {/* Avatar Upload */}
+                            <div className="flex flex-col items-center sm:flex-row sm:items-start gap-6">
+                                <div className="relative group">
+                                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-veci-primary to-veci-secondary p-1 shadow-lg">
+                                        <div className="w-full h-full rounded-full bg-slate-100 flex items-center justify-center overflow-hidden">
+                                            {avatarUrl ? (
+                                                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-3xl font-bold text-indigo-400">
+                                                    {form.firstName?.charAt(0)?.toUpperCase() || '?'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                        {uploadingAvatar ? (
+                                            <Loader2 className="w-6 h-6 text-white animate-spin" />
+                                        ) : (
+                                            <Camera className="w-6 h-6 text-white" />
+                                        )}
+                                        <input
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            className="hidden"
+                                            onChange={handleAvatarUpload}
+                                            disabled={uploadingAvatar}
+                                        />
+                                    </label>
+                                </div>
+                                <div className="text-center sm:text-left sm:pt-2">
+                                    <h3 className="text-sm font-bold text-slate-700">Foto de perfil</h3>
+                                    <p className="text-xs text-slate-400 mt-1">Haz clic en la foto para cambiarla</p>
+                                    <p className="text-[11px] text-slate-300 mt-0.5">JPG, PNG o WebP • Máx 3MB</p>
+                                </div>
+                            </div>
+
                             {/* Personal Info */}
                             <div>
                                 <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4 flex items-center gap-2">

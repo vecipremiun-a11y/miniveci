@@ -1,8 +1,10 @@
 'use client';
 
-import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { Footer } from '@/components/Footer';
-import { BadgeCheck, Crown, Gem, Sparkles, Star } from 'lucide-react';
+import { BadgeCheck, Crown, Gem, Loader2, Sparkles, Star } from 'lucide-react';
 
 const benefits = [
     'Descuentos en todos los productos por 1 mes',
@@ -14,6 +16,54 @@ const benefits = [
 ];
 
 export default function SuscripcionPage() {
+    const { data: session, status } = useSession();
+    const router = useRouter();
+    const [loading, setLoading] = useState(false);
+    const [hasActive, setHasActive] = useState(false);
+    const [checking, setChecking] = useState(true);
+
+    useEffect(() => {
+        if (status === 'authenticated' && session?.user?.role === 'customer') {
+            fetch('/api/store/customer/subscription')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.subscription?.status === 'active') {
+                        setHasActive(true);
+                    }
+                })
+                .finally(() => setChecking(false));
+        } else {
+            setChecking(false);
+        }
+    }, [status, session]);
+
+    const handleSubscribe = async () => {
+        if (status !== 'authenticated' || session?.user?.role !== 'customer') {
+            router.push('/login?redirect=/suscripcion');
+            return;
+        }
+
+        if (hasActive) {
+            router.push('/cuenta/membresia');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const res = await fetch('/api/store/subscription/create', { method: 'POST' });
+            const data = await res.json();
+            if (data.initPoint) {
+                window.location.href = data.initPoint;
+            } else {
+                alert(data.error || 'Error al crear suscripción');
+            }
+        } catch {
+            alert('Error de conexión');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white pb-20">
             <div className="h-32 md:h-40" />
@@ -87,7 +137,7 @@ export default function SuscripcionPage() {
 
                         <p className="mt-5 text-6xl font-black bg-gradient-to-r from-cyan-500 to-violet-600 bg-clip-text text-transparent">$9.990</p>
                         <p className="mt-2 text-2xl font-bold text-slate-400 line-through">Normal: $14.990</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-500">Pago único · Sin renovación automática</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-500">Cobro mensual · Cancela cuando quieras</p>
                     </div>
 
                     <div className="mt-7 space-y-3">
@@ -99,17 +149,23 @@ export default function SuscripcionPage() {
                         ))}
                     </div>
 
-                    <Link
-                        href="/checkout"
-                        className="mt-8 w-full inline-flex items-center justify-center gap-2 btn-secondary rounded-2xl py-4 text-lg font-extrabold shadow-xl"
+                    <button
+                        onClick={handleSubscribe}
+                        disabled={loading || checking}
+                        className="mt-8 w-full inline-flex items-center justify-center gap-2 btn-secondary rounded-2xl py-4 text-lg font-extrabold shadow-xl disabled:opacity-60 cursor-pointer"
                     >
-                        <Crown className="w-5 h-5" />
-                        Comenzar ahora
-                    </Link>
+                        {loading ? (
+                            <><Loader2 className="w-5 h-5 animate-spin" /> Procesando...</>
+                        ) : hasActive ? (
+                            <><Crown className="w-5 h-5" /> Ya eres Premium — Ver membresía</>
+                        ) : (
+                            <><Crown className="w-5 h-5" /> Comenzar ahora</>
+                        )}
+                    </button>
 
                     <div className="mt-4 text-center text-xs font-semibold text-slate-500 flex items-center justify-center gap-4 flex-wrap">
                         <span>Activación inmediata</span>
-                        <span>Sin compromisos</span>
+                        <span>Cancela cuando quieras</span>
                         <span>Soporte 24/7</span>
                     </div>
                 </section>

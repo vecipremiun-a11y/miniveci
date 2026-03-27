@@ -32,6 +32,7 @@ export const customers = sqliteTable("customers", {
     lastName: text("last_name").notNull(),
     phone: text("phone").notNull(),
     rut: text("rut"),
+    avatarUrl: text("avatar_url"),
 
     // Dirección principal (legacy, se mantiene por compatibilidad)
     address: text("address"),
@@ -288,6 +289,9 @@ export const subscriptions = sqliteTable("subscriptions", {
     price: integer("price").notNull(), // CLP pagado
     paymentMethod: text("payment_method"),
     paymentId: text("payment_id"),
+    mpPreApprovalId: text("mp_pre_approval_id"),
+    paymentHistory: text("payment_history", { mode: "json" }), // [{date, amount, paymentId, status}]
+    cancelledAt: text("cancelled_at"),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({

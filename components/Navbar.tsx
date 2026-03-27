@@ -36,6 +36,7 @@ export function Navbar() {
   const [hasMounted, setHasMounted] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const searchBoxMobileRef = useRef<HTMLDivElement>(null);
@@ -46,6 +47,15 @@ export function Navbar() {
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
 
   useEffect(() => { setHasMounted(true); }, []);
+
+  useEffect(() => {
+    if (session?.user?.id && session.user.role === 'customer') {
+      fetch('/api/store/customer')
+        .then(r => r.json())
+        .then(d => { if (d.avatarUrl) setAvatarUrl(d.avatarUrl); })
+        .catch(() => {});
+    }
+  }, [session?.user?.id, session?.user?.role]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -295,8 +305,12 @@ export function Navbar() {
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/50 hover:bg-white/80 border border-white/60 backdrop-blur-md transition-all"
                 >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-veci-primary to-veci-secondary flex items-center justify-center text-white text-sm font-bold">
-                    {session.user.name?.charAt(0)?.toUpperCase() || <User className="w-4 h-4" />}
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-veci-primary to-veci-secondary flex items-center justify-center text-white text-sm font-bold overflow-hidden">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      session.user.name?.charAt(0)?.toUpperCase() || <User className="w-4 h-4" />
+                    )}
                   </div>
                   <span className="hidden sm:block text-sm font-medium text-slate-700 max-w-[120px] truncate">
                     {session.user.name || 'Mi cuenta'}
