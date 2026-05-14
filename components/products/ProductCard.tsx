@@ -133,7 +133,12 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
             {/* Content */}
             <div className="w-full space-y-2">
-                <h3 className="font-bold text-slate-800 text-lg truncate">{name}</h3>
+                <h3
+                    className="font-bold text-slate-800 text-base leading-snug line-clamp-2 min-h-[2.6rem]"
+                    title={name}
+                >
+                    {name}
+                </h3>
                 <div className="flex items-center justify-between gap-3">
                     <div className="flex items-baseline gap-2">
                         {equiv ? (

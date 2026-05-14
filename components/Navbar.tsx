@@ -26,7 +26,9 @@ export function Navbar() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
-  const { totalItems } = useCart();
+  const { totalItems, subtotal } = useCart();
+  const [cartPulse, setCartPulse] = useState(false);
+  const prevSubtotalRef = useRef(subtotal);
   const [scrolled, setScrolled] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,6 +49,22 @@ export function Navbar() {
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
 
   useEffect(() => { setHasMounted(true); }, []);
+
+  useEffect(() => {
+    if (!hasMounted) return;
+    if (prevSubtotalRef.current !== subtotal) {
+      setCartPulse(true);
+      const t = setTimeout(() => setCartPulse(false), 600);
+      prevSubtotalRef.current = subtotal;
+      return () => clearTimeout(t);
+    }
+  }, [subtotal, hasMounted]);
+
+  const cartTotalText = new Intl.NumberFormat('es-CL', {
+    style: 'currency',
+    currency: 'CLP',
+    maximumFractionDigits: 0,
+  }).format(subtotal);
 
   useEffect(() => {
     if (session?.user?.id && session.user.role === 'customer') {
@@ -372,13 +390,27 @@ export function Navbar() {
                 Iniciar sesión
               </Link>
             )}
-            <button onClick={() => setCartOpen(true)} className="btn-primary px-5 py-2.5 rounded-full font-bold flex items-center gap-2 text-sm shadow-md hover:shadow-lg transition-all">
-              <ShoppingCart className="w-4 h-4" />
-              <span>Carrito</span>
-              {hasMounted && totalItems > 0 && (
-                <span className="bg-white/20 text-white text-xs font-extrabold min-w-5 h-5 rounded-full inline-flex items-center justify-center px-1.5">
-                  {totalItems}
+            <button
+              onClick={() => setCartOpen(true)}
+              className={cn(
+                "relative btn-primary pl-4 pr-2 py-2 rounded-full font-bold flex items-center gap-2.5 text-sm shadow-md hover:shadow-lg transition-all",
+                cartPulse && "animate-cart-pulse"
+              )}
+            >
+              <div className="relative">
+                <ShoppingCart className="w-4 h-4" />
+                {hasMounted && totalItems > 0 && (
+                  <span className="absolute -top-2 -right-2.5 bg-white text-veci-primary text-[10px] font-extrabold min-w-[18px] h-[18px] rounded-full inline-flex items-center justify-center px-1 ring-2 ring-veci-primary/30 shadow-sm">
+                    {totalItems}
+                  </span>
+                )}
+              </div>
+              {hasMounted && totalItems > 0 ? (
+                <span className="bg-white/25 text-white text-xs font-extrabold rounded-full px-3 py-1.5 tabular-nums min-w-[5rem] text-center">
+                  {cartTotalText}
                 </span>
+              ) : (
+                <span className="pr-3">Carrito</span>
               )}
             </button>
           </div>

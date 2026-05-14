@@ -28,7 +28,7 @@ function loadGoogleMaps(): Promise<void> {
 
         const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
         if (!apiKey) {
-            console.warn('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY no está configurada');
+            console.warn('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY no esta configurada');
             googleMapsLoading = false;
             loadCallbacks.forEach(cb => cb());
             loadCallbacks.length = 0;
@@ -43,7 +43,7 @@ function loadGoogleMaps(): Promise<void> {
         };
 
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&callback=initGoogleMaps&language=es&region=CL`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&callback=initGoogleMaps&language=es&region=CL&loading=async`;
         script.async = true;
         script.defer = true;
         document.head.appendChild(script);
@@ -130,7 +130,7 @@ export default function AddressAutocomplete({
                 autocompleteRef.current = null;
             }
         };
-    }, [mapsReady]);
+    }, [mapsReady, city, comuna, onAddressChange]);
 
     const handleManualChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         if (onManualAddressChange) {
@@ -141,7 +141,7 @@ export default function AddressAutocomplete({
     return (
         <div className="space-y-4">
             <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 ml-1">Dirección</label>
+                <label className="text-sm font-semibold text-slate-700 ml-1">Direcci&oacute;n</label>
                 <div className="relative group">
                     <Home className="absolute left-4 top-3.5 w-5 h-5 text-slate-400 group-focus-within:text-veci-primary transition-colors" />
                     <input
@@ -149,7 +149,7 @@ export default function AddressAutocomplete({
                         type="text"
                         value={address}
                         onChange={handleManualChange}
-                        placeholder="Busca tu dirección..."
+                        placeholder={'Busca tu direcci\u00f3n...'}
                         autoComplete="off"
                         className="w-full bg-white/50 border border-white focus:bg-white pl-12 pr-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-veci-primary/50 transition-all font-medium text-slate-700 placeholder:text-slate-400"
                     />
