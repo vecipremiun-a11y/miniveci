@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { products, productImages } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { resolveProduct, ProductInput, CategoryInput } from "@/lib/services/product-resolver";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, context: any) {
         const rawProduct = await db.query.products.findFirst({
             where: and(
                 eq(products.slug, slug),
-                eq(products.isPublished, true)
+                sql`${products.isPublished} = 1`
             ),
             with: {
                 category: true,

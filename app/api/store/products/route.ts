@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
         }
 
         // Build WHERE conditions — all filtering at SQL level
-        const conditions: any[] = [eq(products.isPublished, true)];
+        const conditions: any[] = [sql`${products.isPublished} = 1`];
 
         // Products with stock 0 are shown but with "Sin stock" label
 

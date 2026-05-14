@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, Edit, Copy, Trash, ImageOff } from "lucide-react";
+import { MoreHorizontal, Edit, Copy, Trash, ImageOff, Eye, EyeOff } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -56,6 +56,28 @@ interface ProductTableProps {
 export function ProductTable({ data, total, page, totalPages, limit }: ProductTableProps) {
     const router = useRouter();
     const [rowSelection, setRowSelection] = useState({});
+    const [publishingId, setPublishingId] = useState<string | null>(null);
+
+    const handleTogglePublish = async (product: Product) => {
+        setPublishingId(product.id);
+        try {
+            const res = await fetch(`/api/admin/products/${product.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isPublished: !product.isPublished }),
+            });
+            if (res.ok) {
+                toast.success(product.isPublished ? 'Producto ocultado de la tienda' : 'Producto visible en la tienda');
+                router.refresh();
+            } else {
+                toast.error('Error al cambiar visibilidad');
+            }
+        } catch {
+            toast.error('Error al cambiar visibilidad');
+        } finally {
+            setPublishingId(null);
+        }
+    };
 
     const handleDelete = async (id: string) => {
         if (!confirm("¿Estás seguro de eliminar este producto?")) return;
@@ -93,15 +115,31 @@ export function ProductTable({ data, total, page, totalPages, limit }: ProductTa
             accessorKey: "imageUrl",
             header: "Imagen",
             cell: ({ row }) => {
-                const url = row.original.imageUrl;
+                const product = row.original;
+                const url = product.imageUrl;
+                const isLoading = publishingId === product.id;
                 return (
-                    <div className="h-10 w-10 rounded bg-gray-100 flex items-center justify-center overflow-hidden">
-                        {url ? (
-                            <img src={url} alt={row.original.name} className="h-10 w-10 object-cover" />
-                        ) : (
-                            <ImageOff className="h-5 w-5 text-gray-400" />
-                        )}
-                    </div>
+                    <button
+                        onClick={() => handleTogglePublish(product)}
+                        disabled={isLoading}
+                        title={product.isPublished ? 'Visible en tienda — clic para ocultar' : 'Oculto — clic para publicar'}
+                        className="relative group h-10 w-10 rounded overflow-hidden flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                        <div className={`h-10 w-10 rounded bg-gray-100 flex items-center justify-center overflow-hidden ${isLoading ? 'opacity-50' : ''}`}>
+                            {url ? (
+                                <img src={url} alt={product.name} className="h-10 w-10 object-cover" />
+                            ) : (
+                                <ImageOff className="h-5 w-5 text-gray-400" />
+                            )}
+                        </div>
+                        <div className={`absolute inset-0 flex items-center justify-center rounded transition-opacity ${product.isPublished ? 'bg-black/0 group-hover:bg-black/50' : 'bg-black/50'}`}>
+                            {product.isPublished ? (
+                                <EyeOff className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            ) : (
+                                <Eye className="h-4 w-4 text-white" />
+                            )}
+                        </div>
+                    </button>
                 );
             },
         },

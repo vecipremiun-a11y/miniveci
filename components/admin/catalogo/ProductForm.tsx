@@ -27,7 +27,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, X, UploadCloud, Info, Trash2, TrendingDown, Infinity, ArrowRight, Zap, Tag, DollarSign, TrendingUp } from "lucide-react";
+import { Loader2, Plus, X, UploadCloud, Info, Trash2, TrendingDown, Infinity, ArrowRight, Zap, Tag, DollarSign, TrendingUp, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -70,7 +70,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
             priceSource: initialData?.priceSource || "global",
             stockSource: initialData?.stockSource || "global",
             reservedQty: initialData?.reservedQty || 0,
-            isPublished: initialData?.isPublished ?? true,
+            isPublished: initialData ? Boolean(initialData.isPublished) : true,
             isFeatured: initialData?.isFeatured ?? false,
             tags: initialData?.tags || [],
             badges: initialData?.badges || [],
@@ -299,19 +299,28 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                     control={form.control}
                                     name="isPublished"
                                     render={({ field }) => (
-                                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                            <div className="space-y-0.5">
-                                                <FormLabel>Publicado</FormLabel>
-                                                <FormDescription>
-                                                    Visible en la tienda
-                                                </FormDescription>
+                                        <FormItem>
+                                            <FormLabel>Visibilidad en tienda</FormLabel>
+                                            <div className="grid grid-cols-2 gap-2 mt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => field.onChange(true)}
+                                                    className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-all ${field.value ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300'}`}
+                                                >
+                                                    <Eye className="h-5 w-5" />
+                                                    <span className="text-xs font-bold">Visible</span>
+                                                    <span className="text-[10px] leading-tight text-center">Aparece en la tienda</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => field.onChange(false)}
+                                                    className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-all ${!field.value ? 'border-slate-500 bg-slate-100 text-slate-700' : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300'}`}
+                                                >
+                                                    <EyeOff className="h-5 w-5" />
+                                                    <span className="text-xs font-bold">Oculto</span>
+                                                    <span className="text-[10px] leading-tight text-center">No aparece en la tienda</span>
+                                                </button>
                                             </div>
-                                            <FormControl>
-                                                <Switch
-                                                    checked={field.value}
-                                                    onCheckedChange={field.onChange}
-                                                />
-                                            </FormControl>
                                         </FormItem>
                                     )}
                                 />
