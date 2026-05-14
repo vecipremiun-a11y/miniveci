@@ -324,3 +324,54 @@ export const customerPaymentMethods = sqliteTable("customer_payment_methods", {
 export const customerPaymentMethodsRelations = relations(customerPaymentMethods, ({ one }) => ({
     customer: one(customers, { fields: [customerPaymentMethods.customerId], references: [customers.id] }),
 }));
+
+// --- CHAT / SOPORTE ---
+
+export const chatConversations = sqliteTable("chat_conversations", {
+    id: text("id").primaryKey(),
+    // Cliente registrado (opcional)
+    customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    // Visitante anónimo (UUID generado en cliente y guardado en localStorage)
+    guestId: text("guest_id"),
+    guestName: text("guest_name"),
+    guestEmail: text("guest_email"),
+    // Operador asignado (opcional, primer operador que responda queda asignado)
+    assignedOperatorId: text("assigned_operator_id").references(() => users.id, { onDelete: "set null" }),
+    status: text("status").notNull().default("open"), // "open" | "closed"
+    lastMessageAt: text("last_message_at"),
+    lastMessagePreview: text("last_message_preview"),
+    unreadCustomer: integer("unread_customer").default(0),
+    unreadAgent: integer("unread_agent").default(0),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    customerIdIdx: index("chat_customer_id_idx").on(table.customerId),
+    guestIdIdx: index("chat_guest_id_idx").on(table.guestId),
+    statusIdx: index("chat_status_idx").on(table.status),
+    lastMessageAtIdx: index("chat_last_message_at_idx").on(table.lastMessageAt),
+}));
+
+export const chatMessages = sqliteTable("chat_messages", {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id").references(() => chatConversations.id, { onDelete: "cascade" }).notNull(),
+    senderType: text("sender_type").notNull(), // "customer" | "agent" | "system"
+    senderId: text("sender_id"), // users.id o customers.id; null para sistema o invitado
+    senderName: text("sender_name"), // cacheado para mostrar
+    body: text("body").notNull(),
+    readByCustomer: integer("read_by_customer", { mode: "boolean" }).default(false),
+    readByAgent: integer("read_by_agent", { mode: "boolean" }).default(false),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    conversationIdIdx: index("chat_msg_conversation_id_idx").on(table.conversationId),
+    createdAtIdx: index("chat_msg_created_at_idx").on(table.createdAt),
+}));
+
+export const chatConversationsRelations = relations(chatConversations, ({ one, many }) => ({
+    customer: one(customers, { fields: [chatConversations.customerId], references: [customers.id] }),
+    assignedOperator: one(users, { fields: [chatConversations.assignedOperatorId], references: [users.id] }),
+    messages: many(chatMessages),
+}));
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+    conversation: one(chatConversations, { fields: [chatMessages.conversationId], references: [chatConversations.id] }),
+}));

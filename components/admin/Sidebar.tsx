@@ -20,6 +20,7 @@ import {
     Crown,
     ChevronDown,
     UsersRound,
+    MessageCircle,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -38,6 +39,7 @@ const menuItems: MenuItem[] = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { name: "Catálogo", href: "/admin/catalogo", icon: Package },
     { name: "Pedidos", href: "/admin/pedidos", icon: ShoppingCart },
+    { name: "Soporte", href: "/admin/soporte", icon: MessageCircle },
     { name: "Clientes", href: "/admin/clientes", icon: Users },
     {
         name: "Membresías", href: "/admin/membresias", icon: Crown,

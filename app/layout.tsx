@@ -25,6 +25,7 @@ export const metadata: Metadata = {
 import { Navbar } from "@/components/Navbar";
 import { Providers } from "@/components/Providers";
 import { Toaster } from "sonner";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 
 export default function RootLayout({
   children,
@@ -41,6 +42,7 @@ export default function RootLayout({
             <Navbar />
           </Suspense>
           {children}
+          <ChatWidget />
           <Toaster position="top-right" richColors closeButton />
         </Providers>
       </body>
