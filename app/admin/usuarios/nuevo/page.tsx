@@ -13,10 +13,10 @@ export default async function NuevoUsuarioPage() {
     }
 
     return (
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="max-w-3xl mx-auto space-y-4 sm:space-y-6">
             <div className="space-y-1">
-                <h2 className="text-3xl font-bold tracking-tight">Nuevo Usuario</h2>
-                <p className="text-muted-foreground">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Nuevo Usuario</h2>
+                <p className="text-sm sm:text-base text-muted-foreground">
                     Crea una nueva cuenta de usuario para tu equipo.
                 </p>
             </div>

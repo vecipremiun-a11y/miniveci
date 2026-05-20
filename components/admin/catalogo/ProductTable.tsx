@@ -253,7 +253,7 @@ export function ProductTable({ data, total, page, totalPages, limit }: ProductTa
 
     return (
         <div className="space-y-4">
-            <div className="rounded-md border bg-white">
+            <div className="rounded-md border bg-white overflow-x-auto">
                 <Table>
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (

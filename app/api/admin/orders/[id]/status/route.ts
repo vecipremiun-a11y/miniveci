@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { orders, orderItems, products, orderStatusHistory } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
 import { emitProductChange } from "@/lib/product-live-updates";
+import { notifyOrderStatusChanged } from "@/lib/fcm";
 import { syncPaidOrderToPos } from "@/services/pos-sync";
 import { eq, sql } from "drizzle-orm";
 
@@ -119,6 +120,15 @@ export async function PUT(
                 console.error("[ORDER_STATUS_PUT][POS_SYNC]", syncError);
             }
         }
+
+        // Push FCM al cliente
+        void notifyOrderStatusChanged({
+            userId: order.customerId,
+            status: newStatus,
+            source: "store",
+            publicCode: order.orderNumber,
+            orderId: id,
+        });
 
         return NextResponse.json({ success: true, newStatus });
 

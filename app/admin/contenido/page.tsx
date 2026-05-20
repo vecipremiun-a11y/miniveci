@@ -173,16 +173,16 @@ export default function ContenidoPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-8">
       <div className="space-y-1">
-        <h2 className="text-3xl font-bold tracking-tight">Contenido</h2>
-        <p className="text-muted-foreground">
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Contenido</h2>
+        <p className="text-sm sm:text-base text-muted-foreground">
           Gestiona los banners del carrusel de la página principal.
         </p>
       </div>
 
       {/* Upload Form */}
-      <div className="rounded-xl border bg-white p-6 space-y-4">
+      <div className="rounded-xl border bg-white p-4 sm:p-6 space-y-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Plus className="h-5 w-5" />
           Agregar nuevo banner

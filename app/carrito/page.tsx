@@ -15,15 +15,15 @@ export default function CarritoPage() {
 
     return (
         <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white pb-20">
-            <div className="h-32 md:h-40" />
+            <div className="h-36 md:h-40" />
 
-            <div className="max-w-5xl mx-auto px-6 md:px-12">
-                <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl md:text-4xl font-extrabold text-veci-dark">Carrito</h1>
+            <div className="max-w-5xl mx-auto px-3 sm:px-6 md:px-12">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-veci-dark">Carrito</h1>
                     {items.length > 0 && (
                         <button
                             onClick={clearCart}
-                            className="text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                            className="text-xs sm:text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
                         >
                             Vaciar carrito
                         </button>
@@ -61,8 +61,8 @@ export default function CarritoPage() {
                                 const qtyLabel = (isWeight || isKgDirect) ? item.quantity.toFixed(1) : item.quantity;
 
                                 return (
-                                    <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-5 border-b border-slate-200/70 last:border-b-0">
-                                        <div className="w-20 h-20 relative rounded-2xl bg-white overflow-hidden">
+                                    <div key={item.id} className="flex flex-row items-center gap-3 sm:gap-4 p-3 sm:p-5 border-b border-slate-200/70 last:border-b-0">
+                                        <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 relative rounded-xl sm:rounded-2xl bg-white overflow-hidden">
                                             <img
                                                 src={item.image || '/placeholder-product.svg'}
                                                 alt={item.name}
@@ -71,15 +71,38 @@ export default function CarritoPage() {
                                         </div>
 
                                         <div className="flex-1 min-w-0">
-                                            <p className="font-bold text-slate-800 truncate">{item.name}</p>
-                                            <p className="text-sm text-slate-500">
+                                            <p className="font-bold text-slate-800 text-sm sm:text-base truncate">{item.name}</p>
+                                            <p className="text-[11px] sm:text-sm text-slate-500 truncate">
                                                 {equiv
                                                     ? <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Math.round(getTieredPrice(item.price, item.priceTiers, item.quantity) * item.equivWeight!))} x {qtyLabel} {item.equivLabel}</>
                                                     : <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(getTieredPrice(item.price, item.priceTiers, item.quantity))} x {qtyLabel}{isWeight ? ` ${(item.unit ?? 'kg').toLowerCase()}` : ''}</>}
                                             </p>
+                                            <p className="font-extrabold text-veci-dark text-sm sm:hidden mt-0.5">{formattedLineTotal}</p>
+                                            <div className="flex items-center gap-2 mt-1.5 sm:hidden">
+                                                <button
+                                                    onClick={() => updateQuantity(item.id, Math.round((item.quantity - stepVal) * 100) / 100)}
+                                                    disabled={item.quantity <= minQty}
+                                                    className="w-7 h-7 rounded-full bg-white border border-slate-200 font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+                                                >
+                                                    -
+                                                </button>
+                                                <span className="min-w-[2rem] text-center font-bold text-slate-700 text-sm">{qtyLabel}</span>
+                                                <button
+                                                    onClick={() => updateQuantity(item.id, Math.round((item.quantity + stepVal) * 100) / 100)}
+                                                    className="w-7 h-7 rounded-full bg-white border border-slate-200 font-bold text-slate-600 text-sm"
+                                                >
+                                                    +
+                                                </button>
+                                                <button
+                                                    onClick={() => removeItem(item.id)}
+                                                    className="ml-auto text-xs font-semibold text-red-500"
+                                                >
+                                                    Quitar
+                                                </button>
+                                            </div>
                                         </div>
 
-                                        <div className="flex items-center gap-3">
+                                        <div className="hidden sm:flex items-center gap-3">
                                             <button
                                                 onClick={() => updateQuantity(item.id, Math.round((item.quantity - stepVal) * 100) / 100)}
                                                 disabled={item.quantity <= minQty}
@@ -96,7 +119,7 @@ export default function CarritoPage() {
                                             </button>
                                         </div>
 
-                                        <div className="sm:text-right">
+                                        <div className="hidden sm:block text-right">
                                             <p className="font-extrabold text-veci-dark">{formattedLineTotal}</p>
                                             <button
                                                 onClick={() => removeItem(item.id)}
@@ -110,12 +133,12 @@ export default function CarritoPage() {
                             })}
                         </div>
 
-                        <div className="bg-white/60 backdrop-blur-md border border-white rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="bg-white/60 backdrop-blur-md border border-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-row items-center justify-between gap-3 sm:gap-4 sticky bottom-2 sm:static z-10">
                             <div>
-                                <p className="text-lg font-bold text-slate-700">Subtotal</p>
-                                <p className="text-2xl font-extrabold text-veci-dark">{formattedSubtotal}</p>
+                                <p className="text-sm sm:text-lg font-bold text-slate-700">Subtotal</p>
+                                <p className="text-xl sm:text-2xl font-extrabold text-veci-dark">{formattedSubtotal}</p>
                             </div>
-                            <Link href="/checkout" className="btn-primary px-6 py-3 rounded-full font-extrabold text-sm">
+                            <Link href="/checkout" className="btn-primary px-4 sm:px-6 py-2.5 sm:py-3 rounded-full font-extrabold text-xs sm:text-sm whitespace-nowrap">
                                 Ir al checkout
                             </Link>
                         </div>

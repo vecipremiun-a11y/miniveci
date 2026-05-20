@@ -47,9 +47,16 @@ export async function POST(req: NextRequest) {
             },
             messages: messages.map(m => ({
                 id: m.id,
+                conversationId: m.conversationId,
                 senderType: m.senderType,
+                senderId: m.senderId,
                 senderName: m.senderName,
                 body: m.body,
+                messageType: (m as any).messageType || "text",
+                attachmentUrl: (m as any).attachmentUrl ?? null,
+                attachmentName: (m as any).attachmentName ?? null,
+                attachmentSize: (m as any).attachmentSize ?? null,
+                mimeType: (m as any).mimeType ?? null,
                 createdAt: m.createdAt,
             })),
             identity: {

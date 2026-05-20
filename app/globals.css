@@ -105,3 +105,17 @@ body {
   color: white;
   box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
 }
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Tiny breakpoint helper (xs:) for very narrow screens like 320px */
+@media (min-width: 380px) {
+  .xs\:inline { display: inline; }
+}

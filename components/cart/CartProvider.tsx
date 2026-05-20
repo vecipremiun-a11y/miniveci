@@ -30,6 +30,18 @@ export interface CartItem {
     equivWeight?: number | null;
     quantity: number;
     priceTiers?: PriceTier[];
+    /** Item de sorteo: `raffle:<raffleId>:<number>`. Cantidad siempre 1 y reserva activa con expiresAt. */
+    raffle?: {
+        raffleId: string;
+        raffleSlug: string;
+        number: number;
+        expiresAt: string;
+    };
+}
+
+/** Detecta si un id corresponde a un número de sorteo */
+export function isRaffleCartId(id: string): boolean {
+    return id.startsWith('raffle:');
 }
 
 /** Returns the effective unit price for a given quantity based on price tiers */
@@ -82,6 +94,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, [items]);
 
     const addItem = (item: Omit<CartItem, 'quantity'>, quantity?: number) => {
+        if (isRaffleCartId(item.id)) {
+            setItems((prev) => {
+                if (prev.some((p) => p.id === item.id)) return prev;
+                return [...prev, { ...item, quantity: 1 }];
+            });
+            return;
+        }
         const equiv = hasEquiv(item);
         const isWeight = !equiv && isWeightUnit(item.unit);
         const isKgDirect = !equiv && item.id.endsWith('__kg');
@@ -103,6 +122,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     };
 
     const updateQuantity = (id: string, quantity: number) => {
+        if (isRaffleCartId(id)) {
+            if (quantity < 1) removeItem(id);
+            return; // No se puede cambiar la cantidad de un número de sorteo
+        }
         const item = items.find((i) => i.id === id);
         const equiv = item ? hasEquiv(item) : false;
         const isWeight = !equiv && isWeightUnit(item?.unit);

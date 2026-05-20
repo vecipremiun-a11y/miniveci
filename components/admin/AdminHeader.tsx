@@ -6,12 +6,25 @@ import { cn } from "@/lib/utils";
 import { useAdmin } from "./AdminProvider";
 import { Menu, Bell, User, Search, LogOut, Store } from "lucide-react";
 import Link from "next/link";
+import { useState, useEffect, useRef } from "react";
 
 export default function AdminHeader() {
     const pathname = usePathname();
     const { toggleSidebar } = useAdmin();
     const sessionContext = useSession();
     const session = sessionContext?.data || null;
+    const [userMenuOpen, setUserMenuOpen] = useState(false);
+    const userMenuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const onClick = (e: MouseEvent) => {
+            if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+                setUserMenuOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", onClick);
+        return () => document.removeEventListener("mousedown", onClick);
+    }, []);
 
     // Simple breadcrumb logic
     const pathSegments = pathname.split("/").filter(Boolean);
@@ -24,13 +37,13 @@ export default function AdminHeader() {
     });
 
     return (
-        <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b bg-white px-4 shadow-sm">
-            <div className="flex items-center gap-4">
+        <header className="sticky top-0 z-30 flex h-14 sm:h-16 w-full items-center justify-between border-b bg-white px-2 sm:px-4 shadow-sm">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                 <button
                     onClick={toggleSidebar}
-                    className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shrink-0"
                 >
-                    <Menu size={24} />
+                    <Menu size={22} />
                 </button>
 
                 {/* Breadcrumbs */}
@@ -50,7 +63,7 @@ export default function AdminHeader() {
                 </nav>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 sm:gap-4">
                 {/* View Store Link */}
                 <Link
                     href="/"
@@ -62,7 +75,7 @@ export default function AdminHeader() {
                 </Link>
 
                 {/* Search Bar - Placeholder */}
-                <div className="relative hidden sm:block">
+                <div className="relative hidden md:block">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
                     <input
                         type="search"
@@ -73,18 +86,21 @@ export default function AdminHeader() {
 
                 {/* Notifications */}
                 <button className="relative rounded-full p-2 text-gray-500 hover:bg-gray-100">
-                    <Bell size={20} />
+                    <Bell size={18} />
                     <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
                 </button>
 
                 {/* User Profile */}
-                <div className="relative group">
-                    <button className="flex items-center gap-2 rounded-full bg-gray-100 p-1 pr-3 hover:bg-gray-200">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-white">
+                <div className="relative" ref={userMenuRef}>
+                    <button
+                        onClick={() => setUserMenuOpen(!userMenuOpen)}
+                        className="flex items-center gap-2 rounded-full bg-gray-100 p-1 sm:pr-3 hover:bg-gray-200"
+                    >
+                        <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-slate-800 text-white">
                             {session?.user?.image ? (
-                                <img src={session.user.image} alt="User" className="h-8 w-8 rounded-full" />
+                                <img src={session.user.image} alt="User" className="h-7 w-7 sm:h-8 sm:w-8 rounded-full" />
                             ) : (
-                                <User size={16} />
+                                <User size={14} />
                             )}
                         </div>
                         <span className="text-sm font-medium text-gray-700 hidden sm:block">
@@ -93,25 +109,31 @@ export default function AdminHeader() {
                     </button>
 
                     {/* Dropdown Menu */}
-                    <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none hidden group-hover:block border border-gray-100 z-50">
-                        <div className="px-4 py-2 border-b border-gray-100">
-                            <p className="text-sm font-medium text-gray-900">{session?.user?.email}</p>
-                            <p className="text-xs text-gray-500 capitalize">{session?.user?.role || 'Admin'}</p>
+                    {userMenuOpen && (
+                        <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none border border-gray-100 z-50">
+                            <div className="px-4 py-2 border-b border-gray-100">
+                                <p className="text-sm font-medium text-gray-900 truncate">{session?.user?.email}</p>
+                                <p className="text-xs text-gray-500 capitalize">{session?.user?.role || 'Admin'}</p>
+                            </div>
+                            <Link href="/" target="_blank" onClick={() => setUserMenuOpen(false)} className="sm:hidden flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <Store className="h-4 w-4" />
+                                Ver Tienda
+                            </Link>
+                            <Link href="/admin/perfil" onClick={() => setUserMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                Mi Perfil
+                            </Link>
+                            <Link href="/cuenta" onClick={() => setUserMenuOpen(false)} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                Mi Cuenta Cliente
+                            </Link>
+                            <button
+                                onClick={() => signOut({ callbackUrl: "/admin/login" })}
+                                className="flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                            >
+                                <LogOut className="mr-2 h-4 w-4" />
+                                Cerrar Sesión
+                            </button>
                         </div>
-                        <Link href="/admin/perfil" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            Mi Perfil
-                        </Link>
-                        <Link href="/cuenta" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            Mi Cuenta Cliente
-                        </Link>
-                        <button
-                            onClick={() => signOut({ callbackUrl: "/admin/login" })}
-                            className="flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                        >
-                            <LogOut className="mr-2 h-4 w-4" />
-                            Cerrar Sesión
-                        </button>
-                    </div>
+                    )}
                 </div>
             </div>
         </header>

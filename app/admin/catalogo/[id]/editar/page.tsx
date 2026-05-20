@@ -40,10 +40,10 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
     // We'll trust the form's defaultValues logic to handle undefineds/nulls mostly.
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             <div>
-                <h2 className="text-3xl font-bold tracking-tight">Editar Producto</h2>
-                <p className="text-muted-foreground">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Editar Producto</h2>
+                <p className="text-sm sm:text-base text-muted-foreground">
                     Modifica los detalles del producto.
                 </p>
             </div>

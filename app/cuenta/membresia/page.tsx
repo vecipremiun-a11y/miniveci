@@ -165,34 +165,34 @@ function MembresiaContent() {
                             <Star className="w-4 h-4 fill-current" />
                         </div>
 
-                        <div className="relative p-8 md:p-10">
+                        <div className="relative p-4 sm:p-8 md:p-10">
                             {/* Header */}
-                            <div className="flex items-start justify-between mb-8">
-                                <div className="flex items-center gap-4">
+                            <div className="flex items-start justify-between gap-2 mb-5 sm:mb-8">
+                                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                                     {/* Gold avatar ring */}
-                                    <div className="w-20 h-20 rounded-full p-1 bg-gradient-to-br from-yellow-200 via-white to-yellow-300 shadow-xl">
+                                    <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full p-1 bg-gradient-to-br from-yellow-200 via-white to-yellow-300 shadow-xl shrink-0">
                                         <div className="w-full h-full rounded-full bg-gradient-to-br from-amber-600 to-yellow-600 flex items-center justify-center shadow-inner overflow-hidden">
                                             {(avatarUrl || session?.user?.image) ? (
                                                 <img src={avatarUrl || session!.user!.image!} alt="Avatar" className="w-full h-full rounded-full object-cover" />
                                             ) : (
-                                                <span className="text-2xl font-black text-white">{initials}</span>
+                                                <span className="text-lg sm:text-2xl font-black text-white">{initials}</span>
                                             )}
                                         </div>
                                     </div>
-                                    <div>
-                                        <p className="text-yellow-100 text-sm font-medium">Miembro Premium</p>
-                                        <h2 className="text-2xl font-black text-white">{userName}</h2>
+                                    <div className="min-w-0">
+                                        <p className="text-yellow-100 text-xs sm:text-sm font-medium">Miembro Premium</p>
+                                        <h2 className="text-lg sm:text-2xl font-black text-white truncate">{userName}</h2>
                                         <div className="flex items-center gap-1.5 mt-1">
-                                            <Crown className="w-4 h-4 text-yellow-200" />
-                                            <span className="text-yellow-100 text-sm font-semibold uppercase tracking-wider">
+                                            <Crown className="w-3 sm:w-4 h-3 sm:h-4 text-yellow-200" />
+                                            <span className="text-yellow-100 text-xs sm:text-sm font-semibold uppercase tracking-wider">
                                                 Suscriptor
                                             </span>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="bg-white/20 backdrop-blur-sm rounded-2xl px-4 py-2 border border-white/30">
-                                    <p className="text-white/70 text-[10px] uppercase font-bold tracking-wider">Plan</p>
-                                    <p className="text-white font-black text-lg">Premium</p>
+                                <div className="bg-white/20 backdrop-blur-sm rounded-xl sm:rounded-2xl px-2.5 sm:px-4 py-1.5 sm:py-2 border border-white/30 shrink-0">
+                                    <p className="text-white/70 text-[9px] sm:text-[10px] uppercase font-bold tracking-wider">Plan</p>
+                                    <p className="text-white font-black text-sm sm:text-lg">Premium</p>
                                 </div>
                             </div>
 
@@ -242,12 +242,12 @@ function MembresiaContent() {
                     </div>
 
                     {/* Benefits */}
-                    <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl p-8 shadow-xl">
-                        <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
+                    <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-xl">
+                        <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-3 sm:mb-5 flex items-center gap-2">
                             <Gift className="w-5 h-5 text-amber-500" />
                             Tus Beneficios Premium
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                             {[
                                 { icon: TrendingDown, title: 'Precios de Suscriptor', desc: 'Precios casi de costo en todos los productos', color: 'text-emerald-500 bg-emerald-50' },
                                 { icon: Zap, title: 'Acceso Prioritario', desc: 'Primero en ver ofertas y productos nuevos', color: 'text-amber-500 bg-amber-50' },

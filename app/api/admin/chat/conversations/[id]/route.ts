@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { chatConversations, chatMessages, customers, orders } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
+import { publishChatEvent } from "@/lib/chat-live-updates";
 import { asc, desc, eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -101,10 +102,16 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
             recentOrders,
             messages: messages.map(m => ({
                 id: m.id,
+                conversationId: m.conversationId,
                 senderType: m.senderType,
                 senderId: m.senderId,
                 senderName: m.senderName,
                 body: m.body,
+                messageType: (m as any).messageType || "text",
+                attachmentUrl: (m as any).attachmentUrl ?? null,
+                attachmentName: (m as any).attachmentName ?? null,
+                attachmentSize: (m as any).attachmentSize ?? null,
+                mimeType: (m as any).mimeType ?? null,
                 createdAt: m.createdAt,
             })),
         });
@@ -127,8 +134,13 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         const { id } = await context.params;
         const body = await req.json().catch(() => ({}));
 
-        const update: any = { updatedAt: new Date().toISOString() };
-        if (body.status === "open" || body.status === "closed") update.status = body.status;
+        const now = new Date().toISOString();
+        const update: any = { updatedAt: now };
+        let statusChange: "open" | "closed" | null = null;
+        if (body.status === "open" || body.status === "closed") {
+            update.status = body.status;
+            statusChange = body.status;
+        }
         if (body.assignToMe) update.assignedOperatorId = session.user.id;
 
         if (Object.keys(update).length === 1) {
@@ -136,6 +148,65 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         }
 
         await db.update(chatConversations).set(update).where(eq(chatConversations.id, id));
+
+        if (statusChange === "closed") {
+            publishChatEvent({
+                type: "conversation_closed",
+                conversationId: id,
+                occurredAt: now,
+            });
+        } else if (statusChange === "open") {
+            publishChatEvent({
+                type: "conversation_reopened",
+                conversationId: id,
+                occurredAt: now,
+            });
+        }
+
+        // Si solo se cambió la asignación, emitir update con la conversación completa
+        if (!statusChange && body.assignToMe) {
+            const conv = await db.query.chatConversations.findFirst({
+                where: eq(chatConversations.id, id),
+            });
+            if (conv) {
+                let customerInfo = null;
+                if (conv.customerId) {
+                    const c = await db.query.customers.findFirst({
+                        where: eq(customers.id, conv.customerId),
+                    });
+                    if (c) {
+                        customerInfo = {
+                            id: c.id,
+                            firstName: c.firstName,
+                            lastName: c.lastName,
+                            email: c.email,
+                            phone: c.phone,
+                        };
+                    }
+                }
+                publishChatEvent({
+                    type: "conversation_updated",
+                    conversationId: id,
+                    conversation: {
+                        id: conv.id,
+                        customerId: conv.customerId,
+                        guestId: conv.guestId,
+                        guestName: conv.guestName,
+                        guestEmail: conv.guestEmail,
+                        assignedOperatorId: conv.assignedOperatorId,
+                        status: conv.status as "open" | "closed",
+                        lastMessageAt: conv.lastMessageAt,
+                        lastMessagePreview: conv.lastMessagePreview,
+                        unreadCustomer: conv.unreadCustomer ?? 0,
+                        unreadAgent: conv.unreadAgent ?? 0,
+                        createdAt: conv.createdAt ?? now,
+                        customer: customerInfo,
+                    },
+                    occurredAt: now,
+                });
+            }
+        }
+
         return NextResponse.json({ success: true });
     } catch (error) {
         if (error instanceof AuthError) {

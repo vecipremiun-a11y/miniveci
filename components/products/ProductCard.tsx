@@ -96,7 +96,7 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
             onClick={goToDetail}
-            className="glass-card p-4 rounded-[2rem] flex flex-col items-center relative group cursor-pointer"
+            className="glass-card p-2.5 sm:p-4 rounded-2xl sm:rounded-[2rem] flex flex-col items-center relative group cursor-pointer"
         >
             {/* Badges */}
             <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5">
@@ -123,7 +123,7 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
             )}
 
             {/* Image Area */}
-            <div className="w-full h-40 flex items-center justify-center relative mb-4 overflow-hidden rounded-2xl bg-white">
+            <div className="w-full h-28 sm:h-40 flex items-center justify-center relative mb-2 sm:mb-4 overflow-hidden rounded-xl sm:rounded-2xl bg-white">
                 <img
                     src={imageSrc}
                     alt={name}
@@ -132,36 +132,36 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
             </div>
 
             {/* Content */}
-            <div className="w-full space-y-2">
+            <div className="w-full space-y-1.5 sm:space-y-2">
                 <h3
-                    className="font-bold text-slate-800 text-base leading-snug line-clamp-2 min-h-[2.6rem]"
+                    className="font-bold text-slate-800 text-xs sm:text-base leading-snug line-clamp-2 min-h-[2.1rem] sm:min-h-[2.6rem]"
                     title={name}
                 >
                     {name}
                 </h3>
-                <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-baseline gap-2">
+                <div className="flex items-center justify-between gap-2 sm:gap-3 flex-wrap">
+                    <div className="flex items-baseline gap-1.5 sm:gap-2 flex-wrap">
                         {equiv ? (
                             <>
-                                <p className={`font-extrabold text-xl ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>
-                                    {formattedKgPrice}<span className="text-sm font-bold text-slate-400">/kg</span>
+                                <p className={`font-extrabold text-base sm:text-xl ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>
+                                    {formattedKgPrice}<span className="text-[10px] sm:text-sm font-bold text-slate-400">/kg</span>
                                 </p>
                                 {hasOffer && (
-                                    <p className="text-sm text-slate-400 line-through font-medium">{formattedOriginal}</p>
+                                    <p className="text-[10px] sm:text-sm text-slate-400 line-through font-medium">{formattedOriginal}</p>
                                 )}
                             </>
                         ) : (
                             <>
-                                <p className={`font-extrabold text-xl ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>
+                                <p className={`font-extrabold text-base sm:text-xl ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>
                                     {formattedPrice}
                                 </p>
                                 {hasOffer && (
-                                    <p className="text-sm text-slate-400 line-through font-medium">{formattedOriginal}</p>
+                                    <p className="text-[10px] sm:text-sm text-slate-400 line-through font-medium">{formattedOriginal}</p>
                                 )}
                             </>
                         )}
                     </div>
-                    <div className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ring-1 ${outOfStock ? 'bg-red-50 text-red-600 ring-red-100' : 'bg-emerald-50 text-emerald-700 ring-emerald-100'}`}>
+                    <div className={`shrink-0 inline-flex items-center rounded-full px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[11px] font-semibold uppercase tracking-wide ring-1 ${outOfStock ? 'bg-red-50 text-red-600 ring-red-100' : 'bg-emerald-50 text-emerald-700 ring-emerald-100'}`}>
                         {stockLabel}
                     </div>
                 </div>
@@ -229,9 +229,9 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                 )}
 
                 {/* Actions */}
-                <div className="flex flex-col gap-2 mt-4" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-col gap-1.5 sm:gap-2 mt-2 sm:mt-4" onClick={(e) => e.stopPropagation()}>
                     {/* Quantity Selector */}
-                    <div className="flex items-center justify-between bg-white/60 rounded-full px-2 py-1.5 border border-white/50 shadow-sm">
+                    <div className="flex items-center justify-between bg-white/60 rounded-full px-1.5 sm:px-2 py-1 sm:py-1.5 border border-white/50 shadow-sm">
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -261,7 +261,7 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                             handleAdd();
                         }}
                         disabled={outOfStock}
-                        className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-sm font-bold py-2.5 rounded-full shadow-lg hover:shadow-xl hover:shadow-purple-200 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                        className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-[11px] sm:text-sm font-bold py-2 sm:py-2.5 rounded-full shadow-lg hover:shadow-xl hover:shadow-purple-200 transition-all flex items-center justify-center gap-1 sm:gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                     >
                         {outOfStock ? 'Sin stock' : (
                             <>

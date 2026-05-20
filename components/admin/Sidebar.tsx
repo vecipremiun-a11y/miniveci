@@ -21,6 +21,8 @@ import {
     ChevronDown,
     UsersRound,
     MessageCircle,
+    Ticket,
+    Cookie,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -39,6 +41,7 @@ const menuItems: MenuItem[] = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { name: "Catálogo", href: "/admin/catalogo", icon: Package },
     { name: "Pedidos", href: "/admin/pedidos", icon: ShoppingCart },
+    { name: "Encargos", href: "/admin/encargos", icon: Cookie },
     { name: "Soporte", href: "/admin/soporte", icon: MessageCircle },
     { name: "Clientes", href: "/admin/clientes", icon: Users },
     {
@@ -48,6 +51,7 @@ const menuItems: MenuItem[] = [
             { name: "Suscriptores", href: "/admin/membresias/suscriptores", icon: UsersRound },
         ],
     },
+    { name: "Sorteos", href: "/admin/sorteos", icon: Ticket },
     { name: "Promociones", href: "/admin/promociones", icon: Tag },
     { name: "Contenido", href: "/admin/contenido", icon: Palette },
     { name: "Envíos", href: "/admin/envios", icon: Truck },

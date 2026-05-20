@@ -143,14 +143,14 @@ export function ProductShowcase() {
     p.images.find((i) => i.isPrimary)?.url || p.images[0]?.url || null;
 
   return (
-    <section className="py-12 px-6 md:px-12">
+    <section className="py-8 sm:py-12 px-3 sm:px-6 md:px-12">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h2 className="text-3xl md:text-4xl font-extrabold text-veci-dark mb-2">
+        <div className="text-center mb-5 sm:mb-8">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-veci-dark mb-1 sm:mb-2">
             Explora nuestros productos
           </h2>
-          <p className="text-slate-500 text-lg">
+          <p className="text-slate-500 text-sm sm:text-lg">
             Encuentra lo que necesitas al mejor precio
           </p>
         </div>
@@ -235,7 +235,7 @@ export function ProductShowcase() {
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {currentProducts.map((p) => (
-                <div key={p.id} className="snap-start shrink-0 w-[260px] sm:w-[280px]">
+                <div key={p.id} className="snap-start shrink-0 w-[180px] sm:w-[280px]">
                   <ProductCard
                     id={p.id}
                     name={p.name}

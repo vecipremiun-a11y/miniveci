@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql, relations } from "drizzle-orm";
 
 // --- AUTHENTICATION ---
@@ -358,12 +358,20 @@ export const chatMessages = sqliteTable("chat_messages", {
     senderId: text("sender_id"), // users.id o customers.id; null para sistema o invitado
     senderName: text("sender_name"), // cacheado para mostrar
     body: text("body").notNull(),
+    // Adjunto opcional: imagen / PDF / audio / archivo genérico.
+    // `body` puede quedar vacío si el mensaje es solo un adjunto.
+    messageType: text("message_type").notNull().default("text"), // "text" | "image" | "audio" | "file"
+    attachmentUrl: text("attachment_url"),
+    attachmentName: text("attachment_name"),
+    attachmentSize: integer("attachment_size"),
+    mimeType: text("mime_type"),
     readByCustomer: integer("read_by_customer", { mode: "boolean" }).default(false),
     readByAgent: integer("read_by_agent", { mode: "boolean" }).default(false),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
     conversationIdIdx: index("chat_msg_conversation_id_idx").on(table.conversationId),
     createdAtIdx: index("chat_msg_created_at_idx").on(table.createdAt),
+    messageTypeIdx: index("chat_msg_message_type_idx").on(table.messageType),
 }));
 
 export const chatConversationsRelations = relations(chatConversations, ({ one, many }) => ({
@@ -374,4 +382,222 @@ export const chatConversationsRelations = relations(chatConversations, ({ one, m
 
 export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
     conversation: one(chatConversations, { fields: [chatMessages.conversationId], references: [chatConversations.id] }),
+}));
+
+// --- RAFFLES / SORTEOS ---
+
+export const raffles = sqliteTable("raffles", {
+    id: text("id").primaryKey(),
+    slug: text("slug").unique().notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    type: text("type").notNull(), // "free" | "paid"
+    price: integer("price"), // CLP, null si type === "free"
+    audience: text("audience").notNull().default("all"), // "all" | "customers" | "subscribers"
+    totalNumbers: integer("total_numbers").notNull(), // ej 50 → números 1..50
+    status: text("status").notNull().default("draft"), // "draft" | "active" | "closed" | "drawn"
+    startsAt: text("starts_at"),
+    endsAt: text("ends_at"), // cierre de ventas
+    drawAt: text("draw_at"), // fecha programada para el sorteo
+    coverImage: text("cover_image"),
+    terms: text("terms"), // términos y condiciones
+    featured: integer("featured", { mode: "boolean" }).default(false), // destacado en home
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    slugIdx: index("raffles_slug_idx").on(table.slug),
+    statusIdx: index("raffles_status_idx").on(table.status),
+}));
+
+export const raffleImages = sqliteTable("raffle_images", {
+    id: text("id").primaryKey(),
+    raffleId: text("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    position: integer("position").default(0),
+    isPrimary: integer("is_primary", { mode: "boolean" }).default(false),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    raffleIdIdx: index("raffle_images_raffle_id_idx").on(table.raffleId),
+}));
+
+export const rafflePrizes = sqliteTable("raffle_prizes", {
+    id: text("id").primaryKey(),
+    raffleId: text("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(), // 1 = primer premio, 2 = segundo, etc
+    name: text("name").notNull(),
+    description: text("description"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    raffleIdIdx: index("raffle_prizes_raffle_id_idx").on(table.raffleId),
+}));
+
+export const raffleEntries = sqliteTable("raffle_entries", {
+    id: text("id").primaryKey(),
+    raffleId: text("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(), // 1..totalNumbers
+    customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    guestName: text("guest_name"),
+    guestEmail: text("guest_email"),
+    guestPhone: text("guest_phone"),
+    guestAddress: text("guest_address"),
+    receiptNumber: text("receipt_number"), // Número de boleta del local físico (sorteos in-store / temporada)
+    status: text("status").notNull(), // "reserved" | "paid" | "free" | "cancelled"
+    reservedAt: text("reserved_at").default(sql`CURRENT_TIMESTAMP`),
+    expiresAt: text("expires_at"), // para status "reserved"
+    paidAt: text("paid_at"),
+    orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    raffleNumberUnq: index("raffle_entries_raffle_number_unq_idx").on(table.raffleId, table.number),
+    customerIdx: index("raffle_entries_customer_idx").on(table.customerId),
+    statusIdx: index("raffle_entries_status_idx").on(table.status),
+    orderIdx: index("raffle_entries_order_idx").on(table.orderId),
+}));
+
+export const raffleWinners = sqliteTable("raffle_winners", {
+    id: text("id").primaryKey(),
+    raffleId: text("raffle_id").notNull().references(() => raffles.id, { onDelete: "cascade" }),
+    prizeId: text("prize_id").notNull().references(() => rafflePrizes.id, { onDelete: "cascade" }),
+    entryId: text("entry_id").notNull().references(() => raffleEntries.id, { onDelete: "cascade" }),
+    drawnAt: text("drawn_at").default(sql`CURRENT_TIMESTAMP`),
+    notified: integer("notified", { mode: "boolean" }).default(false),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    raffleIdx: index("raffle_winners_raffle_idx").on(table.raffleId),
+}));
+
+export const rafflesRelations = relations(raffles, ({ many }) => ({
+    images: many(raffleImages),
+    prizes: many(rafflePrizes),
+    entries: many(raffleEntries),
+    winners: many(raffleWinners),
+}));
+
+export const raffleImagesRelations = relations(raffleImages, ({ one }) => ({
+    raffle: one(raffles, { fields: [raffleImages.raffleId], references: [raffles.id] }),
+}));
+
+export const rafflePrizesRelations = relations(rafflePrizes, ({ one }) => ({
+    raffle: one(raffles, { fields: [rafflePrizes.raffleId], references: [raffles.id] }),
+}));
+
+export const raffleEntriesRelations = relations(raffleEntries, ({ one }) => ({
+    raffle: one(raffles, { fields: [raffleEntries.raffleId], references: [raffles.id] }),
+    customer: one(customers, { fields: [raffleEntries.customerId], references: [customers.id] }),
+    order: one(orders, { fields: [raffleEntries.orderId], references: [orders.id] }),
+}));
+
+export const raffleWinnersRelations = relations(raffleWinners, ({ one }) => ({
+    raffle: one(raffles, { fields: [raffleWinners.raffleId], references: [raffles.id] }),
+    prize: one(rafflePrizes, { fields: [raffleWinners.prizeId], references: [rafflePrizes.id] }),
+    entry: one(raffleEntries, { fields: [raffleWinners.entryId], references: [raffleEntries.id] }),
+}));
+
+// --- AMASANDERÍA / BAKERY (encargos a futuro) ---
+// Módulo independiente del módulo Tienda (compra inmediata). Tablas, endpoints
+// y estado totalmente separados. Precios en CLP enteros (INTEGER), nunca floats.
+
+export const bakeryProducts = sqliteTable("bakery_products", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    description: text("description"),
+    imageUrl: text("image_url"),
+    category: text("category").notNull(),       // 'pan' | 'sandwich' | 'hamburguesa' | 'canape' | 'dulce'
+    pricingMode: text("pricing_mode").notNull(), // 'unit' | 'kg'
+    price: integer("price").notNull(),           // CLP por unidad o por kg
+    gramsPerUnit: integer("grams_per_unit"),     // requerido si pricingMode='kg'
+    allowsNotes: integer("allows_notes", { mode: "boolean" }).notNull().default(false),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    sortOrder: integer("sort_order").default(0),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+}, (table) => ({
+    activeIdx: index("bakery_products_active_idx").on(table.active),
+    categoryIdx: index("bakery_products_category_idx").on(table.category),
+}));
+
+export const bakeryOrders = sqliteTable("bakery_orders", {
+    id: text("id").primaryKey(),                       // ord_xxx
+    publicCode: text("public_code").notNull().unique(), // MV-A93K2
+    userId: text("user_id").notNull(),                  // customers.id
+    scheduledFor: text("scheduled_for").notNull(),      // ISO 8601 con fecha+hora
+    method: text("method").notNull(),                   // 'pickup' | 'delivery'
+    address: text("address"),
+    generalNotes: text("general_notes"),
+    status: text("status").notNull().default("pending"),
+    // pending | confirmed | preparing | ready | delivered | cancelled
+    subtotal: integer("subtotal").notNull(),
+    deliveryFee: integer("delivery_fee").notNull().default(0),
+    total: integer("total").notNull(),
+    contactPhone: text("contact_phone"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+}, (table) => ({
+    userCreatedIdx: index("bakery_orders_user_created_idx").on(table.userId, table.createdAt),
+    statusScheduledIdx: index("bakery_orders_status_scheduled_idx").on(table.status, table.scheduledFor),
+    scheduledIdx: index("bakery_orders_scheduled_idx").on(table.scheduledFor),
+}));
+
+export const bakeryOrderItems = sqliteTable("bakery_order_items", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id").notNull().references(() => bakeryOrders.id, { onDelete: "cascade" }),
+    productId: text("product_id").notNull(), // sin FK para preservar histórico aunque borren producto
+    // SNAPSHOT del producto al momento de crear el encargo:
+    productName: text("product_name").notNull(),
+    pricingMode: text("pricing_mode").notNull(),
+    unitPrice: integer("unit_price").notNull(),
+    gramsPerUnit: integer("grams_per_unit"),
+    quantity: integer("quantity").notNull(),
+    notes: text("notes"),
+    subtotal: integer("subtotal").notNull(),
+}, (table) => ({
+    orderIdx: index("bakery_order_items_order_idx").on(table.orderId),
+}));
+
+export const bakeryConfig = sqliteTable("bakery_config", {
+    key: text("key").primaryKey(),
+    value: text("value").notNull(), // JSON o string según corresponda
+});
+
+export const bakeryOrdersRelations = relations(bakeryOrders, ({ many, one }) => ({
+    items: many(bakeryOrderItems),
+    customer: one(customers, { fields: [bakeryOrders.userId], references: [customers.id] }),
+}));
+
+export const bakeryOrderItemsRelations = relations(bakeryOrderItems, ({ one }) => ({
+    order: one(bakeryOrders, { fields: [bakeryOrderItems.orderId], references: [bakeryOrders.id] }),
+}));
+
+// --- MOBILE AUTH (JWT con refresh tokens revocables) ---
+// Los access tokens son JWT firmados sin estado. Los refresh tokens también
+// son JWT pero su `jti` se guarda aquí para poder revocarlos (logout) y
+// rotarlos. `userType` indica de qué tabla viene el `userId`.
+
+export const refreshTokens = sqliteTable("refresh_tokens", {
+    jti: text("jti").primaryKey(),
+    userId: text("user_id").notNull(),
+    userType: text("user_type").notNull(), // 'customer' | 'admin'
+    expiresAt: text("expires_at").notNull(),
+    revoked: integer("revoked", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull(),
+}, (table) => ({
+    userIdx: index("refresh_tokens_user_idx").on(table.userId),
+    expiresIdx: index("refresh_tokens_expires_idx").on(table.expiresAt),
+}));
+
+// --- PUSH NOTIFICATIONS (FCM) ---
+// Tokens de dispositivo registrados por la app Flutter para recibir notificaciones
+// de cambios de estado de pedidos (bakery + store). 1 user puede tener N tokens
+// (multi-device, reinstalls, etc).
+
+export const userPushTokens = sqliteTable("user_push_tokens", {
+    id: text("id").primaryKey(),
+    userId: text("user_id").references(() => customers.id, { onDelete: "cascade" }).notNull(),
+    token: text("token").notNull(),
+    platform: text("platform").notNull().default("android"), // 'android' | 'ios'
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+}, (table) => ({
+    userTokenUnique: uniqueIndex("user_push_tokens_user_token_idx").on(table.userId, table.token),
+    userIdx: index("user_push_tokens_user_idx").on(table.userId),
 }));

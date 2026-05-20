@@ -16,7 +16,8 @@ function serializeEvent(event: string, data: unknown) {
 
 /**
  * GET /api/chat/conversation/[id]/events?guestId=...
- * Stream SSE: el cliente recibe mensajes nuevos en tiempo real.
+ * Stream SSE para el cliente: filtrado por conversationId, emite los mismos
+ * tipos que el endpoint admin (message_created, conversation_closed, ...).
  * EventSource no soporta headers custom, por eso guestId va en query.
  */
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         return new Response("Sin acceso", { status: 403 });
     }
 
-    let cleanup = () => {};
+    let cleanup = () => { };
 
     const stream = new ReadableStream<Uint8Array>({
         start(controller) {
@@ -48,15 +49,19 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
                 if (closed) return;
                 closed = true;
                 cleanup();
-                try { controller.close(); } catch {}
+                try { controller.close(); } catch { }
             };
 
             const unsubscribe = subscribeToChatEvents((event) => {
                 if (event.conversationId !== conversationId) return;
-                // Cliente solo necesita ver mensajes del agente y mensajes propios (eco)
-                if (event.type !== "message-created") return;
+                // El cliente solo necesita ver eventos relevantes para su conversación
+                if (
+                    event.type !== "message_created" &&
+                    event.type !== "conversation_closed" &&
+                    event.type !== "conversation_reopened"
+                ) return;
                 try {
-                    controller.enqueue(serializeEvent("message", event.message));
+                    controller.enqueue(serializeEvent(event.type, event));
                 } catch {
                     safeClose();
                 }
@@ -75,7 +80,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
                 clearInterval(heartbeat);
             };
 
-            controller.enqueue(serializeEvent("connected", { ok: true }));
+            controller.enqueue(serializeEvent("connected", { ok: true, t: Date.now() }));
             req.signal.addEventListener("abort", safeClose, { once: true });
         },
         cancel() {
@@ -88,6 +93,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache, no-transform",
             Connection: "keep-alive",
+            "X-Accel-Buffering": "no",
         },
     });
 }

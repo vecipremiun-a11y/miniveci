@@ -63,7 +63,7 @@ export function ProductSidebar({ selectedCategory, onCategoryChange, inOffer = f
     };
 
     return (
-        <div className="w-full md:w-64 shrink-0 space-y-8 p-6 bg-white/40 backdrop-blur-xl rounded-[2rem] border border-white h-fit">
+        <div className="w-full md:w-64 shrink-0 space-y-6 md:space-y-8 p-4 md:p-6 bg-white/40 backdrop-blur-xl rounded-2xl md:rounded-[2rem] border border-white h-fit">
 
             {/* Title */}
             <div className="flex items-center justify-between">

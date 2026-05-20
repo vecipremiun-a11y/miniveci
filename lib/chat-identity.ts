@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { chatConversations, customers } from "@/lib/db/schema";
 import { getServerSession } from "@/lib/auth-utils";
+import { publishChatEvent } from "@/lib/chat-live-updates";
 import { and, eq, isNull } from "drizzle-orm";
 
 export interface CustomerIdentity {
@@ -50,6 +51,8 @@ export async function resolveClientIdentity(
 
 /**
  * Devuelve la conversación abierta del cliente, creándola si no existe.
+ * Si se crea una nueva, emite el evento `conversation_created` para que
+ * el admin la vea en tiempo real sin tener que refrescar.
  */
 export async function getOrCreateOpenConversation(
     identity: ClientIdentity,
@@ -96,6 +99,46 @@ export async function getOrCreateOpenConversation(
     const created = await db.query.chatConversations.findFirst({
         where: eq(chatConversations.id, id),
     });
+
+    if (created) {
+        let customerInfo = null;
+        if (identity.kind === "customer") {
+            const c = await db.query.customers.findFirst({
+                where: eq(customers.id, identity.customerId),
+            });
+            if (c) {
+                customerInfo = {
+                    id: c.id,
+                    firstName: c.firstName,
+                    lastName: c.lastName,
+                    email: c.email,
+                    phone: c.phone,
+                };
+            }
+        }
+
+        publishChatEvent({
+            type: "conversation_created",
+            conversationId: created.id,
+            conversation: {
+                id: created.id,
+                customerId: created.customerId,
+                guestId: created.guestId,
+                guestName: created.guestName,
+                guestEmail: created.guestEmail,
+                assignedOperatorId: created.assignedOperatorId,
+                status: created.status as "open" | "closed",
+                lastMessageAt: created.lastMessageAt,
+                lastMessagePreview: created.lastMessagePreview,
+                unreadCustomer: created.unreadCustomer ?? 0,
+                unreadAgent: created.unreadAgent ?? 0,
+                createdAt: created.createdAt ?? now,
+                customer: customerInfo,
+            },
+            occurredAt: now,
+        });
+    }
+
     return created!;
 }
 

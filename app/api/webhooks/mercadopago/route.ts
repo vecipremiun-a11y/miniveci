@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { orders, orderStatusHistory, subscriptions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { confirmRaffleEntriesForOrder, cancelRaffleEntriesForOrder } from "@/lib/raffle-checkout";
 
 async function handleSubscriptionPreApproval(preApprovalId: string) {
     try {
@@ -242,6 +243,13 @@ export async function POST(req: NextRequest) {
                 await db.update(orderStatusHistory)
                     .set({ orderId: order.id })
                     .where(eq(orderStatusHistory.orderId, ""));
+
+                // Sync raffle entries
+                if (paymentStatus === "paid") {
+                    await confirmRaffleEntriesForOrder(order.id);
+                } else if (paymentStatus === "failed" || paymentStatus === "refunded") {
+                    await cancelRaffleEntriesForOrder(order.id);
+                }
             }
         }
 

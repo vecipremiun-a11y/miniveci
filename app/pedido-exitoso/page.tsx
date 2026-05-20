@@ -16,7 +16,7 @@ function OrderSuccessContent() {
 
     return (
         <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white">
-            <div className="h-32 md:h-40" />
+            <div className="h-36 md:h-40" />
 
             <div className="max-w-2xl mx-auto px-6 pb-20">
                 {/* Success Card */}

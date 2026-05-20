@@ -3,6 +3,7 @@ import { mpPreference } from "@/lib/mercadopago";
 import { db } from "@/lib/db";
 import { orders, orderItems, orderStatusHistory } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
+import { extractRaffleItems, isRaffleItemId, linkRaffleEntriesToOrder } from "@/lib/raffle-checkout";
 
 function generateOrderNumber() {
     const now = new Date();
@@ -84,10 +85,11 @@ export async function POST(req: NextRequest) {
         });
 
         for (const item of cartItems) {
+            const isRaffle = isRaffleItemId(item.id);
             await db.insert(orderItems).values({
                 id: randomUUID(),
                 orderId,
-                productId: item.id || null,
+                productId: isRaffle ? null : (item.id || null),
                 productName: item.name,
                 productSku: item.sku || item.id || "",
                 quantity: item.quantity,
@@ -95,6 +97,14 @@ export async function POST(req: NextRequest) {
                 totalPrice: item.price * item.quantity,
                 createdAt: now,
             });
+        }
+
+        // Vincular números de sorteo reservados con esta orden
+        if (customerId) {
+            const raffleItems = extractRaffleItems(cartItems);
+            if (raffleItems.length > 0) {
+                await linkRaffleEntriesToOrder(orderId, customerId, raffleItems);
+            }
         }
 
         await db.insert(orderStatusHistory).values({

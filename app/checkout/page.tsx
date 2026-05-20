@@ -331,18 +331,18 @@ export default function CheckoutPage() {
 
     return (
         <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white pb-20">
-            <div className="h-32 md:h-40" />
+            <div className="h-36 md:h-40" />
 
-            <div className="max-w-7xl mx-auto px-6 md:px-12 grid lg:grid-cols-[1.25fr_0.75fr] gap-8 items-start">
-                <section className="bg-white/50 backdrop-blur-md border border-white rounded-3xl p-6 md:p-8">
-                    <Link href="/carrito" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-800 font-semibold">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 md:px-12 grid lg:grid-cols-[1.25fr_0.75fr] gap-4 sm:gap-8 items-start">
+                <section className="bg-white/50 backdrop-blur-md border border-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8">
+                    <Link href="/carrito" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-800 font-semibold text-sm">
                         <ArrowLeft className="w-4 h-4" />
                         Volver al carrito
                     </Link>
 
-                    <h1 className="text-4xl font-extrabold text-slate-800 mt-4">Checkout</h1>
+                    <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-800 mt-3 sm:mt-4">Checkout</h1>
 
-                    <div className="mt-8 space-y-10">
+                    <div className="mt-6 sm:mt-8 space-y-6 sm:space-y-10">
                         <div>
                             <h2 className="text-lg font-extrabold text-slate-700 mb-4">1. Información de contacto</h2>
                             {session?.user && contactName && !contactExpanded ? (
@@ -623,19 +623,19 @@ export default function CheckoutPage() {
                     </div>
                 </section>
 
-                <aside className="bg-white/70 backdrop-blur-md border border-white rounded-3xl p-6 sticky top-28">
-                    <h2 className="text-3xl font-extrabold text-slate-800 mb-5">Orden</h2>
+                <aside className="bg-white/70 backdrop-blur-md border border-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:sticky lg:top-28">
+                    <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-4 sm:mb-5">Orden</h2>
 
-                    <div className="space-y-4 max-h-[420px] overflow-auto pr-1">
+                    <div className="space-y-3 sm:space-y-4 max-h-[420px] overflow-auto pr-1">
                         {items.length === 0 ? (
                             <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 text-sm text-slate-600">
                                 Tu carrito está vacío. Agrega productos para continuar.
                             </div>
                         ) : (
                             items.map((item) => (
-                                <div key={item.id} className="rounded-2xl border border-slate-200/80 bg-white/70 p-4">
+                                <div key={item.id} className="rounded-xl sm:rounded-2xl border border-slate-200/80 bg-white/70 p-3 sm:p-4">
                                     <div className="flex gap-3">
-                                        <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden shrink-0">
+                                        <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-lg sm:rounded-xl bg-slate-100 overflow-hidden shrink-0">
                                             <img
                                                 src={item.image || '/placeholder-product.svg'}
                                                 alt={item.name}
@@ -643,13 +643,13 @@ export default function CheckoutPage() {
                                             />
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="font-bold text-slate-800 leading-tight line-clamp-2">{item.name}</p>
-                                            <p className="text-sm text-slate-500 mt-1">
+                                            <p className="font-bold text-slate-800 leading-tight line-clamp-2 text-sm sm:text-base">{item.name}</p>
+                                            <p className="text-xs sm:text-sm text-slate-500 mt-1">
                                                 {hasEquiv(item)
                                                     ? `Cant: ${item.quantity} ${item.equivLabel}`
                                                     : `Cant: ${isWeightUnit(item.unit) ? `${item.quantity.toFixed(1)} ${(item.unit ?? 'kg').toLowerCase()}` : item.quantity}`}
                                             </p>
-                                            <p className="text-base font-extrabold text-slate-700 mt-1">
+                                            <p className="text-sm sm:text-base font-extrabold text-slate-700 mt-1">
                                                 {money.format(hasEquiv(item) ? Math.round(getTieredPrice(item.price, item.priceTiers, item.quantity) * item.equivWeight! * item.quantity) : getTieredPrice(item.price, item.priceTiers, item.quantity) * item.quantity)}
                                             </p>
                                         </div>
@@ -687,8 +687,8 @@ export default function CheckoutPage() {
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-slate-200/80 flex items-center justify-between">
-                        <span className="text-lg font-bold text-slate-700">Total</span>
-                        <span className="text-3xl font-extrabold text-slate-800">{money.format(total)}</span>
+                        <span className="text-base sm:text-lg font-bold text-slate-700">Total</span>
+                        <span className="text-2xl sm:text-3xl font-extrabold text-slate-800">{money.format(total)}</span>
                     </div>
 
                     <button

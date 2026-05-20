@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { chatConversations, chatMessages } from "@/lib/db/schema";
+import { chatConversations, chatMessages, customers } from "@/lib/db/schema";
 import { resolveClientIdentity, ownsConversation } from "@/lib/chat-identity";
 import { publishChatEvent } from "@/lib/chat-live-updates";
 import { eq, sql } from "drizzle-orm";
@@ -58,10 +58,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             senderId: identity.kind === "customer" ? identity.customerId : null,
             senderName,
             body: text,
+            messageType: "text",
             readByCustomer: true,
             readByAgent: false,
             createdAt: now,
         });
+
+        const newUnreadAgent = (conversation.unreadAgent ?? 0) + 1;
 
         await db.update(chatConversations)
             .set({
@@ -72,9 +75,26 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             })
             .where(eq(chatConversations.id, conversationId));
 
-        // Notificar a operadores conectados
+        // Cargar customer si hay (para que admin vea info al recibir conversation_updated)
+        let customerInfo = null;
+        if (conversation.customerId) {
+            const c = await db.query.customers.findFirst({
+                where: eq(customers.id, conversation.customerId),
+            });
+            if (c) {
+                customerInfo = {
+                    id: c.id,
+                    firstName: c.firstName,
+                    lastName: c.lastName,
+                    email: c.email,
+                    phone: c.phone,
+                };
+            }
+        }
+
+        // 1. Mensaje nuevo → admin + cliente
         publishChatEvent({
-            type: "message-created",
+            type: "message_created",
             conversationId,
             message: {
                 id: messageId,
@@ -83,16 +103,50 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
                 senderId: identity.kind === "customer" ? identity.customerId : null,
                 senderName,
                 body: text,
+                messageType: "text",
+                attachmentUrl: null,
+                attachmentName: null,
+                attachmentSize: null,
+                mimeType: null,
                 createdAt: now,
+            },
+            occurredAt: now,
+        });
+
+        // 2. Actualización metadatos conversación → admin (sidebar)
+        publishChatEvent({
+            type: "conversation_updated",
+            conversationId,
+            conversation: {
+                id: conversation.id,
+                customerId: conversation.customerId,
+                guestId: conversation.guestId,
+                guestName: conversation.guestName,
+                guestEmail: conversation.guestEmail,
+                assignedOperatorId: conversation.assignedOperatorId,
+                status: conversation.status as "open" | "closed",
+                lastMessageAt: now,
+                lastMessagePreview: text.slice(0, 140),
+                unreadCustomer: conversation.unreadCustomer ?? 0,
+                unreadAgent: newUnreadAgent,
+                createdAt: conversation.createdAt ?? now,
+                customer: customerInfo,
             },
             occurredAt: now,
         });
 
         return NextResponse.json({
             id: messageId,
+            conversationId,
             senderType: "customer",
+            senderId: identity.kind === "customer" ? identity.customerId : null,
             senderName,
             body: text,
+            messageType: "text",
+            attachmentUrl: null,
+            attachmentName: null,
+            attachmentSize: null,
+            mimeType: null,
             createdAt: now,
         }, { status: 201 });
     } catch (error) {

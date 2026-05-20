@@ -6,11 +6,11 @@ export default async function ClientesPage() {
     await requireAuth();
 
     return (
-        <div className="space-y-6 h-full flex flex-col">
+        <div className="space-y-4 sm:space-y-6 h-full flex flex-col">
             <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                    <h2 className="text-3xl font-bold tracking-tight">Clientes</h2>
-                    <p className="text-muted-foreground">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Clientes</h2>
+                    <p className="text-sm sm:text-base text-muted-foreground">
                         Gestiona el directorio de clientes y su historial de pedidos.
                     </p>
                 </div>

@@ -164,9 +164,9 @@ export default function AjustesPage() {
     };
 
     return (
-        <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl p-8 shadow-xl">
-            <h2 className="text-xl font-bold text-slate-800 mb-2">Ajustes de Cuenta</h2>
-                    <p className="text-slate-500 text-sm mb-8">Actualiza tu información personal y dirección</p>
+        <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-xl">
+            <h2 className="text-base sm:text-xl font-bold text-slate-800 mb-2">Ajustes de Cuenta</h2>
+                    <p className="text-slate-500 text-xs sm:text-sm mb-5 sm:mb-8">Actualiza tu información personal y dirección</p>
 
                     {loading ? (
                         <div className="space-y-4 animate-pulse">

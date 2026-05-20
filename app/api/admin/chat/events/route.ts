@@ -13,7 +13,10 @@ function serializeEvent(event: string, data: unknown) {
 
 /**
  * GET /api/admin/chat/events
- * Stream SSE global: el panel admin recibe TODOS los eventos de chat.
+ * Stream SSE global: el panel admin recibe TODOS los eventos de chat tipados.
+ * Cada evento se emite con su tipo (`message_created`, `conversation_created`,
+ * `conversation_updated`, `conversation_closed`, `conversation_reopened`) como
+ * `event:` SSE, para que el cliente pueda escuchar selectivamente y deduplicar.
  */
 export async function GET(req: NextRequest) {
     try {
@@ -25,7 +28,7 @@ export async function GET(req: NextRequest) {
         throw error;
     }
 
-    let cleanup = () => {};
+    let cleanup = () => { };
 
     const stream = new ReadableStream<Uint8Array>({
         start(controller) {
@@ -34,12 +37,13 @@ export async function GET(req: NextRequest) {
                 if (closed) return;
                 closed = true;
                 cleanup();
-                try { controller.close(); } catch {}
+                try { controller.close(); } catch { }
             };
 
             const unsubscribe = subscribeToChatEvents((event) => {
                 try {
-                    controller.enqueue(serializeEvent("chat-event", event));
+                    // Emitir como event: <type> para que el cliente filtre selectivamente
+                    controller.enqueue(serializeEvent(event.type, event));
                 } catch {
                     safeClose();
                 }
@@ -58,7 +62,7 @@ export async function GET(req: NextRequest) {
                 clearInterval(heartbeat);
             };
 
-            controller.enqueue(serializeEvent("connected", { ok: true }));
+            controller.enqueue(serializeEvent("connected", { ok: true, t: Date.now() }));
             req.signal.addEventListener("abort", safeClose, { once: true });
         },
         cancel() {
@@ -71,6 +75,7 @@ export async function GET(req: NextRequest) {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache, no-transform",
             Connection: "keep-alive",
+            "X-Accel-Buffering": "no",
         },
     });
 }

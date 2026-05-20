@@ -7,7 +7,7 @@ import { ProductSidebar } from "@/components/products/ProductSidebar";
 import { ProductCard } from "@/components/products/ProductCard";
 import { useDebounce } from '@/hooks/use-debounce';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
-import { ChevronDown, LayoutGrid, List, Loader2, PackageOpen } from "lucide-react";
+import { ChevronDown, LayoutGrid, List, Loader2, PackageOpen, SlidersHorizontal, X } from "lucide-react";
 
 interface ApiResponse {
     data: StoreProductPayload[];
@@ -51,6 +51,7 @@ function ProductsPageContent() {
     const [sortBy, setSortBy] = useState<'featured' | 'price_asc' | 'price_desc' | 'newest'>('newest');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [maxPrice, setMaxPrice] = useState(Number(searchParams.get('maxPrice') || '50000') || 50000);
+    const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
     const debouncedMaxPrice = useDebounce(maxPrice, 400);
     const productsRef = useRef<StoreProduct[]>([]);
     const metaRef = useRef(meta);
@@ -253,9 +254,9 @@ function ProductsPageContent() {
             {/* Spacer for fixed navbar */}
             <div className="h-36 md:h-44"></div>
 
-            <div className="w-full px-4 md:px-8 flex flex-col md:flex-row gap-6">
+            <div className="w-full px-3 sm:px-4 md:px-8 flex flex-col md:flex-row gap-4 md:gap-6">
 
-                {/* Sidebar */}
+                {/* Sidebar - Desktop */}
                 <div className="hidden md:block">
                     <ProductSidebar
                         selectedCategory={selectedCategory}
@@ -267,22 +268,52 @@ function ProductsPageContent() {
                     />
                 </div>
 
+                {/* Sidebar - Mobile Drawer */}
+                {mobileFiltersOpen && (
+                    <div className="md:hidden fixed inset-0 z-[80] flex">
+                        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileFiltersOpen(false)} />
+                        <div className="relative ml-auto w-[85%] max-w-sm h-full bg-veci-bg overflow-y-auto p-3 animate-in slide-in-from-right duration-200">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="font-bold text-slate-700">Filtros</span>
+                                <button onClick={() => setMobileFiltersOpen(false)} className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-slate-500">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <ProductSidebar
+                                selectedCategory={selectedCategory}
+                                onCategoryChange={(s) => { handleCategoryChange(s); setMobileFiltersOpen(false); }}
+                                inOffer={inOffer}
+                                onOfferChange={handleOfferChange}
+                                maxPrice={maxPrice}
+                                onMaxPriceChange={handleMaxPriceChange}
+                            />
+                        </div>
+                    </div>
+                )}
+
                 {/* Main Content */}
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
 
                     {/* Top Bar */}
-                    <div className="flex flex-col xl:flex-row justify-between xl:items-center mb-8 gap-4 bg-white/40 backdrop-blur-md p-4 rounded-3xl border border-white">
-                        <span className="text-slate-500 text-sm font-medium whitespace-nowrap">
+                    <div className="flex flex-row items-center justify-between mb-4 sm:mb-8 gap-2 sm:gap-4 bg-white/40 backdrop-blur-md p-2.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-white">
+                        <button
+                            onClick={() => setMobileFiltersOpen(true)}
+                            className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/80 border border-white text-xs font-bold text-slate-700 shrink-0"
+                        >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            Filtros
+                        </button>
+                        <span className="text-slate-500 text-[11px] sm:text-sm font-medium whitespace-nowrap truncate">
                             {meta.total > 0
-                                ? `Mostrando ${startIdx}-${endIdx} de ${meta.total} productos`
+                                ? <><span className="hidden sm:inline">Mostrando </span>{startIdx}-{endIdx} de {meta.total}<span className="hidden sm:inline"> productos</span></>
                                 : 'Sin productos'}
                         </span>
 
-                        <div className="flex items-center gap-4 self-end xl:self-auto">
+                        <div className="flex items-center gap-2 sm:gap-4 self-end xl:self-auto">
                             {/* Sort */}
                             <div className="relative group">
-                                <button className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer hover:text-veci-purple transition-colors">
-                                    <span>Ordenar por: <span className="text-veci-dark">
+                                <button className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-bold text-slate-700 cursor-pointer hover:text-veci-purple transition-colors">
+                                    <span><span className="hidden sm:inline">Ordenar por: </span><span className="text-veci-dark">
                                         {sortBy === 'featured' ? 'Destacados' : sortBy === 'newest' ? 'Nuevos' : sortBy === 'price_asc' ? 'Menor precio' : 'Mayor precio'}
                                     </span></span>
                                     <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />
@@ -309,9 +340,9 @@ function ProductsPageContent() {
                                 </div>
                             </div>
 
-                            <div className="h-6 w-px bg-slate-300"></div>
+                            <div className="hidden sm:block h-6 w-px bg-slate-300"></div>
 
-                            <div className="flex items-center gap-2 bg-white/50 p-1 rounded-lg">
+                            <div className="hidden sm:flex items-center gap-2 bg-white/50 p-1 rounded-lg">
                                 <button
                                     onClick={() => setViewMode('grid')}
                                     className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-veci-purple text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
@@ -354,7 +385,7 @@ function ProductsPageContent() {
                     ) : (
                         /* Product Grid */
                         <>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+                            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-5">
                                 {products.map((product) => (
                                     <ProductCard
                                         key={product.id}
@@ -413,7 +444,7 @@ export default function ProductsPage() {
     return (
         <Suspense fallback={(
             <main className="min-h-screen bg-veci-bg pb-20">
-                <div className="h-32 md:h-40"></div>
+                <div className="h-36 md:h-40"></div>
                 <div className="max-w-7xl mx-auto px-6 md:px-12 h-[50vh] flex items-center justify-center">
                     <div className="flex items-center gap-3 text-slate-500 font-semibold">
                         <Loader2 className="w-6 h-6 animate-spin" />

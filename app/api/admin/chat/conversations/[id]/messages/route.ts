@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { chatConversations, chatMessages, users } from "@/lib/db/schema";
+import { chatConversations, chatMessages, customers, users } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
 import { publishChatEvent } from "@/lib/chat-live-updates";
 import { eq, sql } from "drizzle-orm";
@@ -48,6 +48,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             senderId: session.user.id as string,
             senderName,
             body: text,
+            messageType: "text",
             readByCustomer: false,
             readByAgent: true,
             createdAt: now,
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             unreadCustomer: sql`${chatConversations.unreadCustomer} + 1`,
             updatedAt: now,
         };
+        const newAssigned = conversation.assignedOperatorId || (session.user.id as string);
         if (!conversation.assignedOperatorId) {
             updateData.assignedOperatorId = session.user.id;
         }
@@ -68,8 +70,27 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             .set(updateData)
             .where(eq(chatConversations.id, conversationId));
 
+        const newUnreadCustomer = (conversation.unreadCustomer ?? 0) + 1;
+
+        let customerInfo = null;
+        if (conversation.customerId) {
+            const c = await db.query.customers.findFirst({
+                where: eq(customers.id, conversation.customerId),
+            });
+            if (c) {
+                customerInfo = {
+                    id: c.id,
+                    firstName: c.firstName,
+                    lastName: c.lastName,
+                    email: c.email,
+                    phone: c.phone,
+                };
+            }
+        }
+
+        // 1. Mensaje nuevo → cliente + admin (eco)
         publishChatEvent({
-            type: "message-created",
+            type: "message_created",
             conversationId,
             message: {
                 id: messageId,
@@ -78,16 +99,50 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
                 senderId: session.user.id as string,
                 senderName,
                 body: text,
+                messageType: "text",
+                attachmentUrl: null,
+                attachmentName: null,
+                attachmentSize: null,
+                mimeType: null,
                 createdAt: now,
+            },
+            occurredAt: now,
+        });
+
+        // 2. Actualización metadatos
+        publishChatEvent({
+            type: "conversation_updated",
+            conversationId,
+            conversation: {
+                id: conversation.id,
+                customerId: conversation.customerId,
+                guestId: conversation.guestId,
+                guestName: conversation.guestName,
+                guestEmail: conversation.guestEmail,
+                assignedOperatorId: newAssigned,
+                status: conversation.status as "open" | "closed",
+                lastMessageAt: now,
+                lastMessagePreview: text.slice(0, 140),
+                unreadCustomer: newUnreadCustomer,
+                unreadAgent: conversation.unreadAgent ?? 0,
+                createdAt: conversation.createdAt ?? now,
+                customer: customerInfo,
             },
             occurredAt: now,
         });
 
         return NextResponse.json({
             id: messageId,
+            conversationId,
             senderType: "agent",
+            senderId: session.user.id as string,
             senderName,
             body: text,
+            messageType: "text",
+            attachmentUrl: null,
+            attachmentName: null,
+            attachmentSize: null,
+            mimeType: null,
             createdAt: now,
         }, { status: 201 });
     } catch (error) {

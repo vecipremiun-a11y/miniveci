@@ -3,7 +3,7 @@ import { Package } from "lucide-react";
 
 export function TopProducts() {
     return (
-        <Card className="col-span-4 lg:col-span-2">
+        <Card className="lg:col-span-2 min-w-0">
             <CardHeader>
                 <CardTitle>Más Vendidos</CardTitle>
             </CardHeader>

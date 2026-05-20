@@ -51,18 +51,18 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen pt-32 pb-12 flex items-center justify-center bg-veci-blue-900/5 relative overflow-hidden">
+        <div className="min-h-screen pt-36 sm:pt-32 pb-12 flex items-center justify-center bg-veci-blue-900/5 relative overflow-hidden">
             {/* Background Elements */}
             <div className="absolute top-20 left-20 w-72 h-72 bg-veci-primary/20 rounded-full blur-3xl" />
             <div className="absolute bottom-20 right-20 w-80 h-80 bg-veci-secondary/20 rounded-full blur-3xl" />
 
-            <div className="w-full max-w-md p-8 bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl relative z-10 mx-4">
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-veci-primary to-veci-secondary flex items-center justify-center text-white font-bold text-3xl shadow-lg mx-auto mb-4 transform rotate-3">
+            <div className="w-full max-w-md p-5 sm:p-8 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl sm:rounded-3xl shadow-2xl relative z-10 mx-3 sm:mx-4">
+                <div className="text-center mb-5 sm:mb-8">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-veci-primary to-veci-secondary flex items-center justify-center text-white font-bold text-2xl sm:text-3xl shadow-lg mx-auto mb-3 sm:mb-4 transform rotate-3">
                         N
                     </div>
-                    <h1 className="text-3xl font-bold text-veci-dark mb-2">¡Hola de nuevo!</h1>
-                    <p className="text-slate-500">Ingresa a tu cuenta para continuar</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-veci-dark mb-1 sm:mb-2">¡Hola de nuevo!</h1>
+                    <p className="text-slate-500 text-sm sm:text-base">Ingresa a tu cuenta para continuar</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">

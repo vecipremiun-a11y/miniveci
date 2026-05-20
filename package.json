@@ -11,6 +11,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "db:seed:bakery": "tsx --env-file=.env.local scripts/seed-bakery.ts",
+    "db:migrate:push-tokens": "node --env-file=.env.local scripts/create-push-tokens-table.mjs",
+    "pos:test:patch": "tsx --env-file=.env.local scripts/test-pos-status-patch.ts",
     "test": "vitest run"
   },
   "dependencies": {
@@ -33,6 +36,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "drizzle-orm": "^0.44.0",
+    "firebase-admin": "^13.10.0",
     "framer-motion": "^12.31.0",
     "lucide-react": "^0.563.0",
     "mercadopago": "^2.12.0",

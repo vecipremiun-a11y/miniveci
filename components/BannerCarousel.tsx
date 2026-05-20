@@ -44,7 +44,10 @@ export function BannerCarousel() {
     return () => clearInterval(timer);
   }, [banners.length, next]);
 
-  if (!loaded || banners.length === 0) return null;
+  // Reserva el espacio del navbar fixed aunque no haya banners
+  if (!loaded || banners.length === 0) {
+    return <div className="pt-40 sm:pt-36 md:pt-40" aria-hidden />;
+  }
 
   const currentBanner = banners[current];
   const hasLink = !!currentBanner.linkUrl;
@@ -73,7 +76,7 @@ export function BannerCarousel() {
   );
 
   return (
-    <section className="relative w-full overflow-hidden bg-gray-100 pt-32 md:pt-36">
+    <section className="relative w-full overflow-hidden bg-gray-100 pt-40 sm:pt-36 md:pt-40">
       {/* Slides */}
       {hasLink ? (
         <Link href={currentBanner.linkUrl!}>{slideContent}</Link>

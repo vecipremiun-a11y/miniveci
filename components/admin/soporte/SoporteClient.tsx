@@ -3,9 +3,13 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
     MessageCircle, Send, Loader2, Search, Phone, Mail, MapPin, Package, User,
-    CheckCheck, Inbox, XCircle, RotateCcw, ChevronLeft,
+    CheckCheck, Inbox, XCircle, RotateCcw, ChevronLeft, Paperclip,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useChatSSE, type ChatSSEEvent } from '@/hooks/use-chat-sse';
+import { useAttachmentUpload, validateChatFile } from '@/hooks/use-attachment-upload';
+import { ChatAttachment } from '@/components/chat/ChatAttachment';
+import { ChatLightbox } from '@/components/chat/ChatLightbox';
 
 interface ConversationListItem {
     id: string;
@@ -19,6 +23,8 @@ interface ConversationListItem {
     guest: { id: string | null; name: string | null; email: string | null } | null;
 }
 
+type ChatMsgType = 'text' | 'image' | 'audio' | 'file';
+
 interface ChatMessage {
     id: string;
     conversationId?: string;
@@ -26,8 +32,17 @@ interface ChatMessage {
     senderId: string | null;
     senderName: string | null;
     body: string;
+    messageType: ChatMsgType;
+    attachmentUrl: string | null;
+    attachmentName: string | null;
+    attachmentSize: number | null;
+    mimeType: string | null;
     createdAt: string;
+    /** id local antes de confirmación */
+    tempId?: string;
     pending?: boolean;
+    localPreviewUrl?: string;
+    uploadProgress?: number;
 }
 
 interface ConversationDetail {
@@ -76,6 +91,55 @@ function getInitials(name: string): string {
     return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 }
 
+function conversationFromEventPayload(c: {
+    id: string;
+    customerId: string | null;
+    guestId: string | null;
+    guestName: string | null;
+    guestEmail: string | null;
+    assignedOperatorId: string | null;
+    status: 'open' | 'closed';
+    lastMessageAt: string | null;
+    lastMessagePreview: string | null;
+    unreadCustomer: number;
+    unreadAgent: number;
+    createdAt: string;
+    customer?: { id: string; firstName: string; lastName: string; email: string; phone: string | null } | null;
+}): ConversationListItem {
+    return {
+        id: c.id,
+        status: c.status,
+        lastMessageAt: c.lastMessageAt,
+        lastMessagePreview: c.lastMessagePreview,
+        unreadAgent: c.unreadAgent ?? 0,
+        assignedOperatorId: c.assignedOperatorId,
+        createdAt: c.createdAt,
+        customer: c.customer
+            ? {
+                id: c.customer.id,
+                name: `${c.customer.firstName} ${c.customer.lastName}`.trim(),
+                email: c.customer.email,
+                phone: c.customer.phone,
+            }
+            : null,
+        guest: c.customer
+            ? null
+            : {
+                id: c.guestId,
+                name: c.guestName,
+                email: c.guestEmail,
+            },
+    };
+}
+
+function sortConversations(list: ConversationListItem[]): ConversationListItem[] {
+    return [...list].sort((a, b) => {
+        const aT = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.createdAt).getTime();
+        const bT = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.createdAt).getTime();
+        return bT - aT;
+    });
+}
+
 export function SoporteClient() {
     const [conversations, setConversations] = useState<ConversationListItem[]>([]);
     const [statusFilter, setStatusFilter] = useState<'open' | 'closed' | 'all'>('open');
@@ -87,21 +151,31 @@ export function SoporteClient() {
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const [showInfoPanel, setShowInfoPanel] = useState(true);
+    const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+    const [uploadError, setUploadError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const { upload, progress: uploadProgress, uploading } = useAttachmentUpload();
 
-    const fetchList = useCallback(async () => {
+    // Refs estables para usar dentro del callback SSE sin reconectar
+    const selectedIdRef = useRef<string | null>(null);
+    const statusFilterRef = useRef(statusFilter);
+    useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+    useEffect(() => { statusFilterRef.current = statusFilter; }, [statusFilter]);
+
+    const fetchList = useCallback(async (filter: 'open' | 'closed' | 'all') => {
         setLoadingList(true);
         try {
-            const res = await fetch(`/api/admin/chat/conversations?status=${statusFilter}`);
+            const res = await fetch(`/api/admin/chat/conversations?status=${filter}`);
             if (res.ok) {
                 const data = await res.json();
-                setConversations(data.conversations);
+                setConversations(sortConversations(data.conversations));
             }
         } finally {
             setLoadingList(false);
         }
-    }, [statusFilter]);
+    }, []);
 
     const fetchDetail = useCallback(async (id: string) => {
         setLoadingDetail(true);
@@ -109,6 +183,16 @@ export function SoporteClient() {
             const res = await fetch(`/api/admin/chat/conversations/${id}`);
             if (res.ok) {
                 const data = await res.json();
+                // Asegurar que los mensajes tienen pending=false y campos de adjunto presentes
+                data.messages = (data.messages || []).map((m: any) => ({
+                    ...m,
+                    messageType: m.messageType || 'text',
+                    attachmentUrl: m.attachmentUrl ?? null,
+                    attachmentName: m.attachmentName ?? null,
+                    attachmentSize: m.attachmentSize ?? null,
+                    mimeType: m.mimeType ?? null,
+                    pending: false,
+                }));
                 setDetail(data);
                 // Marcar visualmente como leído en la lista
                 setConversations(prev =>
@@ -120,73 +204,141 @@ export function SoporteClient() {
         }
     }, []);
 
-    useEffect(() => { fetchList(); }, [fetchList]);
+    // Carga inicial de la lista cuando cambia el filtro
+    useEffect(() => { fetchList(statusFilter); }, [fetchList, statusFilter]);
+
+    // Cargar detalle al seleccionar conversación
     useEffect(() => {
         if (selectedId) fetchDetail(selectedId);
         else setDetail(null);
     }, [selectedId, fetchDetail]);
 
-    // SSE global
-    useEffect(() => {
-        const es = new EventSource('/api/admin/chat/events');
-        es.addEventListener('chat-event', (e: MessageEvent) => {
-            try {
-                const event = JSON.parse(e.data);
-                if (event.type === 'message-created' && event.message) {
-                    const msg = event.message as ChatMessage;
-                    // Si pertenece a la conversación abierta, agregarlo
-                    if (selectedId && msg.conversationId === selectedId) {
-                        setDetail(prev => {
-                            if (!prev) return prev;
-                            if (prev.messages.some(m => m.id === msg.id)) return prev;
-                            const filtered = prev.messages.filter(m => !m.pending || m.body !== msg.body);
-                            return { ...prev, messages: [...filtered, msg] };
+    // SSE global — UNA SOLA conexión persistente para todo el panel admin.
+    // No depende de selectedId ni statusFilter, así no se reconecta al navegar.
+    const handleSSEEvent = useCallback((event: ChatSSEEvent) => {
+        const currentSelected = selectedIdRef.current;
+        const currentFilter = statusFilterRef.current;
+
+        switch (event.type) {
+            case 'message_created': {
+                const msg = event.message;
+
+                // Si pertenece a la conversación abierta, mergear con dedup
+                if (currentSelected === msg.conversationId) {
+                    setDetail(prev => {
+                        if (!prev) return prev;
+                        if (prev.messages.some(m => m.id === msg.id)) return prev;
+                        // Si hay un optimista propio que coincide, reemplazarlo
+                        const idx = prev.messages.findIndex(m => {
+                            if (!m.pending || m.senderType !== msg.senderType) return false;
+                            if (msg.messageType === 'text') return m.messageType === 'text' && m.body === msg.body;
+                            return (
+                                m.messageType === msg.messageType &&
+                                m.attachmentName === msg.attachmentName &&
+                                m.attachmentSize === msg.attachmentSize
+                            );
                         });
-                    }
-                    // Refrescar lista (preview + unread)
-                    setConversations(prev => {
-                        const exists = prev.find(c => c.id === msg.conversationId);
-                        if (!exists) {
-                            // Conversación nueva: refrescar lista
-                            fetchList();
-                            return prev;
+                        if (idx >= 0) {
+                            const prevMsg = prev.messages[idx];
+                            if (prevMsg.localPreviewUrl) URL.revokeObjectURL(prevMsg.localPreviewUrl);
+                            const copy = prev.messages.slice();
+                            copy[idx] = { ...msg, pending: false };
+                            return { ...prev, messages: copy };
                         }
-                        return prev.map(c => c.id === msg.conversationId
-                            ? {
-                                ...c,
-                                lastMessageAt: msg.createdAt,
-                                lastMessagePreview: msg.body.slice(0, 140),
-                                unreadAgent: msg.senderType === 'customer' && msg.conversationId !== selectedId
-                                    ? c.unreadAgent + 1
-                                    : c.unreadAgent,
-                            }
-                            : c
-                        ).sort((a, b) => {
-                            const aT = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-                            const bT = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-                            return bT - aT;
-                        });
+                        return { ...prev, messages: [...prev.messages, { ...msg, pending: false }] };
                     });
-                    // Notificación
-                    if (msg.senderType === 'customer' && msg.conversationId !== selectedId) {
-                        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                            new Notification(`${msg.senderName || 'Cliente'}`, { body: msg.body.slice(0, 80) });
-                        }
+                }
+
+                // Notificación si llega del cliente y no es la conversación abierta
+                if (msg.senderType === 'customer' && currentSelected !== msg.conversationId) {
+                    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                        try {
+                            const body = msg.messageType === 'image'
+                                ? '📷 Imagen'
+                                : msg.messageType === 'file'
+                                    ? `📎 ${msg.attachmentName || 'Archivo'}`
+                                    : msg.body.slice(0, 80);
+                            new Notification(`${msg.senderName || 'Cliente'}`, { body });
+                        } catch { /* noop */ }
                     }
                 }
-            } catch {}
-        });
-        return () => es.close();
-    }, [selectedId, fetchList]);
+                break;
+            }
+            case 'conversation_created': {
+                const newConv = conversationFromEventPayload(event.conversation);
+                setConversations(prev => {
+                    if (prev.some(c => c.id === newConv.id)) return prev;
+                    // Solo agregar si el filtro lo incluye
+                    if (currentFilter === 'closed' && newConv.status !== 'closed') return prev;
+                    if (currentFilter === 'open' && newConv.status !== 'open') return prev;
+                    return sortConversations([newConv, ...prev]);
+                });
+                break;
+            }
+            case 'conversation_updated': {
+                const updated = conversationFromEventPayload(event.conversation);
+                setConversations(prev => {
+                    const exists = prev.find(c => c.id === updated.id);
+                    if (!exists) {
+                        // Conversación que no estaba en la lista (ej: nueva con filtro abierto): agregarla si encaja
+                        if (currentFilter === 'closed' && updated.status !== 'closed') return prev;
+                        if (currentFilter === 'open' && updated.status !== 'open') return prev;
+                        return sortConversations([updated, ...prev]);
+                    }
+                    // Mantener unreadAgent si la conversación está abierta en pantalla (ya leída)
+                    const unread = updated.id === currentSelected ? 0 : updated.unreadAgent;
+                    return sortConversations(
+                        prev.map(c => c.id === updated.id ? { ...updated, unreadAgent: unread } : c),
+                    );
+                });
+                break;
+            }
+            case 'conversation_closed': {
+                setConversations(prev => {
+                    if (currentFilter === 'open') {
+                        return prev.filter(c => c.id !== event.conversationId);
+                    }
+                    return prev.map(c => c.id === event.conversationId ? { ...c, status: 'closed' } : c);
+                });
+                if (currentSelected === event.conversationId) {
+                    setDetail(prev => prev ? {
+                        ...prev,
+                        conversation: { ...prev.conversation, status: 'closed' },
+                    } : prev);
+                }
+                break;
+            }
+            case 'conversation_reopened': {
+                setConversations(prev => {
+                    if (currentFilter === 'closed') {
+                        return prev.filter(c => c.id !== event.conversationId);
+                    }
+                    return prev.map(c => c.id === event.conversationId ? { ...c, status: 'open' } : c);
+                });
+                if (currentSelected === event.conversationId) {
+                    setDetail(prev => prev ? {
+                        ...prev,
+                        conversation: { ...prev.conversation, status: 'open' },
+                    } : prev);
+                }
+                break;
+            }
+        }
+    }, []);
+
+    useChatSSE({
+        url: '/api/admin/chat/events',
+        onEvent: handleSSEEvent,
+    });
 
     // Permiso de notificaciones
     useEffect(() => {
         if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-            Notification.requestPermission().catch(() => {});
+            Notification.requestPermission().catch(() => { });
         }
     }, []);
 
-    // Scroll al final
+    // Scroll al final cuando llegan mensajes nuevos
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [detail?.messages.length]);
@@ -206,13 +358,19 @@ export function SoporteClient() {
         const text = input.trim();
         if (!text || !selectedId || sending) return;
         setSending(true);
-        const tempId = `temp-${Date.now()}`;
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const optimistic: ChatMessage = {
             id: tempId,
+            tempId,
             senderType: 'agent',
             senderId: null,
             senderName: 'Tú',
             body: text,
+            messageType: 'text',
+            attachmentUrl: null,
+            attachmentName: null,
+            attachmentSize: null,
+            mimeType: null,
             createdAt: new Date().toISOString(),
             pending: true,
         };
@@ -224,7 +382,23 @@ export function SoporteClient() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ body: text }),
             });
-            if (!res.ok) {
+            if (res.ok) {
+                const real = await res.json() as ChatMessage;
+                setDetail(prev => {
+                    if (!prev) return prev;
+                    // Si llegó por SSE primero, descartar el optimista
+                    if (prev.messages.some(m => m.id === real.id)) {
+                        return { ...prev, messages: prev.messages.filter(m => m.id !== tempId) };
+                    }
+                    const idx = prev.messages.findIndex(m => m.id === tempId);
+                    if (idx >= 0) {
+                        const copy = prev.messages.slice();
+                        copy[idx] = { ...real, pending: false };
+                        return { ...prev, messages: copy };
+                    }
+                    return { ...prev, messages: [...prev.messages, { ...real, pending: false }] };
+                });
+            } else {
                 setDetail(prev => prev ? { ...prev, messages: prev.messages.filter(m => m.id !== tempId) } : prev);
                 setInput(text);
                 toast.error('Error al enviar');
@@ -239,6 +413,88 @@ export function SoporteClient() {
         }
     };
 
+    const handleFilePick = () => {
+        if (!selectedId || uploading) return;
+        if (detail?.conversation.status !== 'open') return;
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !selectedId) return;
+
+        const validation = validateChatFile(file);
+        if (!validation.ok) {
+            setUploadError(validation.error);
+            toast.error(validation.error);
+            setTimeout(() => setUploadError(null), 4000);
+            return;
+        }
+
+        const isImage = file.type.startsWith('image/');
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const localPreviewUrl = isImage ? URL.createObjectURL(file) : undefined;
+        const optimistic: ChatMessage = {
+            id: tempId,
+            tempId,
+            senderType: 'agent',
+            senderId: null,
+            senderName: 'Tú',
+            body: '',
+            messageType: isImage ? 'image' : 'file',
+            attachmentUrl: localPreviewUrl ?? null,
+            attachmentName: file.name,
+            attachmentSize: file.size,
+            mimeType: file.type,
+            createdAt: new Date().toISOString(),
+            pending: true,
+            localPreviewUrl,
+            uploadProgress: 0,
+        };
+        setDetail(prev => prev ? { ...prev, messages: [...prev.messages, optimistic] } : prev);
+        setUploadError(null);
+
+        try {
+            const real = await upload({
+                url: `/api/admin/chat/conversations/${selectedId}/attachments`,
+                file,
+            });
+            setDetail(prev => {
+                if (!prev) return prev;
+                if (prev.messages.some(m => m.id === real.id)) {
+                    if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+                    return { ...prev, messages: prev.messages.filter(m => m.id !== tempId) };
+                }
+                const idx = prev.messages.findIndex(m => m.id === tempId);
+                if (idx >= 0) {
+                    const copy = prev.messages.slice();
+                    copy[idx] = { ...(real as ChatMessage), pending: false };
+                    if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+                    return { ...prev, messages: copy };
+                }
+                return prev;
+            });
+        } catch (err: any) {
+            setDetail(prev => prev ? { ...prev, messages: prev.messages.filter(m => m.id !== tempId) } : prev);
+            if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+            toast.error(err?.message || 'Error subiendo archivo');
+        }
+    };
+
+    // Reflejar progreso en el mensaje pendiente
+    useEffect(() => {
+        if (!uploading) return;
+        setDetail(prev => {
+            if (!prev) return prev;
+            const idx = prev.messages.findIndex(m => m.pending && m.messageType !== 'text');
+            if (idx < 0) return prev;
+            const copy = prev.messages.slice();
+            copy[idx] = { ...copy[idx], uploadProgress };
+            return { ...prev, messages: copy };
+        });
+    }, [uploading, uploadProgress]);
+
     const toggleStatus = async (newStatus: 'open' | 'closed') => {
         if (!selectedId) return;
         try {
@@ -249,8 +505,7 @@ export function SoporteClient() {
             });
             if (res.ok) {
                 toast.success(newStatus === 'closed' ? 'Conversación cerrada' : 'Conversación reabierta');
-                fetchDetail(selectedId);
-                fetchList();
+                // El SSE actualizará lista y detalle automáticamente
             }
         } catch {
             toast.error('Error');
@@ -273,11 +528,10 @@ export function SoporteClient() {
                             <button
                                 key={s}
                                 onClick={() => setStatusFilter(s)}
-                                className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-all ${
-                                    statusFilter === s
-                                        ? 'bg-white text-slate-800 shadow-sm'
-                                        : 'text-slate-500 hover:text-slate-700'
-                                }`}
+                                className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-all ${statusFilter === s
+                                    ? 'bg-white text-slate-800 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                                    }`}
                             >
                                 {s === 'open' ? 'Activas' : s === 'closed' ? 'Cerradas' : 'Todas'}
                             </button>
@@ -315,15 +569,13 @@ export function SoporteClient() {
                                     <li key={c.id}>
                                         <button
                                             onClick={() => setSelectedId(c.id)}
-                                            className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex gap-3 ${
-                                                isSelected ? 'bg-veci-primary/5 border-l-4 border-veci-primary' : ''
-                                            }`}
+                                            className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex gap-3 ${isSelected ? 'bg-veci-primary/5 border-l-4 border-veci-primary' : ''
+                                                }`}
                                         >
-                                            <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-bold text-sm text-white ${
-                                                c.customer
-                                                    ? 'bg-gradient-to-br from-indigo-500 to-purple-500'
-                                                    : 'bg-gradient-to-br from-slate-400 to-slate-500'
-                                            }`}>
+                                            <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-bold text-sm text-white ${c.customer
+                                                ? 'bg-gradient-to-br from-indigo-500 to-purple-500'
+                                                : 'bg-gradient-to-br from-slate-400 to-slate-500'
+                                                }`}>
                                                 {getInitials(name)}
                                             </div>
                                             <div className="flex-1 min-w-0">
@@ -437,6 +689,7 @@ export function SoporteClient() {
                                         const prev = detail.messages[idx - 1];
                                         const sameAuthor = prev && prev.senderType === m.senderType;
 
+                                        const isAttachment = m.messageType !== 'text';
                                         return (
                                             <div key={m.id} className={`flex ${isAgent ? 'justify-end' : 'justify-start'} ${sameAuthor ? 'mt-1' : 'mt-3'}`}>
                                                 <div className={`max-w-[70%] ${isAgent ? 'items-end' : 'items-start'} flex flex-col`}>
@@ -445,13 +698,30 @@ export function SoporteClient() {
                                                             {m.senderName || (isAgent ? 'Soporte' : 'Cliente')}
                                                         </span>
                                                     )}
-                                                    <div className={`px-3.5 py-2 text-sm leading-relaxed rounded-2xl ${
-                                                        isAgent
+                                                    {isAttachment ? (
+                                                        <div className={`${m.messageType === 'image' ? '' : (isAgent
+                                                            ? 'bg-gradient-to-br from-veci-primary to-fuchsia-400 rounded-br-sm shadow-sm'
+                                                            : 'bg-white border border-slate-100 rounded-bl-sm shadow-sm')} ${m.messageType === 'image' ? '' : 'rounded-2xl p-1'}`}>
+                                                            <ChatAttachment
+                                                                messageType={m.messageType}
+                                                                url={m.attachmentUrl}
+                                                                name={m.attachmentName}
+                                                                size={m.attachmentSize}
+                                                                mimeType={m.mimeType}
+                                                                variant={isAgent ? 'sender' : 'receiver'}
+                                                                pending={m.pending}
+                                                                progress={m.uploadProgress}
+                                                                onOpenImage={(url) => setLightboxUrl(url)}
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <div className={`px-3.5 py-2 text-sm leading-relaxed rounded-2xl ${isAgent
                                                             ? 'bg-gradient-to-br from-veci-primary to-fuchsia-400 text-white rounded-br-sm shadow-sm'
                                                             : 'bg-white text-slate-700 border border-slate-100 rounded-bl-sm shadow-sm'
-                                                    } ${m.pending ? 'opacity-70' : ''}`}>
-                                                        <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                                                    </div>
+                                                            } ${m.pending ? 'opacity-70' : ''}`}>
+                                                            <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                                                        </div>
+                                                    )}
                                                     <div className={`flex items-center gap-1 mt-0.5 px-1.5 ${isAgent ? 'flex-row-reverse' : ''}`}>
                                                         <span className="text-[10px] text-slate-400">{formatTime(m.createdAt)}</span>
                                                         {isAgent && (
@@ -470,7 +740,23 @@ export function SoporteClient() {
                                 {/* Input */}
                                 {detail.conversation.status === 'open' ? (
                                     <div className="border-t border-slate-100 bg-white p-4">
-                                        <div className="flex items-end gap-2 bg-slate-50 rounded-2xl px-3 py-2 border border-slate-100 focus-within:border-veci-primary focus-within:bg-white transition-colors">
+                                        <div className="flex items-end gap-2 bg-slate-50 rounded-2xl px-2 py-2 border border-slate-100 focus-within:border-veci-primary focus-within:bg-white transition-colors">
+                                            <button
+                                                type="button"
+                                                onClick={handleFilePick}
+                                                disabled={uploading}
+                                                className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-white hover:text-veci-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                title="Adjuntar imagen o PDF (máx 5MB)"
+                                            >
+                                                <Paperclip className="w-4 h-4" />
+                                            </button>
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif,application/pdf"
+                                                className="hidden"
+                                                onChange={handleFileChange}
+                                            />
                                             <textarea
                                                 ref={inputRef}
                                                 value={input}
@@ -494,6 +780,9 @@ export function SoporteClient() {
                                                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                             </button>
                                         </div>
+                                        {uploadError && (
+                                            <p className="text-[11px] text-red-500 text-center mt-1.5 font-semibold">{uploadError}</p>
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 text-center">
@@ -602,6 +891,10 @@ export function SoporteClient() {
                     </>
                 )}
             </section>
+
+            {lightboxUrl && (
+                <ChatLightbox src={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+            )}
         </div>
     );
 }

@@ -14,18 +14,18 @@ export default function AccountLayout({
                 <div className="absolute -bottom-20 left-1/3 w-[800px] h-[800px] bg-indigo-200/20 rounded-full blur-[150px]" />
             </div>
 
-            <div className="relative z-10 pt-36 pb-12 px-4 md:px-8 max-w-7xl mx-auto">
-                <h1 className="text-3xl font-bold text-slate-800 mb-2">Mi Cuenta</h1>
-                <div className="flex items-center gap-2 text-sm text-slate-500 mb-8">
+            <div className="relative z-10 pt-36 sm:pt-36 pb-12 px-3 sm:px-4 md:px-8 max-w-7xl mx-auto">
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-1 sm:mb-2">Mi Cuenta</h1>
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 mb-4 sm:mb-8">
                     <span>Inicio</span>
                     <span>›</span>
                     <span className="text-slate-800 font-medium">Mi cuenta</span>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-8 items-start">
                     <div className="lg:col-span-3">
                         <AccountSidebar />
                     </div>
-                    <div className="lg:col-span-9">
+                    <div className="lg:col-span-9 min-w-0">
                         {children}
                     </div>
                 </div>

@@ -206,8 +206,8 @@ export default function ProductDetailPage() {
     if (loading) {
         return (
             <main className="min-h-screen bg-veci-bg pb-20">
-                <div className="h-32 md:h-40" />
-                <div className="max-w-7xl mx-auto px-6 md:px-12 h-[50vh] flex items-center justify-center">
+                <div className="h-36 md:h-40" />
+                <div className="max-w-7xl mx-auto px-3 sm:px-6 md:px-12 h-[50vh] flex items-center justify-center">
                     <div className="flex items-center gap-3 text-slate-500 font-semibold">
                         <Loader2 className="w-6 h-6 animate-spin" />
                         Cargando detalle del producto...
@@ -221,7 +221,7 @@ export default function ProductDetailPage() {
     if (!product) {
         return (
             <main className="min-h-screen bg-veci-bg pb-20">
-                <div className="h-32 md:h-40" />
+                <div className="h-36 md:h-40" />
                 <div className="max-w-5xl mx-auto px-6 md:px-12">
                     <div className="bg-white/60 backdrop-blur-md border border-white rounded-3xl p-10 text-center">
                         <h1 className="text-2xl font-extrabold text-slate-700">Producto no encontrado</h1>
@@ -240,7 +240,7 @@ export default function ProductDetailPage() {
 
     return (
         <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white pb-20">
-            <div className="h-32 md:h-40" />
+            <div className="h-36 md:h-40" />
 
             <div className="max-w-7xl mx-auto px-6 md:px-12">
                 <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">

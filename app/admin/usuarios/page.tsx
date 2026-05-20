@@ -19,16 +19,16 @@ export default async function UsuariosPage() {
     }
 
     return (
-        <div className="space-y-6 h-full flex flex-col">
-            <div className="flex items-center justify-between">
+        <div className="space-y-4 sm:space-y-6 h-full flex flex-col">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="space-y-1">
-                    <h2 className="text-3xl font-bold tracking-tight">Usuarios</h2>
-                    <p className="text-muted-foreground">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Usuarios</h2>
+                    <p className="text-sm sm:text-base text-muted-foreground">
                         Administra los usuarios y permisos de tu equipo.
                     </p>
                 </div>
                 <Link href="/admin/usuarios/nuevo">
-                    <Button className="gap-2">
+                    <Button size="sm" className="gap-2 w-full sm:w-auto">
                         <Plus className="h-4 w-4" />
                         Nuevo Usuario
                     </Button>

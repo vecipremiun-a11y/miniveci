@@ -39,6 +39,8 @@ export function Navbar() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [sorteosMenuOpen, setSorteosMenuOpen] = useState(false);
+  const sorteosMenuRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const searchBoxMobileRef = useRef<HTMLDivElement>(null);
@@ -49,6 +51,21 @@ export function Navbar() {
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
 
   useEffect(() => { setHasMounted(true); }, []);
+
+  // Cerrar dropdown de sorteos al hacer click afuera
+  useEffect(() => {
+    if (!sorteosMenuOpen) return;
+    function onClick(e: MouseEvent) {
+      if (sorteosMenuRef.current && !sorteosMenuRef.current.contains(e.target as Node)) {
+        setSorteosMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [sorteosMenuOpen]);
+
+  // Cerrar dropdown al navegar
+  useEffect(() => { setSorteosMenuOpen(false); }, [pathname]);
 
   useEffect(() => {
     if (!hasMounted) return;
@@ -199,8 +216,8 @@ export function Navbar() {
   const formatPrice = (value: number) =>
     new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
 
-  // Don't render Navbar on admin routes
-  if (pathname?.startsWith('/admin')) {
+  // Don't render Navbar on admin routes or full-screen pages (e.g. /sorteos/temporada con QR)
+  if (pathname?.startsWith('/admin') || pathname?.startsWith('/sorteos/temporada')) {
     return null;
   }
 
@@ -280,19 +297,20 @@ export function Navbar() {
   return (
     <>
     <nav className={cn(
-      "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-6 md:px-12 border-b border-transparent",
-      scrolled ? "bg-white/80 backdrop-blur-md shadow-sm py-2 border-white/50" : "bg-transparent py-4"
+      "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-3 sm:px-6 md:px-12 border-b",
+      "bg-white/95 backdrop-blur-md shadow-md border-slate-200/70 md:border-transparent md:shadow-sm",
+      scrolled ? "md:bg-white/80 md:backdrop-blur-md md:shadow-sm py-1.5 sm:py-2 md:border-white/50" : "md:bg-transparent md:backdrop-blur-none md:shadow-none py-2 sm:py-4"
     )}>
-      <div className="max-w-7xl mx-auto flex flex-col gap-4">
+      <div className="max-w-7xl mx-auto flex flex-col gap-1.5 sm:gap-4">
 
         {/* Top Row: Logo - Search - Actions */}
-        <div className="flex items-center justify-between w-full gap-4">
+        <div className="flex items-center justify-between w-full gap-2 sm:gap-4">
 
           {/* Logo */}
-          <div className="flex items-center gap-2 shrink-0">
-            <img src="/logo%20veci.png" alt="MiniVeci" className="w-14 h-14 object-contain" />
+          <Link href="/" className="flex items-center gap-2 shrink-0">
+            <img src="/logo%20veci.png" alt="MiniVeci" className="w-10 h-10 sm:w-14 sm:h-14 object-contain" />
             <span className="text-xl font-bold text-veci-dark tracking-tight hidden sm:block">MiniVeci</span>
-          </div>
+          </Link>
 
           {/* Centered Search Bar - Desktop */}
           <div ref={searchBoxRef} className="hidden md:block flex-1 max-w-xl mx-auto relative">
@@ -313,15 +331,15 @@ export function Navbar() {
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-4 shrink-0">
-            {status === 'loading' ? (
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            {!hasMounted || status === 'loading' ? (
               <div className="w-8 h-8 rounded-full bg-slate-200 animate-pulse" />
             ) : session?.user ? (
               /* Logged-in user menu */
               <div className="relative" ref={menuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/50 hover:bg-white/80 border border-white/60 backdrop-blur-md transition-all"
+                  className="flex items-center gap-2 px-1.5 py-1 sm:px-3 sm:py-2 rounded-full bg-white/50 hover:bg-white/80 border border-white/60 backdrop-blur-md transition-all"
                 >
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-veci-primary to-veci-secondary flex items-center justify-center text-white text-sm font-bold overflow-hidden">
                     {avatarUrl ? (
@@ -333,7 +351,7 @@ export function Navbar() {
                   <span className="hidden sm:block text-sm font-medium text-slate-700 max-w-[120px] truncate">
                     {session.user.name || 'Mi cuenta'}
                   </span>
-                  <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", userMenuOpen && "rotate-180")} />
+                  <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform hidden sm:block", userMenuOpen && "rotate-180")} />
                 </button>
 
                 {/* Dropdown */}
@@ -393,7 +411,7 @@ export function Navbar() {
             <button
               onClick={() => setCartOpen(true)}
               className={cn(
-                "relative btn-primary pl-4 pr-2 py-2 rounded-full font-bold flex items-center gap-2.5 text-sm shadow-md hover:shadow-lg transition-all",
+                "relative btn-primary pl-3 pr-2 sm:pl-4 py-2 rounded-full font-bold flex items-center gap-2 sm:gap-2.5 text-sm shadow-md hover:shadow-lg transition-all",
                 cartPulse && "animate-cart-pulse"
               )}
             >
@@ -406,11 +424,11 @@ export function Navbar() {
                 )}
               </div>
               {hasMounted && totalItems > 0 ? (
-                <span className="bg-white/25 text-white text-xs font-extrabold rounded-full px-3 py-1.5 tabular-nums min-w-[5rem] text-center">
+                <span className="bg-white/25 text-white text-[11px] sm:text-xs font-extrabold rounded-full px-2 sm:px-3 py-1 sm:py-1.5 tabular-nums min-w-[4.5rem] sm:min-w-[5rem] text-center">
                   {cartTotalText}
                 </span>
               ) : (
-                <span className="pr-3">Carrito</span>
+                <span className="pr-2 sm:pr-3 hidden xs:inline">Carrito</span>
               )}
             </button>
           </div>
@@ -419,8 +437,8 @@ export function Navbar() {
 
         {/* Mobile Search */}
         <div ref={searchBoxMobileRef} className="md:hidden relative">
-          <form onSubmit={handleSearchSubmit} className="flex items-center bg-white/90 border-2 border-purple-300 hover:border-purple-400 backdrop-blur-md rounded-full px-4 py-2.5 transition-all group focus-within:ring-2 focus-within:ring-purple-400/40 focus-within:border-purple-500 focus-within:bg-white focus-within:shadow-md shadow-sm">
-            <Search className="w-5 h-5 text-purple-400 group-focus-within:text-purple-600 transition-colors" />
+          <form onSubmit={handleSearchSubmit} className="flex items-center bg-white/90 border-2 border-purple-300 hover:border-purple-400 backdrop-blur-md rounded-full px-3 py-2 transition-all group focus-within:ring-2 focus-within:ring-purple-400/40 focus-within:border-purple-500 focus-within:bg-white focus-within:shadow-md shadow-sm">
+            <Search className="w-4 h-4 text-purple-400 group-focus-within:text-purple-600 transition-colors" />
             <input
               type="text"
               placeholder="Buscar productos..."
@@ -428,7 +446,7 @@ export function Navbar() {
               onChange={(event) => { userTypingRef.current = true; setSearchQuery(event.target.value); }}
               onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
               onKeyDown={handleKeyDown}
-              className="bg-transparent border-none outline-none text-sm ml-3 w-full text-slate-700 placeholder:text-slate-400 font-medium"
+              className="bg-transparent border-none outline-none text-sm ml-2 w-full text-slate-700 placeholder:text-slate-400 font-medium"
             />
             <button type="submit" className="sr-only">Buscar</button>
           </form>
@@ -436,12 +454,92 @@ export function Navbar() {
         </div>
 
         {/* Bottom Row: Navigation Links */}
-        <div className="flex items-center justify-center gap-8 font-medium text-slate-600 text-sm overflow-x-auto pb-1 md:pb-0 scrollbar-hide w-full">
-          <Link href="/" className="hover:text-veci-primary transition-colors whitespace-nowrap">Inicio</Link>
-          <Link href="/productos" className="hover:text-veci-primary transition-colors whitespace-nowrap">Tienda</Link>
-          <Link href="/suscripcion" className="hover:text-veci-primary transition-colors whitespace-nowrap">Suscripción</Link>
-          <Link href="#" className="hover:text-veci-primary transition-colors whitespace-nowrap">Sorteos</Link>
-          <Link href="/contacto" className="hover:text-veci-primary transition-colors whitespace-nowrap">Contacto</Link>
+        <div className="flex items-center justify-start sm:justify-center gap-1.5 sm:gap-8 font-medium text-slate-600 text-xs sm:text-sm overflow-x-auto sm:overflow-visible pb-1 md:pb-0 scrollbar-hide w-full -mx-1 px-1">
+          {[
+            { href: '/', label: 'Inicio' },
+            { href: '/productos', label: 'Tienda' },
+            { href: '/amasanderia', label: 'Amasandería' },
+            { href: '/suscripcion', label: 'Suscripción' },
+            { href: '/sorteos', label: 'Sorteos', hasSubmenu: true },
+            { href: '/contacto', label: 'Contacto' },
+          ].map((item) => {
+            const isActive = item.href === '/' ? pathname === '/' : pathname?.startsWith(item.href);
+            if (item.hasSubmenu) {
+              return (
+                <div key={item.label} className="relative whitespace-nowrap" ref={sorteosMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setSorteosMenuOpen((o) => !o)}
+                    className={cn(
+                      "inline-flex items-center gap-1 transition-colors px-2.5 sm:px-0 py-1 sm:py-0 rounded-full sm:rounded-none cursor-pointer",
+                      isActive || sorteosMenuOpen
+                        ? "bg-veci-primary/10 text-veci-primary font-bold sm:bg-transparent"
+                        : "bg-white/60 sm:bg-transparent text-slate-700 sm:text-slate-600 hover:text-veci-primary"
+                    )}
+                  >
+                    {item.label}
+                    <ChevronDown className={cn("w-3 h-3 transition", sorteosMenuOpen && "rotate-180")} />
+                  </button>
+
+                  {/* Submenu — fixed en mobile para escapar del overflow horizontal del nav,
+                       absolute en desktop debajo del botón */}
+                  {sorteosMenuOpen && (
+                    <>
+                      {/* Overlay mobile que oscurece el resto y permite cerrar al tocar fuera */}
+                      <div
+                        className="sm:hidden fixed inset-0 bg-black/30 z-40"
+                        onClick={() => setSorteosMenuOpen(false)}
+                      />
+                      <div
+                        className="
+                          z-50 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden
+                          fixed left-3 right-3 top-32
+                          sm:absolute sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-full sm:mt-2 sm:w-[280px]
+                        "
+                      >
+                        <Link href="/sorteos" className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition">
+                          <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0 text-base">
+                            🎟️
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-slate-800 text-sm leading-tight">Sorteos online</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 whitespace-normal">Elige tu número y participa</p>
+                          </div>
+                        </Link>
+                        <div className="h-px bg-slate-100 mx-3" />
+                        <Link href="/sorteos/temporada" className="flex items-start gap-3 px-4 py-3 hover:bg-amber-50 transition">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0 text-base shadow-md shadow-amber-200">
+                            ✨
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-slate-800 text-sm leading-tight flex items-center gap-1.5 flex-wrap whitespace-normal">
+                              Sorteo de Temporada
+                              <span className="text-[9px] font-extrabold bg-amber-500 text-white px-1.5 py-0.5 rounded">QR LOCAL</span>
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 whitespace-normal">Inscribe tu boleta del local físico</p>
+                          </div>
+                        </Link>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={cn(
+                  "whitespace-nowrap transition-colors px-2.5 sm:px-0 py-1 sm:py-0 rounded-full sm:rounded-none",
+                  isActive
+                    ? "bg-veci-primary/10 text-veci-primary font-bold sm:bg-transparent"
+                    : "bg-white/60 sm:bg-transparent text-slate-700 sm:text-slate-600 hover:text-veci-primary"
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
 
       </div>

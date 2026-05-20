@@ -31,17 +31,17 @@ export default async function ProductsPage() {
         .orderBy(desc(products.id));
 
     return (
-        <div className="space-y-8">
-            <div className="flex items-center justify-between">
+        <div className="space-y-5 sm:space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Catálogo</h2>
-                    <p className="text-muted-foreground">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Catálogo</h2>
+                    <p className="text-sm sm:text-base text-muted-foreground">
                         Gestiona tus productos y sincronización.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Link href="/admin/products/new">
-                        <Button>
+                    <Link href="/admin/products/new" className="w-full sm:w-auto">
+                        <Button size="sm" className="w-full sm:w-auto">
                             <Plus className="mr-2 h-4 w-4" /> Nuevo Producto
                         </Button>
                     </Link>

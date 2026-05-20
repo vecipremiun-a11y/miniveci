@@ -180,9 +180,9 @@ export default function DireccionesPage() {
     );
 
     return (
-        <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl p-8 shadow-xl">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-bold text-slate-800">Mis Direcciones</h2>
+        <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-xl">
+                    <div className="flex items-center justify-between mb-4 sm:mb-6">
+                        <h2 className="text-base sm:text-xl font-bold text-slate-800">Mis Direcciones</h2>
                         {!adding && !editingId && (
                             <button onClick={startAdd}
                                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 text-indigo-600 text-sm font-semibold hover:bg-indigo-100 transition-colors">

@@ -6,10 +6,10 @@ import { SystemAlerts } from "@/components/admin/dashboard/SystemAlerts";
 
 export default function AdminDashboard() {
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             <div>
-                <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-                <p className="text-muted-foreground">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h2>
+                <p className="text-sm sm:text-base text-muted-foreground">
                     Resumen de actividad de MiniVeci.
                 </p>
             </div>
@@ -18,19 +18,19 @@ export default function AdminDashboard() {
             <StatsCards />
 
             {/* Main Content Grid */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+            <div className="grid gap-4 sm:gap-6 lg:grid-cols-7">
                 {/* Chart Section */}
-                <div className="col-span-4 lg:col-span-4">
+                <div className="lg:col-span-4 min-w-0">
                     <SalesChart />
                 </div>
 
                 {/* System Alerts - Right side on large screens */}
-                <div className="col-span-4 lg:col-span-3">
+                <div className="lg:col-span-3 min-w-0">
                     <SystemAlerts />
                 </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-4 sm:gap-6 lg:grid-cols-5">
                 {/* Recent Orders */}
                 <RecentOrders />
 

@@ -66,11 +66,11 @@ export default function SuscripcionPage() {
 
     return (
         <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white pb-20">
-            <div className="h-32 md:h-40" />
+            <div className="h-36 md:h-40" />
 
-            <div className="max-w-7xl mx-auto px-6 md:px-12 space-y-10">
-                <section className="grid lg:grid-cols-[280px_1fr] gap-6 items-start">
-                    <div className="rounded-3xl p-6 bg-gradient-to-br from-veci-dark via-violet-600 to-fuchsia-600 text-white shadow-xl">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 md:px-12 space-y-6 sm:space-y-10">
+                <section className="grid lg:grid-cols-[280px_1fr] gap-4 sm:gap-6 items-start">
+                    <div className="rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-gradient-to-br from-veci-dark via-violet-600 to-fuchsia-600 text-white shadow-xl">
                         <div className="inline-flex items-center gap-2 text-xs font-bold bg-white/15 rounded-full px-3 py-1.5 border border-white/20">
                             <Crown className="w-3.5 h-3.5" />
                             PREMIUM

@@ -22,28 +22,28 @@ export default function ContactoPage() {
             <div className="h-36 md:h-44" />
 
             {/* Hero Section */}
-            <div className="max-w-7xl mx-auto px-6 md:px-12">
-                <div className="text-center mb-12">
-                    <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-sm font-extrabold px-5 py-2.5 mb-6 shadow-lg shadow-purple-200/50">
-                        <Sparkles className="w-4 h-4" />
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 md:px-12">
+                <div className="text-center mb-6 sm:mb-12">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs sm:text-sm font-extrabold px-3 sm:px-5 py-2 sm:py-2.5 mb-4 sm:mb-6 shadow-lg shadow-purple-200/50">
+                        <Sparkles className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
                         Estamos para ti
                     </div>
-                    <h1 className="text-4xl md:text-6xl font-black text-veci-dark leading-tight">
+                    <h1 className="text-3xl sm:text-4xl md:text-6xl font-black text-veci-dark leading-tight">
                         Contáctanos
                     </h1>
-                    <p className="mt-4 text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
+                    <p className="mt-3 sm:mt-4 text-sm sm:text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed px-1">
                         ¿Tienes preguntas, sugerencias o necesitas ayuda? Estamos disponibles para ti todos los días. ¡Escríbenos!
                     </p>
                 </div>
 
                 {/* Cards Grid */}
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 mb-14">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-8 sm:mb-14">
                     {/* Location Card */}
-                    <div className="group rounded-3xl border border-white bg-white/60 backdrop-blur-md p-6 shadow-lg shadow-purple-100/30 hover:shadow-xl hover:shadow-purple-200/40 transition-all hover:-translate-y-1">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center mb-4 shadow-md shadow-rose-200/50 group-hover:scale-110 transition-transform">
-                            <MapPin className="w-7 h-7 text-white" />
+                    <div className="group rounded-2xl sm:rounded-3xl border border-white bg-white/60 backdrop-blur-md p-3 sm:p-6 shadow-lg shadow-purple-100/30 hover:shadow-xl hover:shadow-purple-200/40 transition-all hover:-translate-y-1">
+                        <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center mb-4 shadow-md shadow-rose-200/50 group-hover:scale-110 transition-transform">
+                            <MapPin className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
                         </div>
-                        <h3 className="font-extrabold text-slate-800 text-lg mb-1">Dirección</h3>
+                        <h3 className="font-extrabold text-slate-800 text-sm sm:text-lg mb-1">Dirección</h3>
                         <p className="text-slate-500 text-sm leading-relaxed">Sotomayor N°1460-A, Iquique</p>
                     </div>
 
@@ -52,12 +52,12 @@ export default function ContactoPage() {
                         href="https://wa.me/56951892258"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group rounded-3xl border border-white bg-white/60 backdrop-blur-md p-6 shadow-lg shadow-green-100/30 hover:shadow-xl hover:shadow-green-200/40 transition-all hover:-translate-y-1 cursor-pointer"
+                        className="group rounded-2xl sm:rounded-3xl border border-white bg-white/60 backdrop-blur-md p-3 sm:p-6 shadow-lg shadow-green-100/30 hover:shadow-xl hover:shadow-green-200/40 transition-all hover:-translate-y-1 cursor-pointer"
                     >
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center mb-4 shadow-md shadow-green-200/50 group-hover:scale-110 transition-transform">
-                            <Phone className="w-7 h-7 text-white" />
+                        <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center mb-4 shadow-md shadow-green-200/50 group-hover:scale-110 transition-transform">
+                            <Phone className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
                         </div>
-                        <h3 className="font-extrabold text-slate-800 text-lg mb-1">WhatsApp</h3>
+                        <h3 className="font-extrabold text-slate-800 text-sm sm:text-lg mb-1">WhatsApp</h3>
                         <p className="text-slate-500 text-sm leading-relaxed">+56 9 5189 2258</p>
                         <span className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-green-600">
                             Escríbenos <ChevronRight className="w-3 h-3" />
@@ -67,12 +67,12 @@ export default function ContactoPage() {
                     {/* Email Card */}
                     <a
                         href="mailto:Cliente@miniveci.cl"
-                        className="group rounded-3xl border border-white bg-white/60 backdrop-blur-md p-6 shadow-lg shadow-blue-100/30 hover:shadow-xl hover:shadow-blue-200/40 transition-all hover:-translate-y-1 cursor-pointer"
+                        className="group rounded-2xl sm:rounded-3xl border border-white bg-white/60 backdrop-blur-md p-3 sm:p-6 shadow-lg shadow-blue-100/30 hover:shadow-xl hover:shadow-blue-200/40 transition-all hover:-translate-y-1 cursor-pointer"
                     >
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center mb-4 shadow-md shadow-blue-200/50 group-hover:scale-110 transition-transform">
-                            <Mail className="w-7 h-7 text-white" />
+                        <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center mb-4 shadow-md shadow-blue-200/50 group-hover:scale-110 transition-transform">
+                            <Mail className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
                         </div>
-                        <h3 className="font-extrabold text-slate-800 text-lg mb-1">Correo</h3>
+                        <h3 className="font-extrabold text-slate-800 text-sm sm:text-lg mb-1">Correo</h3>
                         <p className="text-slate-500 text-sm leading-relaxed">Cliente@miniveci.cl</p>
                         <span className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-blue-600">
                             Enviar correo <ChevronRight className="w-3 h-3" />
@@ -80,11 +80,11 @@ export default function ContactoPage() {
                     </a>
 
                     {/* Schedule Card */}
-                    <div className="group rounded-3xl border border-white bg-white/60 backdrop-blur-md p-6 shadow-lg shadow-amber-100/30 hover:shadow-xl hover:shadow-amber-200/40 transition-all hover:-translate-y-1">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mb-4 shadow-md shadow-amber-200/50 group-hover:scale-110 transition-transform">
-                            <Clock className="w-7 h-7 text-white" />
+                    <div className="group rounded-2xl sm:rounded-3xl border border-white bg-white/60 backdrop-blur-md p-3 sm:p-6 shadow-lg shadow-amber-100/30 hover:shadow-xl hover:shadow-amber-200/40 transition-all hover:-translate-y-1">
+                        <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mb-4 shadow-md shadow-amber-200/50 group-hover:scale-110 transition-transform">
+                            <Clock className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
                         </div>
-                        <h3 className="font-extrabold text-slate-800 text-lg mb-1">Horario</h3>
+                        <h3 className="font-extrabold text-slate-800 text-sm sm:text-lg mb-1">Horario</h3>
                         <p className="text-slate-500 text-sm leading-relaxed">7:00 AM - 11:00 PM</p>
                         <span className="inline-flex items-center gap-1 mt-2 text-xs font-bold text-amber-600">
                             Los 365 días del año
@@ -93,21 +93,21 @@ export default function ContactoPage() {
                 </div>
 
                 {/* Main Content: Form + Map */}
-                <div className="grid lg:grid-cols-5 gap-8">
+                <div className="grid lg:grid-cols-5 gap-4 sm:gap-8">
                     {/* Contact Form */}
-                    <div className="lg:col-span-3 rounded-3xl border border-white bg-white/70 backdrop-blur-md p-8 md:p-10 shadow-xl shadow-violet-200/20">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 flex items-center justify-center">
-                                <Send className="w-5 h-5 text-white" />
+                    <div className="lg:col-span-3 rounded-2xl sm:rounded-3xl border border-white bg-white/70 backdrop-blur-md p-4 sm:p-8 md:p-10 shadow-xl shadow-violet-200/20">
+                        <div className="flex items-center gap-3 mb-4 sm:mb-6">
+                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 flex items-center justify-center shrink-0">
+                                <Send className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
                             </div>
                             <div>
-                                <h2 className="text-2xl font-extrabold text-slate-800">Envíanos un mensaje</h2>
-                                <p className="text-sm text-slate-400">Te respondemos por WhatsApp al instante</p>
+                                <h2 className="text-lg sm:text-2xl font-extrabold text-slate-800">Envíanos un mensaje</h2>
+                                <p className="text-xs sm:text-sm text-slate-400">Te respondemos por WhatsApp al instante</p>
                             </div>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-5">
-                            <div className="grid sm:grid-cols-2 gap-5">
+                        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+                            <div className="grid sm:grid-cols-2 gap-4 sm:gap-5">
                                 <div>
                                     <label className="block text-sm font-bold text-slate-600 mb-2">Nombre</label>
                                     <input
@@ -171,9 +171,9 @@ export default function ContactoPage() {
                     </div>
 
                     {/* Map + Info Sidebar */}
-                    <div className="lg:col-span-2 flex flex-col gap-6">
+                    <div className="lg:col-span-2 flex flex-col gap-4 sm:gap-6">
                         {/* Map */}
-                        <div className="rounded-3xl overflow-hidden border border-white shadow-xl shadow-slate-200/30 flex-1 min-h-[300px]">
+                        <div className="rounded-2xl sm:rounded-3xl overflow-hidden border border-white shadow-xl shadow-slate-200/30 flex-1 min-h-[200px] sm:min-h-[300px]">
                             <iframe
                                 src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3631.5!2d-70.1525!3d-20.2133!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x9152efe021d3c9b3%3A0x0!2sSotomayor%201460%2C%20Iquique!5e0!3m2!1ses!2scl!4v1"
                                 width="100%"
@@ -191,16 +191,16 @@ export default function ContactoPage() {
                             href="https://wa.me/56951892258"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="rounded-3xl bg-gradient-to-r from-green-400 to-emerald-500 p-6 text-white shadow-lg shadow-green-200/40 hover:shadow-xl hover:shadow-green-300/50 transition-all hover:-translate-y-0.5 flex items-center gap-4"
+                            className="rounded-2xl sm:rounded-3xl bg-gradient-to-r from-green-400 to-emerald-500 p-4 sm:p-6 text-white shadow-lg shadow-green-200/40 hover:shadow-xl hover:shadow-green-300/50 transition-all hover:-translate-y-0.5 flex items-center gap-3 sm:gap-4"
                         >
-                            <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
-                                <MessageCircle className="w-7 h-7" />
+                            <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                                <MessageCircle className="w-5 h-5 sm:w-7 sm:h-7" />
                             </div>
-                            <div>
-                                <h3 className="text-lg font-extrabold">¿Necesitas ayuda rápida?</h3>
-                                <p className="text-sm text-white/80 font-medium">Chatea con nosotros por WhatsApp ahora</p>
+                            <div className="min-w-0">
+                                <h3 className="text-sm sm:text-lg font-extrabold">¿Necesitas ayuda rápida?</h3>
+                                <p className="text-xs sm:text-sm text-white/80 font-medium">Chatea con nosotros por WhatsApp ahora</p>
                             </div>
-                            <ChevronRight className="w-6 h-6 ml-auto shrink-0" />
+                            <ChevronRight className="w-5 sm:w-6 h-5 sm:h-6 ml-auto shrink-0" />
                         </a>
                     </div>
                 </div>

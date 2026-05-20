@@ -162,9 +162,9 @@ function OrderList({ orders, loading, page, totalPages, onPageChange, onSelectOr
     }
 
     return (
-        <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl p-8 shadow-xl">
-            <h2 className="text-xl font-bold text-slate-800 mb-6">Mis Pedidos</h2>
-            <div className="space-y-3">
+        <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-xl">
+            <h2 className="text-base sm:text-xl font-bold text-slate-800 mb-4 sm:mb-6">Mis Pedidos</h2>
+            <div className="space-y-2.5 sm:space-y-3">
                 {orders.map(order => {
                     const statusInfo = statusLabels[order.status] || { label: order.status, color: 'bg-gray-100 text-gray-700' };
                     const date = new Date(order.createdAt);
@@ -172,12 +172,12 @@ function OrderList({ orders, loading, page, totalPages, onPageChange, onSelectOr
 
                     return (
                         <button key={order.id} onClick={() => onSelectOrder(order)}
-                            className="w-full text-left bg-white/50 backdrop-blur-sm p-5 rounded-2xl border border-white hover:shadow-md hover:bg-white/70 transition-all group">
-                            <div className="flex items-center justify-between gap-4">
+                            className="w-full text-left bg-white/50 backdrop-blur-sm p-3 sm:p-5 rounded-xl sm:rounded-2xl border border-white hover:shadow-md hover:bg-white/70 transition-all group">
+                            <div className="flex items-center justify-between gap-2 sm:gap-4">
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-3 mb-1.5 flex-wrap">
-                                        <span className="font-bold text-slate-700">#{order.orderNumber}</span>
-                                        <span className={`text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full ${statusInfo.color}`}>
+                                    <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-1.5 flex-wrap">
+                                        <span className="font-bold text-slate-700 text-sm sm:text-base">#{order.orderNumber}</span>
+                                        <span className={`text-[10px] sm:text-[11px] font-bold uppercase px-2 sm:px-2.5 py-0.5 rounded-full ${statusInfo.color}`}>
                                             {statusInfo.label}
                                         </span>
                                         {order.paymentStatus === 'pending' && order.paymentMethod !== 'contrarembolso' && !(order.paymentMethod === 'transferencia' && order.paymentId) && (
@@ -196,14 +196,14 @@ function OrderList({ orders, loading, page, totalPages, onPageChange, onSelectOr
                                             </span>
                                         )}
                                     </div>
-                                    <p className="text-sm text-slate-500 truncate">{itemsSummary}</p>
-                                    <p className="text-xs text-slate-400 mt-1">
+                                    <p className="text-xs sm:text-sm text-slate-500 truncate">{itemsSummary}</p>
+                                    <p className="text-[10px] sm:text-xs text-slate-400 mt-1">
                                         {format(date, "dd 'de' MMMM, yyyy", { locale: es })}
                                     </p>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="font-bold text-slate-800 text-lg">${order.total.toLocaleString('es-CL')}</span>
-                                    <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-veci-primary transition-colors" />
+                                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                    <span className="font-bold text-slate-800 text-sm sm:text-lg whitespace-nowrap">${order.total.toLocaleString('es-CL')}</span>
+                                    <ChevronRight className="w-4 sm:w-5 h-4 sm:h-5 text-slate-400 group-hover:text-veci-primary transition-colors" />
                                 </div>
                             </div>
                         </button>
@@ -377,21 +377,21 @@ function OrderDetail({ order, onBack }: { order: Order; onBack: () => void }) {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl p-8 shadow-xl">
-                <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-500 hover:text-veci-primary transition-colors mb-6">
+        <div className="space-y-4 sm:space-y-6">
+            <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-xl">
+                <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-500 hover:text-veci-primary transition-colors mb-4 sm:mb-6">
                     <ArrowLeft className="w-4 h-4" /> Volver a mis pedidos
                 </button>
 
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                    <div>
-                        <h2 className="text-2xl font-bold text-slate-800">Pedido #{order.orderNumber}</h2>
-                        <div className="flex items-center gap-2 text-sm text-slate-500 mt-1">
-                            <Clock className="w-3.5 h-3.5" />
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                    <div className="min-w-0">
+                        <h2 className="text-lg sm:text-2xl font-bold text-slate-800 truncate">Pedido #{order.orderNumber}</h2>
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 mt-1">
+                            <Clock className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
                             {format(date, "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
                         </div>
                     </div>
-                    <span className={`text-xs font-bold uppercase px-3 py-1.5 rounded-full ${statusInfo.color}`}>
+                    <span className={`text-[10px] sm:text-xs font-bold uppercase px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full ${statusInfo.color}`}>
                         {statusInfo.label}
                     </span>
                 </div>

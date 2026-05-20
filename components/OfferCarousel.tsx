@@ -79,9 +79,9 @@ export function OfferCarousel() {
     p.images.find((i) => i.isPrimary)?.url || p.images[0]?.url || null;
 
   return (
-    <section className="py-10 px-6 md:px-12">
+    <section className="py-6 sm:py-10 px-3 sm:px-6 md:px-12">
       <div className="max-w-7xl mx-auto">
-        <h2 className="text-3xl font-bold text-center text-veci-dark mb-8">
+        <h2 className="text-2xl sm:text-3xl font-bold text-center text-veci-dark mb-4 sm:mb-8">
           Ofertas del día 🔥
         </h2>
 
@@ -108,7 +108,7 @@ export function OfferCarousel() {
             {products.map((p) => (
               <div
                 key={p.id}
-                className="snap-start shrink-0 w-[260px] sm:w-[280px]"
+                className="snap-start shrink-0 w-[180px] sm:w-[280px]"
               >
                 <ProductCard
                   id={p.id}

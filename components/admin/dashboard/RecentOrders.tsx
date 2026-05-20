@@ -5,7 +5,7 @@ import { ArrowRight } from "lucide-react";
 
 export function RecentOrders() {
     return (
-        <Card className="col-span-4 lg:col-span-3">
+        <Card className="lg:col-span-3 min-w-0">
             <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Pedidos Recientes</CardTitle>
                 <Link
