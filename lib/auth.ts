@@ -91,7 +91,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             },
         }),
     ],
+    // En producción confiamos en el host de la request (custom domain miniveci.cl)
+    // en lugar del valor de NEXTAUTH_URL — evita redirects a URLs viejas.
+    trustHost: true,
     callbacks: {
+        async redirect({ url, baseUrl }) {
+            // Siempre clampear al dominio canónico configurado, NUNCA al vercel.app fantasma.
+            const canonical = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || baseUrl;
+            // Path relativo
+            if (url.startsWith("/")) return `${canonical}${url}`;
+            // URL absoluta del mismo origen
+            try {
+                if (new URL(url).origin === canonical) return url;
+            } catch { /* malformed */ }
+            // Cualquier otra cosa → home canónica
+            return canonical;
+        },
         async signIn({ user, account, profile }) {
             // Google flow: upsert customer en nuestra DB usando datos del perfil.
             // En credentials, el authorize() ya devolvió el user válido — pasa directo.
