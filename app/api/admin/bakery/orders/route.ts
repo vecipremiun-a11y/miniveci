@@ -45,7 +45,9 @@ export async function GET(req: NextRequest) {
             .from(bakeryOrders)
             .leftJoin(customers, eq(bakeryOrders.userId, customers.id))
             .where(conditions.length > 0 ? and(...conditions) : undefined)
-            .orderBy(asc(bakeryOrders.scheduledFor))
+            // Más nuevos arriba — para que el dueño vea encargos recién entrados al tope.
+            // (Independiente de POSVECI que usa scheduledFor ASC para producción.)
+            .orderBy(desc(bakeryOrders.createdAt))
             .limit(200);
 
         const orderIds = rows.map((r) => r.order.id);
