@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { bakeryOrders, bakeryOrderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -66,13 +66,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             occurredAt: now,
         });
 
-        // Push FCM al cliente del encargo (POSVECI cambió el estado)
-        void notifyOrderStatusChanged({
-            userId: order.userId,
-            status,
-            source: "bakery",
-            publicCode: order.publicCode,
-            orderId: order.id,
+        // Push FCM al cliente del encargo (POSVECI cambió el estado) — background after response
+        after(async () => {
+            try {
+                await notifyOrderStatusChanged({
+                    userId: order.userId,
+                    status,
+                    source: "bakery",
+                    publicCode: order.publicCode,
+                    orderId: order.id,
+                });
+            } catch (err) {
+                console.error(`[FCM] notify threw para ${order.publicCode}:`, (err as Error).message);
+            }
         });
 
         // Devolver el encargo completo actualizado (más útil para POS que recargar)

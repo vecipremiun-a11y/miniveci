@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { orders, orderItems, orderStatusHistory, products, customers } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
@@ -334,14 +334,20 @@ async function handleMobileOrder(req: NextRequest, token: string) {
         // 12. Publicar SSE para admin
         publishStoreOrderEvent({ type: "order.created", order: serialized, occurredAt: now });
 
-        // 13. Push FCM al cliente: "Recibimos tu pedido"
+        // 13. Push FCM al cliente: "Recibimos tu pedido" — background after response
         if (userType === "customer") {
-            void notifyOrderStatusChanged({
-                userId,
-                status: "new",
-                source: "store",
-                publicCode: orderNumber,
-                orderId,
+            after(async () => {
+                try {
+                    await notifyOrderStatusChanged({
+                        userId,
+                        status: "new",
+                        source: "store",
+                        publicCode: orderNumber,
+                        orderId,
+                    });
+                } catch (err) {
+                    console.error(`[FCM] notify threw para ${orderNumber}:`, (err as Error).message);
+                }
             });
         }
 
@@ -506,14 +512,20 @@ async function handleLegacyWebOrder(req: NextRequest) {
         };
         publishStoreOrderEvent({ type: "order.created", order: serialized, occurredAt: now });
 
-        // Push FCM si el cliente está identificado (logueado web)
+        // Push FCM si el cliente está identificado (logueado web) — background after response
         if (customerId) {
-            void notifyOrderStatusChanged({
-                userId: customerId,
-                status: "new",
-                source: "store",
-                publicCode: orderNumber,
-                orderId,
+            after(async () => {
+                try {
+                    await notifyOrderStatusChanged({
+                        userId: customerId,
+                        status: "new",
+                        source: "store",
+                        publicCode: orderNumber,
+                        orderId,
+                    });
+                } catch (err) {
+                    console.error(`[FCM] notify threw para ${orderNumber}:`, (err as Error).message);
+                }
             });
         }
 

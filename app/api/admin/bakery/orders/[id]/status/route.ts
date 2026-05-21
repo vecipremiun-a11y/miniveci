@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { bakeryOrders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -41,20 +41,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             occurredAt: now,
         });
 
-        // Si admin canceló desde miniveci, avisar a POSVECI.
-        // (No publicamos los otros estados porque POSVECI es la fuente de esos cambios.
-        //  No publicamos cuando POSVECI cancela vía /api/pos/... — eso evita el loop.)
-        if (status === "cancelled") {
-            void publishPreorderCancelled(id, "Cancelado por admin desde miniveci");
-        }
+        // Trabajo en background (Vercel `after()` mantiene la lambda viva post-response).
+        after(async () => {
+            // Si admin canceló desde miniveci, avisar a POSVECI.
+            // No publicamos los otros estados (POSVECI es la fuente).
+            // No publicamos cuando POSVECI cancela vía /api/pos/... — evita loop.
+            if (status === "cancelled") {
+                try {
+                    await publishPreorderCancelled(id, "Cancelado por admin desde miniveci");
+                } catch (err) {
+                    console.error(`[POSVECI] cancellation threw para ${id}:`, (err as Error).message);
+                }
+            }
 
-        // Push FCM al cliente del encargo
-        void notifyOrderStatusChanged({
-            userId: order.userId,
-            status,
-            source: "bakery",
-            publicCode: order.publicCode,
-            orderId: id,
+            // Push FCM al cliente del encargo
+            try {
+                await notifyOrderStatusChanged({
+                    userId: order.userId,
+                    status,
+                    source: "bakery",
+                    publicCode: order.publicCode,
+                    orderId: id,
+                });
+            } catch (err) {
+                console.error(`[FCM] notify threw para ${order.publicCode}:`, (err as Error).message);
+            }
         });
 
         return NextResponse.json({ success: true, status });

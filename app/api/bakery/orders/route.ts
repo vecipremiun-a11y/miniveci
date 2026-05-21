@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { bakeryOrders, bakeryOrderItems, bakeryProducts, customers } from "@/lib/db/schema";
@@ -161,27 +161,42 @@ export async function POST(req: NextRequest) {
             occurredAt: now,
         });
 
-        // 10. Publicar a POSVECI (fire-and-forget; falla sin bloquear)
-        if (customerSnapshot) {
-            const fullName = `${customerSnapshot.firstName} ${customerSnapshot.lastName}`.trim();
-            void publishPreorderCreated(serialized, {
-                externalId: user.id,
-                name: fullName || customerSnapshot.email,
-                phone: customerSnapshot.phone,
-                email: customerSnapshot.email,
-                rut: customerSnapshot.rut,
-            });
-        } else {
-            console.warn(`[POSVECI] skip publish para ${publicCode}: user ${user.id.slice(0, 8)}... (role=${user.role}) no está en tabla customers — probablemente es admin testeando. Registra una cuenta de cliente para probar el flujo completo.`);
-        }
+        // 10-11. Trabajo en background DESPUÉS de mandar la respuesta.
+        // Crítico: en Vercel serverless, `void asyncFn()` muere cuando la lambda
+        // se congela post-response. `after()` le dice a Vercel que extienda la
+        // lifetime de la lambda lo suficiente para terminar este trabajo.
+        // Esto fue la causa de POSTs a POSVECI que no llegaban en prod.
+        after(async () => {
+            // POSVECI: publica preorder al sistema del panadero
+            if (customerSnapshot) {
+                const fullName = `${customerSnapshot.firstName} ${customerSnapshot.lastName}`.trim();
+                try {
+                    await publishPreorderCreated(serialized, {
+                        externalId: user.id,
+                        name: fullName || customerSnapshot.email,
+                        phone: customerSnapshot.phone,
+                        email: customerSnapshot.email,
+                        rut: customerSnapshot.rut,
+                    });
+                } catch (err) {
+                    console.error(`[POSVECI] publisher threw para ${publicCode}:`, (err as Error).message);
+                }
+            } else {
+                console.warn(`[POSVECI] skip publish para ${publicCode}: user ${user.id.slice(0, 8)}... (role=${user.role}) no está en tabla customers — probablemente es admin testeando. Registra una cuenta de cliente para probar el flujo completo.`);
+            }
 
-        // 11. Push FCM al cliente: "Recibimos tu encargo"
-        void notifyOrderStatusChanged({
-            userId: user.id,
-            status: "pending",
-            source: "bakery",
-            publicCode,
-            orderId,
+            // FCM: push "Recibimos tu encargo"
+            try {
+                await notifyOrderStatusChanged({
+                    userId: user.id,
+                    status: "pending",
+                    source: "bakery",
+                    publicCode,
+                    orderId,
+                });
+            } catch (err) {
+                console.error(`[FCM] notify threw para ${publicCode}:`, (err as Error).message);
+            }
         });
 
         return NextResponse.json(serialized, { status: 201 });

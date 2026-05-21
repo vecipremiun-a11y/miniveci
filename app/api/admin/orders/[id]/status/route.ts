@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { orders, orderItems, products, orderStatusHistory } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
@@ -121,13 +121,19 @@ export async function PUT(
             }
         }
 
-        // Push FCM al cliente
-        void notifyOrderStatusChanged({
-            userId: order.customerId,
-            status: newStatus,
-            source: "store",
-            publicCode: order.orderNumber,
-            orderId: id,
+        // Push FCM al cliente — background after response
+        after(async () => {
+            try {
+                await notifyOrderStatusChanged({
+                    userId: order.customerId,
+                    status: newStatus,
+                    source: "store",
+                    publicCode: order.orderNumber,
+                    orderId: id,
+                });
+            } catch (err) {
+                console.error(`[FCM] notify threw para ${order.orderNumber}:`, (err as Error).message);
+            }
         });
 
         return NextResponse.json({ success: true, newStatus });
