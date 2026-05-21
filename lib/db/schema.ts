@@ -40,11 +40,16 @@ export const customers = sqliteTable("customers", {
     city: text("city").default("Santiago"),
     addressNotes: text("address_notes"),
 
+    // Google Sign-In: ID de Google (sub claim) + flag de email verificado por Google.
+    googleId: text("google_id").unique(),
+    emailVerified: integer("email_verified", { mode: "boolean" }).default(false),
+
     active: integer("active", { mode: "boolean" }).default(true),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
     customerEmailIdx: index("customer_email_idx_unique").on(table.email),
+    customerGoogleIdIdx: index("customer_google_id_idx").on(table.googleId),
 }));
 
 export const customerAddresses = sqliteTable("customer_addresses", {

@@ -1,10 +1,12 @@
 import NextAuth, { DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { signInSchema } from "./zod";
 import { db } from "./db";
 import { users, customers } from "./db/schema";
 import { eq, and } from "drizzle-orm";
 import { verifyPassword } from "./auth-utils";
+import { upsertCustomerFromGoogle } from "./customer-google-upsert";
 
 // --- NextAuth Type Augmentation ---
 declare module "next-auth" {
@@ -25,6 +27,16 @@ declare module "next-auth" {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
     providers: [
+        // Google Sign-In para customers en la web.
+        // Si las env vars no están seteadas, NextAuth omite el provider silenciosamente
+        // (el botón en /login no aparecería tampoco).
+        ...(process.env.GOOGLE_OAUTH_WEB_CLIENT_ID && process.env.GOOGLE_OAUTH_WEB_CLIENT_SECRET
+            ? [Google({
+                clientId: process.env.GOOGLE_OAUTH_WEB_CLIENT_ID,
+                clientSecret: process.env.GOOGLE_OAUTH_WEB_CLIENT_SECRET,
+                allowDangerousEmailAccountLinking: true, // permite link a cuenta existente por email
+            })]
+            : []),
         Credentials({
             credentials: {
                 email: { label: "Email", type: "email" },
@@ -80,6 +92,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }),
     ],
     callbacks: {
+        async signIn({ user, account, profile }) {
+            // Google flow: upsert customer en nuestra DB usando datos del perfil.
+            // En credentials, el authorize() ya devolvió el user válido — pasa directo.
+            if (account?.provider === "google" && profile?.sub && profile.email) {
+                try {
+                    const c = await upsertCustomerFromGoogle({
+                        googleSub: profile.sub,
+                        email: profile.email,
+                        name: profile.name ?? user?.name ?? profile.email.split("@")[0],
+                        picture: (profile.picture as string | undefined) ?? null,
+                    });
+                    // Inyectar id/role del customer al objeto user de NextAuth
+                    if (user) {
+                        user.id = c.id;
+                        user.role = "customer";
+                        user.name = c.name;
+                        user.email = c.email;
+                    }
+                } catch (err) {
+                    console.error("[auth] upsertCustomerFromGoogle failed:", err);
+                    return false;
+                }
+            }
+            return true;
+        },
         async jwt({ token, user }) {
             if (user) {
                 token.role = user.role;
