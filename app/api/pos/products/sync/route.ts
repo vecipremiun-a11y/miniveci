@@ -405,7 +405,7 @@ async function handleProductSync(req: NextRequest) {
         taxRate: data.tax_rate ?? null,
         costPrice: data.cost_price != null ? Math.round(data.cost_price) : null,
         priceTiers: priceTiers ?? null,
-        isPublished: false,
+        isPublished: true,
         createdAt: now,
         updatedAt: now,
       });

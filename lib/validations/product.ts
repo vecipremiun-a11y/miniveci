@@ -36,7 +36,7 @@ export const productSchema = z.object({
     subscriptionPrice: z.coerce.number().min(0).optional().nullable(),
 
     // Status
-    isPublished: z.boolean().default(false),
+    isPublished: z.boolean().default(true),
     isFeatured: z.boolean().default(false),
 
     // Collections/Arrays

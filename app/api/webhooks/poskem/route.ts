@@ -164,7 +164,7 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
             taxRate: taxRate ?? null,
             costPrice: costPrice ?? null,
             priceTiers: priceTiers ?? null,
-            isPublished: false,
+            isPublished: true,
             createdAt: now,
             updatedAt: now,
         });
