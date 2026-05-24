@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
 import { raffles, rafflePrizes, raffleEntries, raffleWinners, customers } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
 import { releaseExpiredReservations } from "@/lib/raffles";
 import { notifyRaffleWinner } from "@/lib/raffle-notifications";
+import { notifyRaffleWinnerPush, notifyRaffleResultPush } from "@/lib/fcm";
 import { and, eq, inArray } from "drizzle-orm";
 
 export async function POST(
@@ -87,6 +88,45 @@ export async function POST(
                 });
             }
         }
+
+        // Push notifications (fire-and-forget, después de responder al admin).
+        // Ganadores → push de victoria; resto de participantes → push de resultado.
+        const winnerCustomerIds = new Set(
+            winnerEntries
+                .map((w) => w.entry.customerId)
+                .filter((x): x is string => !!x),
+        );
+        const loserCustomerIds = Array.from(
+            new Set(
+                eligible
+                    .map((e) => e.customerId)
+                    .filter((x): x is string => !!x)
+                    .filter((id) => !winnerCustomerIds.has(id)),
+            ),
+        );
+        after(async () => {
+            await Promise.allSettled([
+                ...winnerEntries
+                    .filter((w) => w.entry.customerId)
+                    .map((w) =>
+                        notifyRaffleWinnerPush({
+                            userId: w.entry.customerId,
+                            raffleName: raffle.name,
+                            raffleSlug: raffle.slug,
+                            prizeName: w.prize.name,
+                            prizePosition: w.prize.position,
+                            number: w.entry.number,
+                        }),
+                    ),
+                ...loserCustomerIds.map((id) =>
+                    notifyRaffleResultPush({
+                        userId: id,
+                        raffleName: raffle.name,
+                        raffleSlug: raffle.slug,
+                    }),
+                ),
+            ]);
+        });
 
         // Obtener datos de ganadores
         const customerIds = winnerEntries

@@ -7,11 +7,13 @@ import { NextResponse, NextRequest } from "next/server";
 // definido + cualquier *.vercel.app.
 const DEV_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:5000",  // Flutter web (puerto autorizado en Google OAuth)
     "http://localhost:5500",  // Flutter web (Live Server)
     "http://localhost:5555",  // Flutter web (flutter run -d chrome --web-port 5555)
     "http://localhost:5173",  // Vite default
     "http://localhost:8080",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:5000",
     "http://127.0.0.1:5500",
     "http://127.0.0.1:5555",
     "http://10.0.2.2:3000",   // Android emulator

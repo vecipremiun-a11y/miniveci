@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth-utils";
+import { claimUnclaimedOrdersForCustomer } from "@/lib/pos-customer-match";
 import { z } from "zod";
 
 const registerSchema = z.object({
@@ -52,6 +53,15 @@ export async function POST(req: NextRequest) {
             comuna: data.comuna?.trim() || null,
             city: data.city?.trim() || "Santiago",
             addressNotes: data.addressNotes?.trim() || null,
+        });
+
+        // Reclamar encargos presenciales que POSVECI haya empujado antes con estos identificadores.
+        after(async () => {
+            try {
+                await claimUnclaimedOrdersForCustomer(id);
+            } catch (err) {
+                console.error(`[CLAIM] register threw para ${id}:`, (err as Error).message);
+            }
         });
 
         return NextResponse.json(

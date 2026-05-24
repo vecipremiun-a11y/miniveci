@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { randomUUID } from "crypto";
 import { ZodError } from "zod";
 import { db } from "@/lib/db";
@@ -8,6 +8,7 @@ import { hashPassword } from "@/lib/auth-utils";
 import { registerSchema } from "@/lib/validations/mobile-auth";
 import { issueTokens } from "@/lib/mobile-auth";
 import { customerToApiUser } from "@/lib/user-shape";
+import { claimUnclaimedOrdersForCustomer } from "@/lib/pos-customer-match";
 
 export async function POST(req: NextRequest) {
     try {
@@ -52,6 +53,15 @@ export async function POST(req: NextRequest) {
             email: created.email,
             role: "customer",
             userType: "customer",
+        });
+
+        // Reclamar encargos presenciales que POSVECI haya empujado antes con estos identificadores.
+        after(async () => {
+            try {
+                await claimUnclaimedOrdersForCustomer(created.id);
+            } catch (err) {
+                console.error(`[CLAIM] mobile register threw para ${created.id}:`, (err as Error).message);
+            }
         });
 
         return NextResponse.json({

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
 import { raffles, raffleEntries, subscriptions } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { getBakeryUser } from "@/lib/bakery-auth";
 import { releaseExpiredReservations, RAFFLE_RESERVE_MINUTES } from "@/lib/raffles";
 import { and, eq, ne } from "drizzle-orm";
 
@@ -11,11 +11,11 @@ export async function POST(
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const user = await getBakeryUser(req);
+        if (!user || user.role !== "customer") {
             return NextResponse.json({ error: "Debes iniciar sesión para participar" }, { status: 401 });
         }
-        const customerId = session.user.id;
+        const customerId = user.id;
 
         const { slug } = await params;
         const body = await req.json();
@@ -120,11 +120,11 @@ export async function DELETE(
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const user = await getBakeryUser(req);
+        if (!user || user.role !== "customer") {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
-        const customerId = session.user.id;
+        const customerId = user.id;
         const { slug } = await params;
         const { searchParams } = new URL(req.url);
         const number = Number(searchParams.get("number"));

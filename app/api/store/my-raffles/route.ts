@@ -1,16 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { raffleEntries, raffles, raffleWinners, rafflePrizes } from "@/lib/db/schema";
-import { auth } from "@/lib/auth";
+import { getBakeryUser } from "@/lib/bakery-auth";
 import { and, eq, inArray, desc } from "drizzle-orm";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const user = await getBakeryUser(req);
+        if (!user || user.role !== "customer") {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
-        const customerId = session.user.id;
+        const customerId = user.id;
 
         const entries = await db
             .select({ entry: raffleEntries, raffle: raffles })

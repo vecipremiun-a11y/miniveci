@@ -221,3 +221,46 @@ export async function notifyOrderStatusChanged(opts: {
         },
     });
 }
+
+// --- Sorteos ---
+
+/** Push al ganador de un sorteo. */
+export async function notifyRaffleWinnerPush(opts: {
+    userId: string | null | undefined;
+    raffleName: string;
+    raffleSlug: string;
+    prizeName: string;
+    prizePosition: number;
+    number: number;
+}): Promise<void> {
+    if (!opts.userId) return;
+    await sendPushToUser({
+        userId: opts.userId,
+        title: `🏆 ¡Ganaste el sorteo ${opts.raffleName}!`,
+        body: `Tu Nº ${opts.number} se llevó el ${opts.prizePosition}° lugar: ${opts.prizeName}. Pronto te contactamos.`,
+        data: {
+            type: "raffle_win",
+            raffleSlug: opts.raffleSlug,
+            deepLink: `miniveci://raffle/${opts.raffleSlug}`,
+        },
+    });
+}
+
+/** Push a un participante (no ganador) cuando el sorteo ya se realizó. */
+export async function notifyRaffleResultPush(opts: {
+    userId: string | null | undefined;
+    raffleName: string;
+    raffleSlug: string;
+}): Promise<void> {
+    if (!opts.userId) return;
+    await sendPushToUser({
+        userId: opts.userId,
+        title: `El sorteo ${opts.raffleName} ya tiene ganadores`,
+        body: "Revisa el resultado en la app. ¡Gracias por participar!",
+        data: {
+            type: "raffle_result",
+            raffleSlug: opts.raffleSlug,
+            deepLink: `miniveci://raffle/${opts.raffleSlug}`,
+        },
+    });
+}

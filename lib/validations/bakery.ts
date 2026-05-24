@@ -53,6 +53,53 @@ export const bakeryUpdateStatusSchema = z.object({
     status: z.enum(BAKERY_STATUSES),
 });
 
+// --- POSVECI → miniveci: encargo presencial creado en el POS ---
+// Las llaves vienen en snake_case (lo que envía POSVECI), no camelCase como en el resto.
+
+const posClientSchema = z.object({
+    external_id: z.string().optional().nullable(),
+    rut: z.string().optional().nullable(),
+    phone: z.string().optional().nullable(),
+    email: z.string().optional().nullable(),
+    name: z.string().optional().nullable(),
+}).refine(
+    (d) => !!(d.external_id || d.rut || d.phone || d.email),
+    { message: "client: al menos uno de external_id, rut, phone o email debe venir poblado" },
+);
+
+const posItemSchema = z.object({
+    product_external_id: z.string().optional().nullable(),
+    product_name: z.string().min(1, "product_name requerido"),
+    quantity: z.number().min(0.0001, "quantity > 0"),
+    unit: z.string().optional().nullable(),
+    pricing_mode: z.enum(["unit", "kg"]),
+    unit_price: z.number().int().min(0),
+    line_subtotal: z.number().int().min(0),
+    grams_per_unit: z.number().int().min(0).optional().nullable(),
+    note: z.string().max(500).optional().nullable(),
+});
+
+export const bakeryPosCreateOrderSchema = z.object({
+    external_order_id: z.string().min(1, "external_order_id requerido"),
+    source: z.string().optional().default("posveci_presencial"),
+    client: posClientSchema,
+    scheduled_for: z.string().min(10, "scheduled_for requerido"),
+    method: z.enum(["pickup", "delivery"]),
+    address: z.string().max(240).optional().nullable(),
+    items: z.array(posItemSchema).min(1, "Missing items"),
+    subtotal: z.number().int().min(0),
+    delivery_fee: z.number().int().min(0).default(0),
+    total: z.number().int().min(0),
+    deposit: z.number().int().min(0).default(0),
+    payment_method: z.string().max(40).optional().nullable(),
+    general_notes: z.string().max(500).optional().nullable(),
+}).refine(
+    (d) => d.method !== "delivery" || (d.address && d.address.trim().length > 0),
+    { message: "address requerido para delivery", path: ["address"] },
+);
+
+export type BakeryPosCreateOrderInput = z.infer<typeof bakeryPosCreateOrderSchema>;
+
 // Config (subconjunto)
 export const bakeryConfigUpdateSchema = z.object({
     min_hours_ahead: z.number().int().min(0).max(720).optional(),

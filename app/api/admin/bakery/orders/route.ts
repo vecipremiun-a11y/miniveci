@@ -61,14 +61,23 @@ export async function GET(req: NextRequest) {
             itemsByOrder.set(it.orderId, arr);
         }
 
-        const orders = rows.map((r) => ({
-            ...serializeOrder(r.order, itemsByOrder.get(r.order.id) ?? []),
-            customer: {
-                name: r.customerFirstName ? `${r.customerFirstName} ${r.customerLastName ?? ""}`.trim() : null,
-                email: r.customerEmail,
-                phone: r.customerPhone,
-            },
-        }));
+        const orders = rows.map((r) => {
+            // Guest orders (POSVECI presencial sin cuenta aún) no tienen fila en customers:
+            // caemos a los identificadores guardados en la propia orden.
+            const customerName = r.customerFirstName
+                ? `${r.customerFirstName} ${r.customerLastName ?? ""}`.trim()
+                : (r.order.guestName ?? null);
+            return {
+                ...serializeOrder(r.order, itemsByOrder.get(r.order.id) ?? []),
+                customer: {
+                    name: customerName,
+                    email: r.customerEmail ?? r.order.guestEmail,
+                    phone: r.customerPhone ?? r.order.guestPhone,
+                },
+                unclaimed: r.order.unclaimed,
+                source: r.order.source,
+            };
+        });
 
         // Resumen por estado
         const summaryRows = await db

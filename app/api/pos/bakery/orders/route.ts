@@ -1,12 +1,27 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
-import { bakeryOrders, bakeryOrderItems } from "@/lib/db/schema";
-import { and, asc, desc, eq, gt, gte, inArray, lt, lte, not } from "drizzle-orm";
-import { serializeOrder } from "@/lib/bakery";
-import { BAKERY_STATUSES, type BakeryStatus } from "@/lib/validations/bakery";
+import { bakeryOrders, bakeryOrderItems, BAKERY_GUEST_USER_ID } from "@/lib/db/schema";
+import { and, asc, desc, eq, gt, gte, inArray, lte, not } from "drizzle-orm";
+import { generatePublicCode, serializeOrder } from "@/lib/bakery";
+import { publishBakeryEvent } from "@/lib/bakery-live-updates";
+import { notifyOrderStatusChanged } from "@/lib/fcm";
+import {
+    BAKERY_STATUSES,
+    bakeryPosCreateOrderSchema,
+    type BakeryStatus,
+} from "@/lib/validations/bakery";
+import { ZodError } from "zod";
+import {
+    matchCustomerFromPos,
+    normalizeEmail,
+    normalizePhone,
+    normalizeRut,
+} from "@/lib/pos-customer-match";
 import { requirePosCredentials, withPosCors } from "@/lib/pos-auth";
 
 export const dynamic = "force-dynamic";
+const MAX_GENERATE_RETRIES = 5;
 
 export async function OPTIONS() {
     return withPosCors(new NextResponse(null, { status: 204 }));
@@ -108,5 +123,189 @@ export async function GET(req: NextRequest) {
     } catch (error) {
         console.error("[POS_BAKERY_ORDERS_GET]", error);
         return withPosCors(NextResponse.json({ error: "Internal Server Error" }, { status: 500 }));
+    }
+}
+
+/**
+ * POST /api/pos/bakery/orders
+ *
+ * Recibe un encargo presencial creado en POSVECI (cajero atiende al cliente físicamente)
+ * y lo refleja en la cuenta web/app del cliente. Contrato definido por POSVECI:
+ *
+ *   - Idempotente vía `external_order_id` (formato `posveci_{preorder_id}`).
+ *     Si llega el mismo dos veces → devuelve el mismo `public_code` con `duplicate: true`.
+ *   - Match de cliente por external_id → rut → email → phone (sin matchear por nombre).
+ *   - Si no hay match: guest order (userId='__guest__'), claim diferido cuando el
+ *     cliente luego se registra / agrega un identificador.
+ *   - NO valida `scheduled_for` contra slots web (presencial: el cajero ya acordó la hora).
+ *   - NO recalcula precios: guarda snapshot crudo del POS. El cajero ya cobró/acordó.
+ *
+ * Auth: mismas credenciales POS que el resto (x-api-key/secret).
+ */
+export async function POST(req: NextRequest) {
+    const denial = await requirePosCredentials(req);
+    if (denial) return denial;
+
+    try {
+        const rawBody = await req.json().catch(() => ({}));
+        const data = bakeryPosCreateOrderSchema.parse(rawBody);
+
+        // 1. Idempotencia: si ya existe el external_order_id, devolver el mismo public_code
+        const existing = await db.query.bakeryOrders.findFirst({
+            where: eq(bakeryOrders.externalOrderId, data.external_order_id),
+            columns: { publicCode: true },
+        });
+        if (existing) {
+            return withPosCors(NextResponse.json({
+                success: true,
+                public_code: existing.publicCode,
+                external_order_id: data.external_order_id,
+                duplicate: true,
+            }, { status: 200 }));
+        }
+
+        // 2. Match de cliente (no crea cuentas: si no hay match → guest order)
+        const matched = await matchCustomerFromPos({
+            externalId: data.client.external_id,
+            rut: data.client.rut,
+            phone: data.client.phone,
+            email: data.client.email,
+        });
+
+        const isGuest = !matched;
+        const userId = matched?.customerId ?? BAKERY_GUEST_USER_ID;
+
+        // 3. Generar public_code único
+        let publicCode = generatePublicCode();
+        for (let i = 0; i < MAX_GENERATE_RETRIES; i++) {
+            const clash = await db.query.bakeryOrders.findFirst({
+                where: eq(bakeryOrders.publicCode, publicCode),
+                columns: { id: true },
+            });
+            if (!clash) break;
+            publicCode = generatePublicCode();
+        }
+
+        const orderId = `ord_${randomUUID().slice(0, 12)}`;
+        const now = new Date().toISOString();
+        const contactPhone = data.client.phone?.trim() || null;
+
+        // 4. Insertar order + items con snapshot crudo del POS (no recalculamos)
+        await db.insert(bakeryOrders).values({
+            id: orderId,
+            publicCode,
+            userId,
+            scheduledFor: data.scheduled_for,
+            method: data.method,
+            address: data.method === "delivery" ? (data.address?.trim() ?? null) : null,
+            generalNotes: data.general_notes?.trim() || null,
+            status: "pending",
+            subtotal: data.subtotal,
+            deliveryFee: data.delivery_fee,
+            total: data.total,
+            contactPhone,
+            externalOrderId: data.external_order_id,
+            source: data.source || "posveci_presencial",
+            paymentMethod: data.payment_method?.trim() || null,
+            deposit: data.deposit,
+            unclaimed: isGuest,
+            // Solo guardamos guest_* si es guest order: para claim posterior.
+            // Si ya hubo match, esos identificadores ya están en la fila de customers.
+            guestRut: isGuest ? normalizeRut(data.client.rut) : null,
+            guestEmail: isGuest ? normalizeEmail(data.client.email) : null,
+            guestPhone: isGuest ? normalizePhone(data.client.phone) : null,
+            guestName: isGuest ? (data.client.name?.trim() || null) : null,
+            createdAt: now,
+            updatedAt: now,
+        });
+
+        // Items: usamos product_external_id como productId (cumple con el NOT NULL del schema).
+        // No validamos contra bakery_products: el POS puede tener productos que miniveci no.
+        const itemsToInsert = data.items.map((it) => ({
+            id: randomUUID(),
+            orderId,
+            productId: it.product_external_id?.trim() || `pos_${randomUUID().slice(0, 8)}`,
+            productName: it.product_name,
+            pricingMode: it.pricing_mode,
+            unitPrice: it.unit_price,
+            gramsPerUnit: it.grams_per_unit ?? null,
+            // quantity en schema es integer; redondeamos defensivo.
+            quantity: Math.round(it.quantity),
+            notes: it.note?.trim() || null,
+            subtotal: it.line_subtotal,
+        }));
+        await db.insert(bakeryOrderItems).values(itemsToInsert);
+
+        // 5. SSE para admin/encargos (siempre, aunque sea guest — el panadero quiere verlo)
+        const serialized = serializeOrder(
+            {
+                id: orderId,
+                publicCode,
+                userId,
+                scheduledFor: data.scheduled_for,
+                method: data.method,
+                address: data.method === "delivery" ? (data.address?.trim() ?? null) : null,
+                generalNotes: data.general_notes?.trim() || null,
+                status: "pending",
+                subtotal: data.subtotal,
+                deliveryFee: data.delivery_fee,
+                total: data.total,
+                contactPhone,
+                createdAt: now,
+                updatedAt: now,
+            },
+            itemsToInsert,
+        );
+        publishBakeryEvent({
+            type: "order.created",
+            order: serialized,
+            occurredAt: now,
+        });
+
+        // 6. FCM al cliente (solo si hay match — guests no tienen device token registrado)
+        if (!isGuest) {
+            after(async () => {
+                try {
+                    await notifyOrderStatusChanged({
+                        userId,
+                        status: "pending",
+                        source: "bakery",
+                        publicCode,
+                        orderId,
+                    });
+                } catch (err) {
+                    console.error(`[FCM] notify threw para ${publicCode}:`, (err as Error).message);
+                }
+            });
+        }
+
+        console.log(
+            `[POS_BAKERY_ORDER_CREATED] ${publicCode} ext=${data.external_order_id} ` +
+            `${isGuest ? "guest" : `matched(${matched.matchedBy})`}`,
+        );
+
+        return withPosCors(NextResponse.json({
+            success: true,
+            public_code: publicCode,
+            external_order_id: data.external_order_id,
+            duplicate: false,
+            unclaimed: isGuest,
+        }, { status: 201 }));
+    } catch (error) {
+        if (error instanceof ZodError) {
+            const issue = error.issues[0];
+            const path = issue?.path?.join(".") || "";
+            const msg = issue?.message || "Datos inválidos";
+            return withPosCors(NextResponse.json({
+                success: false,
+                error: path ? `${path}: ${msg}` : msg,
+                details: error.issues,
+            }, { status: 400 }));
+        }
+        console.error("[POS_BAKERY_ORDERS_POST]", error);
+        return withPosCors(NextResponse.json({
+            success: false,
+            error: "Internal error",
+        }, { status: 500 }));
     }
 }

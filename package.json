@@ -14,6 +14,7 @@
     "db:seed:bakery": "tsx --env-file=.env.local scripts/seed-bakery.ts",
     "db:migrate:push-tokens": "node --env-file=.env.local scripts/create-push-tokens-table.mjs",
     "db:migrate:google-auth": "node scripts/add-google-auth-columns.mjs",
+    "db:migrate:bakery-external": "node scripts/add-bakery-external-order-columns.mjs",
     "pos:test:patch": "tsx --env-file=.env.local scripts/test-pos-status-patch.ts",
     "test": "vitest run"
   },

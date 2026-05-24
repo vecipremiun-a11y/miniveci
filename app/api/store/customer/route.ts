@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { claimUnclaimedOrdersForCustomer } from "@/lib/pos-customer-match";
 
 export async function GET() {
     try {
@@ -65,6 +66,18 @@ export async function PUT(req: NextRequest) {
         if ('avatarUrl' in body) updateData.avatarUrl = body.avatarUrl || null;
 
         await db.update(customers).set(updateData).where(eq(customers.id, session.user.id));
+
+        // Si cambió un identificador usable para match, reclamar encargos presenciales pendientes.
+        if ('phone' in body || 'rut' in body) {
+            const customerId = session.user.id;
+            after(async () => {
+                try {
+                    await claimUnclaimedOrdersForCustomer(customerId);
+                } catch (err) {
+                    console.error(`[CLAIM] profile PUT threw para ${customerId}:`, (err as Error).message);
+                }
+            });
+        }
 
         return NextResponse.json({ message: "Perfil actualizado" });
     } catch (error) {

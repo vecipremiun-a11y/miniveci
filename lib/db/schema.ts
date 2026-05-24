@@ -524,7 +524,7 @@ export const bakeryProducts = sqliteTable("bakery_products", {
 export const bakeryOrders = sqliteTable("bakery_orders", {
     id: text("id").primaryKey(),                       // ord_xxx
     publicCode: text("public_code").notNull().unique(), // MV-A93K2
-    userId: text("user_id").notNull(),                  // customers.id
+    userId: text("user_id").notNull(),                  // customers.id (o '__guest__' si unclaimed)
     scheduledFor: text("scheduled_for").notNull(),      // ISO 8601 con fecha+hora
     method: text("method").notNull(),                   // 'pickup' | 'delivery'
     address: text("address"),
@@ -535,13 +535,34 @@ export const bakeryOrders = sqliteTable("bakery_orders", {
     deliveryFee: integer("delivery_fee").notNull().default(0),
     total: integer("total").notNull(),
     contactPhone: text("contact_phone"),
+    // Integración POSVECI (encargos presenciales empujados desde el POS).
+    externalOrderId: text("external_order_id").unique(), // posveci_{preorder_id} — idempotencia
+    source: text("source").notNull().default("web"),    // 'web' | 'posveci_presencial'
+    paymentMethod: text("payment_method"),               // Efectivo | Tarjeta | Transferencia (snapshot)
+    deposit: integer("deposit").notNull().default(0),    // abono cobrado en POSVECI
+    // Guest orders: cuando POSVECI manda un cliente sin match en miniveci,
+    // userId = '__guest__' y guardamos identificadores para claim posterior.
+    unclaimed: integer("unclaimed", { mode: "boolean" }).notNull().default(false),
+    guestRut: text("guest_rut"),
+    guestEmail: text("guest_email"),    // lowercased
+    guestPhone: text("guest_phone"),    // normalizado (solo dígitos + '+' opcional)
+    guestName: text("guest_name"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
 }, (table) => ({
     userCreatedIdx: index("bakery_orders_user_created_idx").on(table.userId, table.createdAt),
     statusScheduledIdx: index("bakery_orders_status_scheduled_idx").on(table.status, table.scheduledFor),
     scheduledIdx: index("bakery_orders_scheduled_idx").on(table.scheduledFor),
+    externalOrderIdIdx: uniqueIndex("bakery_orders_external_order_id_unq").on(table.externalOrderId),
+    unclaimedIdx: index("bakery_orders_unclaimed_idx").on(table.unclaimed),
+    guestRutIdx: index("bakery_orders_guest_rut_idx").on(table.guestRut),
+    guestEmailIdx: index("bakery_orders_guest_email_idx").on(table.guestEmail),
+    guestPhoneIdx: index("bakery_orders_guest_phone_idx").on(table.guestPhone),
 }));
+
+/** Sentinel para `bakery_orders.userId` cuando el encargo presencial no matchea
+ * ningún customer. El claim posterior reasigna userId al customer real. */
+export const BAKERY_GUEST_USER_ID = "__guest__";
 
 export const bakeryOrderItems = sqliteTable("bakery_order_items", {
     id: text("id").primaryKey(),

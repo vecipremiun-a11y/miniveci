@@ -14,6 +14,7 @@ import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
+import { claimUnclaimedOrdersForCustomer } from "@/lib/pos-customer-match";
 
 export interface UpsertCustomerInput {
     googleSub: string;
@@ -51,6 +52,15 @@ function googleOnlyPasswordSentinel(): string {
     return `GOOGLE_AUTH_NO_PASSWORD:${randomUUID()}`;
 }
 
+/** Reclama encargos presenciales (POSVECI) pendientes para este customer. Best-effort. */
+async function tryClaim(customerId: string): Promise<void> {
+    try {
+        await claimUnclaimedOrdersForCustomer(customerId);
+    } catch (err) {
+        console.error(`[CLAIM] google upsert threw para ${customerId}:`, (err as Error).message);
+    }
+}
+
 export async function upsertCustomerFromGoogle(input: UpsertCustomerInput): Promise<UpsertedCustomer> {
     const now = new Date().toISOString();
 
@@ -78,6 +88,7 @@ export async function upsertCustomerFromGoogle(input: UpsertCustomerInput): Prom
         };
         if (!byEmail.avatarUrl && input.picture) update.avatarUrl = input.picture;
         await db.update(customers).set(update).where(eq(customers.id, byEmail.id));
+        await tryClaim(byEmail.id);
         return toUpserted(byEmail, { avatarUrl: (update.avatarUrl as string | undefined) ?? byEmail.avatarUrl, isNew: false });
     }
 
@@ -99,6 +110,8 @@ export async function upsertCustomerFromGoogle(input: UpsertCustomerInput): Prom
         createdAt: now,
         updatedAt: now,
     });
+
+    await tryClaim(id);
 
     return {
         id,
