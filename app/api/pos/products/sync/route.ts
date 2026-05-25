@@ -12,6 +12,9 @@ export const maxDuration = 30;
 // Schema acepta snake_case y camelCase (POSKEM envía camelCase)
 const syncProductRawSchema = z.object({
   sku: z.string().trim().min(1, "sku es requerido"),
+  // ID maestro del producto en POSVECI (permanente). El SKU puede cambiar; este no.
+  pos_product_id: z.union([z.string(), z.number()]).optional().nullable(),
+  posProductId: z.union([z.string(), z.number()]).optional().nullable(),
   name: z.string().trim().min(1).optional(),
   category: z.string().trim().min(1).optional(),
   stock: z.number().optional(),
@@ -55,6 +58,11 @@ const syncProductRawSchema = z.object({
   })).optional().nullable(),
 }).transform((d) => ({
   sku: d.sku,
+  pos_product_id: ((): string | undefined => {
+    const v = d.pos_product_id ?? d.posProductId;
+    if (v === null || v === undefined) return undefined;
+    return String(v).trim() || undefined;
+  })(),
   name: d.name,
   category: d.category,
   stock: d.stock,
@@ -313,24 +321,50 @@ async function handleProductSync(req: NextRequest) {
     const webPrice =
       data.sale_price !== undefined ? Math.round(data.sale_price) : undefined;
 
-    // Look for existing product by SKU
-    const existing = await db
-      .select({ id: products.id, sku: products.sku, slug: products.slug })
-      .from(products)
-      .where(sql`UPPER(TRIM(${products.sku})) = ${skuUpper}`)
-      .limit(1);
+    // Identidad del producto: match por pos_product_id (llave maestra) primero;
+    // fallback a SKU para productos legacy que aún no tienen el id guardado.
+    // El SKU es mutable (cambia el código de barras) → no sirve como identidad.
+    let existingRow: { id: string; sku: string; slug: string | null } | undefined;
+    let matchedBy: "pos_id" | "sku" | null = null;
+
+    if (data.pos_product_id) {
+      const byId = await db
+        .select({ id: products.id, sku: products.sku, slug: products.slug })
+        .from(products)
+        .where(eq(products.posProductId, data.pos_product_id))
+        .limit(1);
+      if (byId[0]) { existingRow = byId[0]; matchedBy = "pos_id"; }
+    }
+
+    if (!existingRow) {
+      const bySku = await db
+        .select({ id: products.id, sku: products.sku, slug: products.slug })
+        .from(products)
+        .where(sql`UPPER(TRIM(${products.sku})) = ${skuUpper}`)
+        .limit(1);
+      if (bySku[0]) { existingRow = bySku[0]; matchedBy = "sku"; }
+    }
 
     const now = new Date().toISOString();
     let productId: string;
     let productSlug: string;
     let action: "created" | "updated";
 
-    if (existing[0]) {
+    if (existingRow) {
       // --- UPDATE ---
-      productId = existing[0].id;
-      productSlug = existing[0].slug ?? "";
+      productId = existingRow.id;
+      productSlug = existingRow.slug ?? "";
 
       const updateFields: Record<string, unknown> = { updatedAt: now };
+
+      // Alinear SKU al entrante: si matcheamos por pos_product_id y el cajero cambió
+      // el código de barras, esto actualiza el mismo producto en vez de duplicar.
+      updateFields.sku = skuUpper;
+      // Enlazar el pos_product_id (sea match por id —ya lo tiene— o por SKU legacy —se enlaza ahora).
+      if (data.pos_product_id) {
+        updateFields.posProductId = data.pos_product_id;
+      }
+      console.log(`[POS_SYNC] match por ${matchedBy} → update producto ${productId} (sku=${skuUpper})`);
 
       if (data.name !== undefined) {
         updateFields.name = data.name;
@@ -392,6 +426,7 @@ async function handleProductSync(req: NextRequest) {
       await db.insert(products).values({
         id: productId,
         sku: skuUpper,
+        posProductId: data.pos_product_id ?? null,
         name: productName,
         slug,
         categoryId,

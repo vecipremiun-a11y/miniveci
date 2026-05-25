@@ -99,6 +99,9 @@ export const categories = sqliteTable("categories", {
 export const products = sqliteTable("products", {
     id: text("id").primaryKey(),
     sku: text("sku").unique().notNull(),
+    // ID interno permanente del producto en POSVECI. Llave maestra del sync:
+    // el SKU/código de barras puede cambiar, este no. Match por aquí evita duplicados.
+    posProductId: text("pos_product_id"),
     name: text("name").notNull(),
     slug: text("slug").unique().notNull(),
     description: text("description"),
@@ -144,6 +147,7 @@ export const products = sqliteTable("products", {
     slugIdx: index("slug_idx").on(table.slug),
     skuIdx: index("sku_idx").on(table.sku),
     categoryIdIdx: index("category_id_idx").on(table.categoryId),
+    posProductIdIdx: index("products_pos_product_id_idx").on(table.posProductId),
 }));
 
 export const productImages = sqliteTable("product_images", {
