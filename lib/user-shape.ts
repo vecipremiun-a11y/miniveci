@@ -25,6 +25,32 @@ export function customerToApiUser(c: typeof customers.$inferSelect): ApiUser {
     };
 }
 
+export interface CustomerProfile extends ApiUser {
+    firstName: string;
+    lastName: string;
+    rut: string | null;
+    address: string | null;
+    comuna: string | null;
+    city: string | null;
+    addressNotes: string | null;
+    avatarUrl: string | null;
+}
+
+/** Perfil completo del customer para la pantalla "Mi cuenta" de la app (superset de ApiUser). */
+export function customerToProfile(c: typeof customers.$inferSelect): CustomerProfile {
+    return {
+        ...customerToApiUser(c),
+        firstName: c.firstName,
+        lastName: c.lastName ?? "",
+        rut: c.rut ?? null,
+        address: c.address ?? null,
+        comuna: c.comuna ?? null,
+        city: c.city ?? null,
+        addressNotes: c.addressNotes ?? null,
+        avatarUrl: c.avatarUrl ?? null,
+    };
+}
+
 export function adminToApiUser(u: typeof users.$inferSelect): ApiUser {
     return {
         id: u.id,
