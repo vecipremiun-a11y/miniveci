@@ -31,7 +31,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     try {
         const { id: idOrCode } = await params;
         const body = await req.json().catch(() => ({}));
-        const { status } = bakeryUpdateStatusSchema.parse(body);
+        const { status, delivery } = bakeryUpdateStatusSchema.parse(body);
+
+        // Detalle real de entrega (POSVECI lo manda al pasar a 'delivered'): mapear a camelCase.
+        const deliveryDetail = delivery ? {
+            realTotal: delivery.real_total,
+            depositPaid: delivery.deposit_paid,
+            balancePaid: delivery.balance_paid,
+            balancePaymentMethod: delivery.balance_payment_method ?? null,
+            items: delivery.items.map((it) => ({
+                externalProductId: it.external_product_id ?? null,
+                productName: it.product_name,
+                pricingMode: it.pricing_mode,
+                realQty: it.real_qty ?? null,
+                realWeightKg: it.real_weight_kg ?? null,
+                realTotal: it.real_total,
+            })),
+        } : null;
 
         const isPublicCode = /^MV-/i.test(idOrCode);
         const order = await db.query.bakeryOrders.findFirst({
@@ -54,7 +70,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
         const now = new Date().toISOString();
         await db.update(bakeryOrders)
-            .set({ status, updatedAt: now })
+            .set({ status, updatedAt: now, ...(deliveryDetail ? { deliveryDetail } : {}) })
             .where(eq(bakeryOrders.id, order.id));
 
         publishBakeryEvent({
@@ -86,9 +102,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             .select()
             .from(bakeryOrderItems)
             .where(eq(bakeryOrderItems.orderId, order.id));
-        const refreshed = { ...order, status, updatedAt: now };
+        const refreshed = { ...order, status, updatedAt: now, deliveryDetail: deliveryDetail ?? order.deliveryDetail };
         return withPosCors(NextResponse.json(serializeOrder(refreshed, items)));
-    } catch (error: any) {
+    } catch (error) {
         if (error instanceof ZodError) {
             return withPosCors(NextResponse.json({
                 error: error.issues[0]?.message || "Datos inválidos",

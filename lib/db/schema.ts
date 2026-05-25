@@ -540,6 +540,9 @@ export const bakeryOrders = sqliteTable("bakery_orders", {
     source: text("source").notNull().default("web"),    // 'web' | 'posveci_presencial'
     paymentMethod: text("payment_method"),               // Efectivo | Tarjeta | Transferencia (snapshot)
     deposit: integer("deposit").notNull().default(0),    // abono cobrado en POSVECI
+    // Detalle real de entrega (POSVECI lo manda al pasar a 'delivered'): total real,
+    // saldo pagado + medio, y peso/cantidad real por ítem. JSON camelCase. Null hasta entregar.
+    deliveryDetail: text("delivery_detail", { mode: "json" }),
     // Guest orders: cuando POSVECI manda un cliente sin match en miniveci,
     // userId = '__guest__' y guardamos identificadores para claim posterior.
     unclaimed: integer("unclaimed", { mode: "boolean" }).notNull().default(false),

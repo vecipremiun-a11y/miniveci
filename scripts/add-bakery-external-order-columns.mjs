@@ -57,6 +57,7 @@ const columnsToAdd = [
     ["guest_name", "ALTER TABLE bakery_orders ADD COLUMN guest_name TEXT"],
     ["payment_method", "ALTER TABLE bakery_orders ADD COLUMN payment_method TEXT"],
     ["deposit", "ALTER TABLE bakery_orders ADD COLUMN deposit INTEGER NOT NULL DEFAULT 0"],
+    ["delivery_detail", "ALTER TABLE bakery_orders ADD COLUMN delivery_detail TEXT"],
 ];
 
 for (const [name, ddl] of columnsToAdd) {

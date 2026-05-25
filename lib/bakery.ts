@@ -227,6 +227,25 @@ export interface SerializedOrderItem {
     subtotal: number;
 }
 
+/** Ítem real entregado (POSVECI lo manda al pasar a 'delivered'). */
+export interface DeliveryDetailItem {
+    externalProductId: string | null;
+    productName: string;
+    pricingMode: "unit" | "kg";
+    realQty: number | null;
+    realWeightKg: number | null;
+    realTotal: number;
+}
+
+/** Detalle real de entrega: reemplaza la estimación con lo realmente cobrado. */
+export interface DeliveryDetail {
+    realTotal: number;
+    depositPaid: number;
+    balancePaid: number;
+    balancePaymentMethod: string | null;
+    items: DeliveryDetailItem[];
+}
+
 export interface SerializedOrder {
     id: string;
     publicCode: string;
@@ -240,13 +259,28 @@ export interface SerializedOrder {
     subtotal: number;
     deliveryFee: number;
     total: number;
+    deposit: number;
+    paymentMethod: string | null;
+    delivery: DeliveryDetail | null;
     contactPhone: string | null;
     createdAt: string;
     updatedAt: string;
 }
 
+/** Parsea delivery_detail (puede venir como objeto JSON ya parseado por drizzle, o string). */
+function parseDeliveryDetail(raw: unknown): DeliveryDetail | null {
+    if (raw == null) return null;
+    try {
+        const v = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (v && typeof v === "object" && "realTotal" in v) return v as DeliveryDetail;
+        return null;
+    } catch {
+        return null;
+    }
+}
+
 export function serializeOrder(
-    o: { id: string; publicCode: string; userId: string; scheduledFor: string; method: string; address: string | null; generalNotes: string | null; status: string; subtotal: number; deliveryFee: number; total: number; contactPhone: string | null; createdAt: string; updatedAt: string },
+    o: { id: string; publicCode: string; userId: string; scheduledFor: string; method: string; address: string | null; generalNotes: string | null; status: string; subtotal: number; deliveryFee: number; total: number; contactPhone: string | null; createdAt: string; updatedAt: string; deposit?: number; paymentMethod?: string | null; deliveryDetail?: unknown },
     items: Array<{ id: string; productId: string; productName: string; pricingMode: string; unitPrice: number; gramsPerUnit: number | null; quantity: number; notes: string | null; subtotal: number }>,
 ): SerializedOrder {
     return {
@@ -272,6 +306,9 @@ export function serializeOrder(
         subtotal: o.subtotal,
         deliveryFee: o.deliveryFee,
         total: o.total,
+        deposit: o.deposit ?? 0,
+        paymentMethod: o.paymentMethod ?? null,
+        delivery: parseDeliveryDetail(o.deliveryDetail),
         contactPhone: o.contactPhone,
         createdAt: o.createdAt,
         updatedAt: o.updatedAt,

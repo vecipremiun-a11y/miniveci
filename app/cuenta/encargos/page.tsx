@@ -19,6 +19,23 @@ interface OrderItem {
     subtotal: number;
 }
 
+interface DeliveryItem {
+    externalProductId: string | null;
+    productName: string;
+    pricingMode: "unit" | "kg";
+    realQty: number | null;
+    realWeightKg: number | null;
+    realTotal: number;
+}
+
+interface DeliveryDetail {
+    realTotal: number;
+    depositPaid: number;
+    balancePaid: number;
+    balancePaymentMethod: string | null;
+    items: DeliveryItem[];
+}
+
 interface Order {
     id: string;
     publicCode: string;
@@ -31,6 +48,9 @@ interface Order {
     subtotal: number;
     deliveryFee: number;
     total: number;
+    deposit: number;
+    paymentMethod: string | null;
+    delivery: DeliveryDetail | null;
     contactPhone: string | null;
     createdAt: string;
 }
@@ -217,7 +237,7 @@ export default function MisEncargosPage() {
                                         {/* Totals */}
                                         <div className="border-t border-slate-100 pt-3 space-y-1 text-sm">
                                             <div className="flex justify-between text-slate-600">
-                                                <span>Subtotal</span><span>{formatCLP(order.subtotal)}</span>
+                                                <span>Subtotal{order.delivery ? " estimado" : ""}</span><span>{formatCLP(order.subtotal)}</span>
                                             </div>
                                             {order.deliveryFee > 0 && (
                                                 <div className="flex justify-between text-slate-600">
@@ -225,10 +245,63 @@ export default function MisEncargosPage() {
                                                 </div>
                                             )}
                                             <div className="flex justify-between font-extrabold text-base pt-1 border-t border-slate-100">
-                                                <span>Total</span><span className="text-veci-dark">{formatCLP(order.total)}</span>
+                                                <span>Total{order.delivery ? " estimado" : ""}</span><span className="text-veci-dark">{formatCLP(order.total)}</span>
                                             </div>
-                                            <p className="text-[11px] text-slate-500 pt-1">Pagas al retirar / recibir.</p>
+
+                                            {/* Abono (encargos con abono cobrado en el local) — solo si aún no se entrega */}
+                                            {!order.delivery && order.deposit > 0 && (
+                                                <div className="mt-2 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2 space-y-1">
+                                                    <div className="flex justify-between text-emerald-700 font-semibold">
+                                                        <span>Abono pagado{order.paymentMethod ? ` · ${order.paymentMethod}` : ""}</span>
+                                                        <span>{formatCLP(order.deposit)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-slate-600">
+                                                        <span>Pendiente</span>
+                                                        <span>{formatCLP(Math.max(order.total - order.deposit, 0))}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {!order.delivery && order.deposit === 0 && (
+                                                <p className="text-[11px] text-slate-500 pt-1">Pagas al retirar / recibir.</p>
+                                            )}
                                         </div>
+
+                                        {/* Detalle real de entrega (cuando ya fue entregado) */}
+                                        {order.delivery && (
+                                            <div className="rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3 space-y-2">
+                                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Detalle de entrega</p>
+                                                <ul className="space-y-1.5">
+                                                    {order.delivery.items.map((it, idx) => (
+                                                        <li key={idx} className="flex justify-between gap-3 text-sm">
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-slate-800">{it.productName}</p>
+                                                                <p className="text-[11px] text-slate-500">
+                                                                    {it.pricingMode === "kg" && it.realWeightKg != null
+                                                                        ? `${formatKg(it.realWeightKg * 1000)} reales`
+                                                                        : it.realQty != null ? `${it.realQty} u. reales` : null}
+                                                                </p>
+                                                            </div>
+                                                            <span className="font-semibold text-slate-700 shrink-0">{formatCLP(it.realTotal)}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                                <div className="border-t border-slate-200 pt-2 space-y-1 text-sm">
+                                                    <div className="flex justify-between font-extrabold text-base">
+                                                        <span>Total real</span><span className="text-veci-dark">{formatCLP(order.delivery.realTotal)}</span>
+                                                    </div>
+                                                    {order.delivery.depositPaid > 0 && (
+                                                        <div className="flex justify-between text-slate-600">
+                                                            <span>Abono</span><span>− {formatCLP(order.delivery.depositPaid)}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex justify-between text-emerald-700 font-semibold">
+                                                        <span>Saldo pagado{order.delivery.balancePaymentMethod ? ` · ${order.delivery.balancePaymentMethod}` : ""}</span>
+                                                        <span>{formatCLP(order.delivery.balancePaid)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
 
                                     </div>
                                 )}

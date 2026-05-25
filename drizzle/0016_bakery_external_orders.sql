@@ -16,6 +16,7 @@ ALTER TABLE bakery_orders ADD COLUMN guest_phone TEXT;
 ALTER TABLE bakery_orders ADD COLUMN guest_name TEXT;
 ALTER TABLE bakery_orders ADD COLUMN payment_method TEXT;
 ALTER TABLE bakery_orders ADD COLUMN deposit INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE bakery_orders ADD COLUMN delivery_detail TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS bakery_orders_external_order_id_unq
     ON bakery_orders(external_order_id);

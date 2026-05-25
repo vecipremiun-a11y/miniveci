@@ -48,9 +48,29 @@ export const bakeryCreateOrderSchema = z.object({
     { message: "Dirección requerida para delivery", path: ["address"] },
 );
 
-// Cambio de estado
+// Detalle real de entrega (POSVECI lo manda en el PATCH al pasar a 'delivered').
+// Llaves en snake_case (como las envía POSVECI); se mapean a camelCase al guardar.
+const posDeliveryItemSchema = z.object({
+    external_product_id: z.string().optional().nullable(),
+    product_name: z.string(),
+    pricing_mode: z.enum(["unit", "kg"]),
+    real_qty: z.number().optional().nullable(),
+    real_weight_kg: z.number().optional().nullable(),
+    real_total: z.number().int(),
+});
+
+export const posDeliverySchema = z.object({
+    real_total: z.number().int(),
+    deposit_paid: z.number().int().default(0),
+    balance_paid: z.number().int().default(0),
+    balance_payment_method: z.string().max(40).optional().nullable(),
+    items: z.array(posDeliveryItemSchema).default([]),
+});
+
+// Cambio de estado. `delivery` es opcional (típicamente llega con status='delivered').
 export const bakeryUpdateStatusSchema = z.object({
     status: z.enum(BAKERY_STATUSES),
+    delivery: posDeliverySchema.optional(),
 });
 
 // --- POSVECI → miniveci: encargo presencial creado en el POS ---
