@@ -10,16 +10,19 @@
  * a su cuenta.
  *
  * Prioridad de match (primer hit gana):
- *   1. external_id (customers.id directo)
+ *   1. external_id (customers.id directo) — la llave maestra; una vez enlazado por
+ *      ID, la identidad queda resuelta y no se vuelve a buscar por rut/email.
  *   2. RUT  — llave más confiable en Chile (único por ley)
  *   3. email (lowercase)
- *   4. phone (normalizado, solo dígitos)
  *
- * El nombre NUNCA se usa para matchear: es ambiguo y no es identificador único.
+ * El teléfono NO es llave de identidad (poco confiable: compartido/reciclado).
+ * Se guarda como dato en la orden pero no enlaza cuentas. El nombre tampoco
+ * se usa para matchear: es ambiguo.
  */
 import { and, eq, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers, bakeryOrders, BAKERY_GUEST_USER_ID } from "@/lib/db/schema";
+import { publishClientUpsert } from "@/lib/posveci-publisher";
 
 // --- Normalizadores ---
 
@@ -83,15 +86,15 @@ export interface PosClientInput {
 
 export interface MatchedCustomer {
     customerId: string;
-    matchedBy: "external_id" | "rut" | "email" | "phone";
+    matchedBy: "external_id" | "rut" | "email";
 }
 
 /**
  * Intenta encontrar un customer con cualquiera de los identificadores recibidos.
- * No crea nada; devuelve null si no hay match.
+ * No crea nada; devuelve null si no hay match. El teléfono no se usa para match.
  */
 export async function matchCustomerFromPos(client: PosClientInput): Promise<MatchedCustomer | null> {
-    // 1. external_id directo
+    // 1. external_id directo (llave maestra — identidad ya resuelta)
     if (client.externalId) {
         const c = await db.query.customers.findFirst({
             where: eq(customers.id, client.externalId),
@@ -103,10 +106,8 @@ export async function matchCustomerFromPos(client: PosClientInput): Promise<Matc
     // 2. RUT (normalizamos ambos lados — DB puede tener "12.345.678-9" o "123456789")
     const rutNorm = normalizeRut(client.rut);
     if (rutNorm) {
-        // No podemos normalizar en SQL fácilmente, así que traemos candidatos por RUT raw
-        // y por RUT con guion estilo "12345678-9". Para ser tolerantes, buscamos todos
-        // los que tengan RUT y filtramos en JS — esto NO escala a miles, pero la base
-        // de clientes es pequeña (panadería local).
+        // No podemos normalizar en SQL fácilmente, así que traemos candidatos con RUT
+        // y filtramos en JS — no escala a miles, pero la base es pequeña (panadería local).
         const candidates = await db
             .select({ id: customers.id, rut: customers.rut })
             .from(customers)
@@ -125,49 +126,51 @@ export async function matchCustomerFromPos(client: PosClientInput): Promise<Matc
         if (c) return { customerId: c.id, matchedBy: "email" };
     }
 
-    // 4. Phone (mismo problema que RUT: DB puede tener formatos mixtos)
-    const phoneNorm = normalizePhone(client.phone);
-    if (phoneNorm) {
-        const candidates = await db
-            .select({ id: customers.id, phone: customers.phone })
-            .from(customers)
-            .where(eq(customers.active, true));
-        const hit = candidates.find((c) => c.phone && normalizePhone(c.phone) === phoneNorm);
-        if (hit) return { customerId: hit.id, matchedBy: "phone" };
-    }
-
     return null;
+}
+
+/**
+ * ¿Existe OTRA cuenta (distinta de excludeId) con este RUT? Usado para enforcar
+ * RUT único por tienda en registro y edición de perfil. Compara normalizado.
+ */
+export async function rutTakenByOtherCustomer(rut: string, excludeId?: string): Promise<boolean> {
+    const rutNorm = normalizeRut(rut);
+    if (!rutNorm) return false;
+    const candidates = await db
+        .select({ id: customers.id, rut: customers.rut })
+        .from(customers)
+        .where(eq(customers.active, true));
+    return candidates.some((c) => c.rut && normalizeRut(c.rut) === rutNorm && c.id !== excludeId);
 }
 
 // --- Claim (deferred) ---
 
 /**
- * Cuando un customer se crea o actualiza alguno de sus identificadores
- * (rut/email/phone), llamamos esto para reasignar guest orders que matcheen.
+ * Cuando un customer se crea o actualiza su RUT o email, llamamos esto para
+ * reasignar guest orders que matcheen.
  *
- * Match por orden de prioridad: RUT → email → phone. Cualquier match basta.
- * Operación idempotente: correrla varias veces es seguro.
+ * Match por orden de prioridad: RUT → email. El teléfono NO reclama (no es llave
+ * de identidad). Una vez reclamado (unclaimed=false), no se vuelve a tocar:
+ * la identidad ya quedó resuelta por ID. Operación idempotente.
  *
  * Devuelve la lista de publicCodes reclamados (para logging).
  */
 export async function claimUnclaimedOrdersForCustomer(customerId: string): Promise<string[]> {
     const customer = await db.query.customers.findFirst({
         where: eq(customers.id, customerId),
-        columns: { id: true, rut: true, email: true, phone: true },
+        columns: { id: true, rut: true, email: true },
     });
     if (!customer) return [];
 
     const rutNorm = normalizeRut(customer.rut);
     const emailNorm = normalizeEmail(customer.email);
-    const phoneNorm = normalizePhone(customer.phone);
 
-    if (!rutNorm && !emailNorm && !phoneNorm) return [];
+    if (!rutNorm && !emailNorm) return [];
 
-    // Buscar guest orders que matcheen por cualquiera de los identificadores normalizados.
+    // Buscar guest orders que matcheen por RUT o email normalizado.
     const matchConds = [];
     if (rutNorm) matchConds.push(eq(bakeryOrders.guestRut, rutNorm));
     if (emailNorm) matchConds.push(eq(bakeryOrders.guestEmail, emailNorm));
-    if (phoneNorm) matchConds.push(eq(bakeryOrders.guestPhone, phoneNorm));
 
     const candidates = await db
         .select({ id: bakeryOrders.id, publicCode: bakeryOrders.publicCode })
@@ -194,6 +197,27 @@ export async function claimUnclaimedOrdersForCustomer(customerId: string): Promi
     }
 
     return claimed;
+}
+
+/**
+ * Carga el customer y lo sincroniza a POSVECI (upsert por ID maestro).
+ * Best-effort: nunca lanza — loguea y sigue. Llamar al registrar y al editar perfil.
+ */
+export async function syncCustomerToPosveci(customerId: string): Promise<void> {
+    try {
+        const c = await db.query.customers.findFirst({ where: eq(customers.id, customerId) });
+        if (!c) return;
+        await publishClientUpsert({
+            externalId: c.id,
+            name: `${c.firstName} ${c.lastName ?? ""}`.trim() || c.email,
+            rut: c.rut ?? null,
+            phone: c.phone || null,
+            email: c.email,
+            address: c.address ?? null,
+        });
+    } catch (err) {
+        console.error(`[POSVECI] syncCustomerToPosveci threw para ${customerId}:`, (err as Error).message);
+    }
 }
 
 // Re-export para imports limpios desde el endpoint POST

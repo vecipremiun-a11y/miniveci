@@ -153,12 +153,14 @@ export async function POST(req: NextRequest) {
         // 1. Idempotencia: si ya existe el external_order_id, devolver el mismo public_code
         const existing = await db.query.bakeryOrders.findFirst({
             where: eq(bakeryOrders.externalOrderId, data.external_order_id),
-            columns: { publicCode: true },
+            columns: { publicCode: true, userId: true },
         });
         if (existing) {
+            const existingCustomerId = existing.userId === BAKERY_GUEST_USER_ID ? null : existing.userId;
             return withPosCors(NextResponse.json({
                 success: true,
                 public_code: existing.publicCode,
+                customer_id: existingCustomerId,
                 external_order_id: data.external_order_id,
                 duplicate: true,
             }, { status: 200 }));
@@ -287,6 +289,9 @@ export async function POST(req: NextRequest) {
         return withPosCors(NextResponse.json({
             success: true,
             public_code: publicCode,
+            // ID maestro de la cuenta miniveci — POSVECI lo guarda para enlace permanente.
+            // null en guest orders (aún sin cuenta); se enlaza al reclamarse.
+            customer_id: isGuest ? null : userId,
             external_order_id: data.external_order_id,
             duplicate: false,
             unclaimed: isGuest,

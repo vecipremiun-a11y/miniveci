@@ -62,8 +62,24 @@ interface PreorderCancelledPayload {
     occurred_at: string;
 }
 
+interface ClientUpsertPayload {
+    external_id: string; // ID de la cuenta en miniveci — llave maestra permanente
+    name: string;
+    rut: string | null;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+}
+
 function getConfig(): { url: string; token: string } | null {
     const url = process.env.POSVECI_PREORDERS_URL;
+    const token = process.env.POSVECI_BEARER_TOKEN;
+    if (!url || !token) return null;
+    return { url, token };
+}
+
+function getClientsConfig(): { url: string; token: string } | null {
+    const url = process.env.POSVECI_CLIENTS_URL;
     const token = process.env.POSVECI_BEARER_TOKEN;
     if (!url || !token) return null;
     return { url, token };
@@ -192,4 +208,56 @@ export async function publishPreorderCancelled(
         return;
     }
     console.log(`[POSVECI] cancellation ${externalOrderId} publicada OK`);
+}
+
+/**
+ * Crea/actualiza un cliente en POSVECI por `external_id` (= ID de cuenta miniveci).
+ *
+ * El ID de miniveci es la llave maestra permanente: POSVECI hace UPSERT por
+ * external_id. Llamar al registrar la cuenta y en cada edición de perfil
+ * (rut/email/teléfono/nombre/dirección). Best-effort: si POSVECI no está
+ * configurado o falla, no bloquea — log y seguir.
+ */
+export async function publishClientUpsert(client: {
+    externalId: string;
+    name: string;
+    rut: string | null;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+}): Promise<void> {
+    const cfg = getClientsConfig();
+    if (!cfg) {
+        console.log("[POSVECI] POSVECI_CLIENTS_URL no configurado, omitiendo upsert de cliente");
+        return;
+    }
+
+    const payload: ClientUpsertPayload = {
+        external_id: client.externalId,
+        name: client.name,
+        rut: client.rut,
+        phone: client.phone,
+        email: client.email,
+        address: client.address,
+    };
+
+    const res = await sendWithTimeout(cfg.url, {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${cfg.token}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+    }, TIMEOUT_MS);
+
+    if (!res) {
+        console.error("[POSVECI] client upsert timeout/network error para", client.externalId);
+        return;
+    }
+    if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error(`[POSVECI] client upsert falló ${res.status} para ${client.externalId}:`, text.slice(0, 300));
+        return;
+    }
+    console.log(`[POSVECI] cliente ${client.externalId} sincronizado OK`);
 }

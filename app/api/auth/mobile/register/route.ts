@@ -8,7 +8,7 @@ import { hashPassword } from "@/lib/auth-utils";
 import { registerSchema } from "@/lib/validations/mobile-auth";
 import { issueTokens } from "@/lib/mobile-auth";
 import { customerToApiUser } from "@/lib/user-shape";
-import { claimUnclaimedOrdersForCustomer } from "@/lib/pos-customer-match";
+import { claimUnclaimedOrdersForCustomer, syncCustomerToPosveci } from "@/lib/pos-customer-match";
 
 export async function POST(req: NextRequest) {
     try {
@@ -55,8 +55,10 @@ export async function POST(req: NextRequest) {
             userType: "customer",
         });
 
-        // Reclamar encargos presenciales que POSVECI haya empujado antes con estos identificadores.
+        // Post-registro (background): sincronizar cliente a POSVECI por ID maestro y
+        // reclamar encargos presenciales pendientes.
         after(async () => {
+            await syncCustomerToPosveci(created.id);
             try {
                 await claimUnclaimedOrdersForCustomer(created.id);
             } catch (err) {

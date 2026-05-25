@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth-utils";
-import { claimUnclaimedOrdersForCustomer } from "@/lib/pos-customer-match";
+import { claimUnclaimedOrdersForCustomer, rutTakenByOtherCustomer, syncCustomerToPosveci } from "@/lib/pos-customer-match";
 import { z } from "zod";
 
 const registerSchema = z.object({
@@ -38,6 +38,14 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // RUT único por tienda (espeja la regla de POSVECI). Solo valida contra escrituras nuevas.
+        if (data.rut?.trim() && await rutTakenByOtherCustomer(data.rut.trim())) {
+            return NextResponse.json(
+                { error: "Ya existe una cuenta con este RUT" },
+                { status: 409 }
+            );
+        }
+
         const passwordHash = await hashPassword(data.password);
         const id = crypto.randomUUID();
 
@@ -55,8 +63,10 @@ export async function POST(req: NextRequest) {
             addressNotes: data.addressNotes?.trim() || null,
         });
 
-        // Reclamar encargos presenciales que POSVECI haya empujado antes con estos identificadores.
+        // Post-registro (background): sincronizar cliente a POSVECI por ID maestro y
+        // reclamar encargos presenciales pendientes con estos identificadores.
         after(async () => {
+            await syncCustomerToPosveci(id);
             try {
                 await claimUnclaimedOrdersForCustomer(id);
             } catch (err) {

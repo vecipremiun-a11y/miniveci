@@ -11,10 +11,11 @@
  *  3. Crear nuevo customer
  */
 import { randomUUID } from "crypto";
+import { after } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
-import { claimUnclaimedOrdersForCustomer } from "@/lib/pos-customer-match";
+import { claimUnclaimedOrdersForCustomer, syncCustomerToPosveci } from "@/lib/pos-customer-match";
 
 export interface UpsertCustomerInput {
     googleSub: string;
@@ -52,12 +53,20 @@ function googleOnlyPasswordSentinel(): string {
     return `GOOGLE_AUTH_NO_PASSWORD:${randomUUID()}`;
 }
 
-/** Reclama encargos presenciales (POSVECI) pendientes para este customer. Best-effort. */
+/** Reclama encargos presenciales pendientes (solo DB, rápido → inline) y sincroniza
+ * el cliente a POSVECI (round-trip de red → diferido para no bloquear el sign-in).
+ * Best-effort: nunca rompe el flujo de Google. */
 async function tryClaim(customerId: string): Promise<void> {
     try {
         await claimUnclaimedOrdersForCustomer(customerId);
     } catch (err) {
         console.error(`[CLAIM] google upsert threw para ${customerId}:`, (err as Error).message);
+    }
+    try {
+        after(() => syncCustomerToPosveci(customerId));
+    } catch {
+        // Fuera de contexto de request: ejecutar inline best-effort.
+        await syncCustomerToPosveci(customerId);
     }
 }
 
