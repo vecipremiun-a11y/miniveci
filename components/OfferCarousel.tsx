@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ProductCard } from "@/components/products/ProductCard";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crown } from "lucide-react";
 
 interface Product {
   id: string;
@@ -79,11 +79,22 @@ export function OfferCarousel() {
     p.images.find((i) => i.isPrimary)?.url || p.images[0]?.url || null;
 
   return (
-    <section className="py-6 sm:py-10 px-3 sm:px-6 md:px-12">
+    <section className="relative py-7 sm:py-12 px-3 sm:px-6 md:px-12 bg-gradient-to-b from-amber-50 via-orange-50/40 to-transparent">
       <div className="max-w-7xl mx-auto">
-        <h2 className="text-2xl sm:text-3xl font-bold text-center text-veci-dark mb-4 sm:mb-8">
-          Ofertas del día 🔥
-        </h2>
+        <div className="text-center mb-5 sm:mb-8">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-white text-[11px] font-extrabold uppercase tracking-widest shadow-md shadow-amber-200/60 mb-3">
+            <Crown className="w-3.5 h-3.5" /> Ofertas premium
+          </span>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold mb-1">
+            <span className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 bg-clip-text text-transparent">
+              Ofertas del día
+            </span>{" "}
+            🔥
+          </h2>
+          <p className="text-slate-500 text-sm sm:text-base">
+            Precios que no se repiten · por tiempo limitado
+          </p>
+        </div>
 
         <div
           className="relative group/carousel"
@@ -110,20 +121,25 @@ export function OfferCarousel() {
                 key={p.id}
                 className="snap-start shrink-0 w-[180px] sm:w-[280px]"
               >
-                <ProductCard
-                  id={p.id}
-                  name={p.name}
-                  slug={p.slug}
-                  price={p.price}
-                  offerPrice={p.offerPrice}
-                  isOffer={p.isOffer}
-                  stock={p.stock}
-                  unit={p.unit}
-                  equivLabel={p.equivLabel}
-                  equivWeight={p.equivWeight}
-                  image={primaryImage(p)}
-                  priceTiers={p.priceTiers}
-                />
+                {/* Marco dorado premium: anillo de gradiente + glow ámbar */}
+                <div className="relative rounded-2xl sm:rounded-[2.15rem] p-[2px] sm:p-[3px] bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 shadow-[0_8px_28px_-6px_rgba(234,179,8,0.5)] hover:shadow-[0_14px_44px_-6px_rgba(234,179,8,0.7)] transition-shadow duration-300">
+                  {/* brillo superior tipo destello */}
+                  <div className="pointer-events-none absolute inset-x-8 -top-px h-px bg-gradient-to-r from-transparent via-white/90 to-transparent" />
+                  <ProductCard
+                    id={p.id}
+                    name={p.name}
+                    slug={p.slug}
+                    price={p.price}
+                    offerPrice={p.offerPrice}
+                    isOffer={p.isOffer}
+                    stock={p.stock}
+                    unit={p.unit}
+                    equivLabel={p.equivLabel}
+                    equivWeight={p.equivWeight}
+                    image={primaryImage(p)}
+                    priceTiers={p.priceTiers}
+                  />
+                </div>
               </div>
             ))}
           </div>
