@@ -16,7 +16,7 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { BakeryCategory } from "@/lib/validations/bakery";
-import { BAKERY_CATEGORY_LABELS, formatCLP } from "@/lib/bakery-shared";
+import { bakeryCategoryBadgeClass, bakeryCategoryLabel, formatCLP } from "@/lib/bakery-shared";
 
 interface BakeryProduct {
     id: string;
@@ -32,20 +32,24 @@ interface BakeryProduct {
     sortOrder: number;
 }
 
-const CATEGORY_BADGE: Record<BakeryCategory, string> = {
-    pan: "bg-amber-100 text-amber-800 border-amber-200",
-    sandwich: "bg-rose-100 text-rose-700 border-rose-200",
-    hamburguesa: "bg-orange-100 text-orange-700 border-orange-200",
-    canape: "bg-violet-100 text-violet-700 border-violet-200",
-    dulce: "bg-pink-100 text-pink-700 border-pink-200",
-};
-
 export function BakeryProductTable() {
     const router = useRouter();
     const [data, setData] = useState<BakeryProduct[]>([]);
     const [loading, setLoading] = useState(true);
     const [busyId, setBusyId] = useState<string | null>(null);
     const [hideInactive, setHideInactive] = useState(false);
+    const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        fetch("/api/bakery/categories")
+            .then((r) => r.json())
+            .then((cats) => {
+                if (Array.isArray(cats)) {
+                    setCategoryLabels(Object.fromEntries(cats.map((c: { slug: string; label: string }) => [c.slug, c.label])));
+                }
+            })
+            .catch(() => { /* silent */ });
+    }, []);
 
     const fetchData = async () => {
         setLoading(true);
@@ -82,7 +86,7 @@ export function BakeryProductTable() {
     };
 
     const handleDelete = async (p: BakeryProduct) => {
-        if (!confirm(`¿Eliminar "${p.name}"?\n\nSe ocultará de la página pública pero quedará en histórico para encargos anteriores.`)) return;
+        if (!confirm(`¿Eliminar "${p.name}" de forma PERMANENTE?\n\nEsta acción no se puede deshacer. Los encargos anteriores no se afectan.\nSi solo quieres sacarlo del catálogo por ahora, usa "Ocultar".`)) return;
         setBusyId(p.id);
         try {
             const res = await fetch(`/api/admin/bakery/products/${p.id}`, { method: "DELETE" });
@@ -178,8 +182,8 @@ export function BakeryProductTable() {
                                     )}
                                 </TableCell>
                                 <TableCell>
-                                    <Badge variant="outline" className={CATEGORY_BADGE[p.category]}>
-                                        {BAKERY_CATEGORY_LABELS[p.category]}
+                                    <Badge variant="outline" className={bakeryCategoryBadgeClass(p.category)}>
+                                        {bakeryCategoryLabel(p.category, categoryLabels)}
                                     </Badge>
                                 </TableCell>
                                 <TableCell>
@@ -203,15 +207,24 @@ export function BakeryProductTable() {
                                     )}
                                 </TableCell>
                                 <TableCell>
-                                    {p.active ? (
-                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                                            <Eye className="w-3 h-3 mr-1" /> Visible
-                                        </Badge>
-                                    ) : (
-                                        <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200">
-                                            <EyeOff className="w-3 h-3 mr-1" /> Oculto
-                                        </Badge>
-                                    )}
+                                    {/* Botón directo para ocultar/mostrar (además del menú "...") */}
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleActive(p)}
+                                        disabled={busyId === p.id}
+                                        title={p.active ? "Click para ocultar del catálogo" : "Click para mostrar en el catálogo"}
+                                        className="disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {p.active ? (
+                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 cursor-pointer hover:bg-emerald-100 transition-colors">
+                                                <Eye className="w-3 h-3 mr-1" /> Visible
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors">
+                                                <EyeOff className="w-3 h-3 mr-1" /> Oculto
+                                            </Badge>
+                                        )}
+                                    </button>
                                 </TableCell>
                                 <TableCell>
                                     <DropdownMenu>

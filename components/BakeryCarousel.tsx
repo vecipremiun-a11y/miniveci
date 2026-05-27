@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Croissant, Loader2, NotebookPen } from "lucide-react";
-import { formatCLP, BAKERY_CATEGORY_LABELS } from "@/lib/bakery-shared";
+import { ChevronLeft, ChevronRight, Croissant, NotebookPen } from "lucide-react";
+import { formatCLP, bakeryCategoryLabel } from "@/lib/bakery-shared";
 import type { BakeryCategory } from "@/lib/validations/bakery";
 
 const PLACEHOLDER_IMAGE = "/placeholder-product.svg";
@@ -21,6 +21,7 @@ interface BakeryProduct {
 
 export function BakeryCarousel() {
     const [products, setProducts] = useState<BakeryProduct[]>([]);
+    const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>({});
     const [loaded, setLoaded] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -34,6 +35,15 @@ export function BakeryCarousel() {
             })
             .catch(() => { /* silent */ })
             .finally(() => setLoaded(true));
+
+        fetch("/api/bakery/categories")
+            .then((r) => r.json())
+            .then((cats) => {
+                if (Array.isArray(cats)) {
+                    setCategoryLabels(Object.fromEntries(cats.map((c: { slug: string; label: string }) => [c.slug, c.label])));
+                }
+            })
+            .catch(() => { /* silent */ });
     }, []);
 
     const scroll = useCallback((direction: "left" | "right") => {
@@ -137,7 +147,7 @@ export function BakeryCarousel() {
                                         {/* Imagen */}
                                         <div className="relative w-full h-32 sm:h-44 bg-gradient-to-br from-amber-50 to-orange-50/50 flex items-center justify-center overflow-hidden">
                                             <span className="absolute top-3 left-3 z-10 inline-flex items-center px-2.5 py-1 rounded-full bg-white/90 backdrop-blur text-amber-700 text-[10px] font-bold uppercase tracking-wide shadow-sm">
-                                                {BAKERY_CATEGORY_LABELS[p.category] ?? p.category}
+                                                {bakeryCategoryLabel(p.category, categoryLabels)}
                                             </span>
                                             <img
                                                 src={imageSrc}

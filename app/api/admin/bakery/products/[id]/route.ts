@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { del } from "@vercel/blob";
 import { db } from "@/lib/db";
 import { bakeryProducts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -45,10 +46,19 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     try {
         await requireAuth();
         const { id } = await params;
-        // Soft delete: preserva snapshots históricos en order_items
-        await db.update(bakeryProducts)
-            .set({ active: false, updatedAt: new Date().toISOString() })
-            .where(eq(bakeryProducts.id, id));
+
+        const existing = await db.query.bakeryProducts.findFirst({ where: eq(bakeryProducts.id, id) });
+        if (!existing) return NextResponse.json({ message: "Producto no encontrado" }, { status: 404 });
+
+        // Borrado real (hard delete). El histórico de encargos NO se afecta:
+        // bakery_order_items guarda un snapshot del producto y no tiene FK a esta tabla.
+        await db.delete(bakeryProducts).where(eq(bakeryProducts.id, id));
+
+        // Limpiar la imagen del blob si era una subida nuestra (evita huérfanos).
+        if (existing.imageUrl && existing.imageUrl.includes(".public.blob.vercel-storage.com")) {
+            try { await del(existing.imageUrl.split("?")[0]); } catch { /* puede ya no existir */ }
+        }
+
         return NextResponse.json({ success: true });
     } catch (error) {
         if (error instanceof AuthError) return NextResponse.json({ message: "No autorizado" }, { status: 401 });

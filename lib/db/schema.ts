@@ -592,6 +592,20 @@ export const bakeryConfig = sqliteTable("bakery_config", {
     value: text("value").notNull(), // JSON o string según corresponda
 });
 
+// Categorías de amasandería (dinámicas, creables desde el admin).
+// bakeryProducts.category guarda el `slug` de aquí.
+export const bakeryCategories = sqliteTable("bakery_categories", {
+    id: text("id").primaryKey(),
+    slug: text("slug").notNull().unique(),
+    label: text("label").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at").notNull(),
+}, (table) => ({
+    slugIdx: uniqueIndex("bakery_categories_slug_idx").on(table.slug),
+    activeIdx: index("bakery_categories_active_idx").on(table.active),
+}));
+
 export const bakeryOrdersRelations = relations(bakeryOrders, ({ many, one }) => ({
     items: many(bakeryOrderItems),
     customer: one(customers, { fields: [bakeryOrders.userId], references: [customers.id] }),

@@ -32,7 +32,7 @@ export function BakeryCartButton() {
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className={`fixed bottom-5 right-5 sm:bottom-8 sm:right-8 z-50 inline-flex items-center gap-3 pl-3 pr-5 py-3 rounded-full bg-gradient-to-r from-veci-primary to-rose-400 text-white shadow-2xl shadow-veci-primary/40 hover:shadow-3xl hover:scale-[1.03] active:scale-[0.97] transition ${pulse ? "animate-bounce" : ""}`}
+                className={`fixed bottom-5 left-5 sm:bottom-8 sm:left-8 z-50 inline-flex items-center gap-3 pl-3 pr-5 py-3 rounded-full bg-gradient-to-r from-veci-primary to-rose-400 text-white shadow-2xl shadow-veci-primary/40 hover:shadow-3xl hover:scale-[1.03] active:scale-[0.97] transition ${pulse ? "animate-bounce" : ""}`}
                 aria-label="Ver mi encargo"
             >
                 <span className="relative w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">

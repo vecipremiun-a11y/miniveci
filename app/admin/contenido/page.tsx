@@ -36,6 +36,10 @@ export default function ContenidoPage() {
   const [title, setTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
 
+  // Edición inline del enlace de cada banner existente
+  const [linkDrafts, setLinkDrafts] = useState<Record<string, string>>({});
+  const [savingLinkId, setSavingLinkId] = useState<string | null>(null);
+
   const fetchBanners = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/banners");
@@ -118,6 +122,35 @@ export default function ContenidoPage() {
       }
     } catch {
       toast.error("Error al actualizar");
+    }
+  };
+
+  const handleSaveLink = async (banner: Banner) => {
+    const draft = (linkDrafts[banner.id] ?? banner.linkUrl ?? "").trim();
+    setSavingLinkId(banner.id);
+    try {
+      const res = await fetch(`/api/admin/banners/${banner.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkUrl: draft || null }),
+      });
+      if (res.ok) {
+        setBannerList((prev) =>
+          prev.map((b) => (b.id === banner.id ? { ...b, linkUrl: draft || null } : b))
+        );
+        setLinkDrafts((p) => {
+          const next = { ...p };
+          delete next[banner.id];
+          return next;
+        });
+        toast.success("Enlace guardado");
+      } else {
+        toast.error("No se pudo guardar el enlace");
+      }
+    } catch {
+      toast.error("Error al guardar el enlace");
+    } finally {
+      setSavingLinkId(null);
     }
   };
 
@@ -303,18 +336,49 @@ export default function ContenidoPage() {
                   />
                 </div>
 
-                {/* Info */}
+                {/* Info + edición de enlace */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">
-                    {banner.title || "Sin título"}
-                  </p>
-                  {banner.linkUrl && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {banner.linkUrl}
+                  <div className="flex items-baseline gap-2">
+                    <p className="font-medium truncate">
+                      {banner.title || "Sin título"}
                     </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    Posición: {index + 1}
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      Posición: {index + 1}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <Label htmlFor={`link-${banner.id}`} className="sr-only">
+                      URL de redirección
+                    </Label>
+                    <Input
+                      id={`link-${banner.id}`}
+                      type="text"
+                      placeholder="Ej: /amasanderia  o  https://..."
+                      value={linkDrafts[banner.id] ?? banner.linkUrl ?? ""}
+                      onChange={(e) =>
+                        setLinkDrafts((p) => ({ ...p, [banner.id]: e.target.value }))
+                      }
+                      className="h-8 text-xs"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSaveLink(banner)}
+                      disabled={
+                        savingLinkId === banner.id ||
+                        (linkDrafts[banner.id] ?? banner.linkUrl ?? "") === (banner.linkUrl ?? "")
+                      }
+                      className="h-8 shrink-0"
+                    >
+                      {savingLinkId === banner.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        "Guardar"
+                      )}
+                    </Button>
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Al hacer click en el banner, el cliente irá a esta ruta. Vacío = sin redirección.
                   </p>
                 </div>
 

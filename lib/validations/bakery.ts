@@ -3,8 +3,11 @@ import { z } from "zod";
 export const BAKERY_STATUSES = ["pending", "confirmed", "preparing", "ready", "out_for_delivery", "delivered", "cancelled"] as const;
 export type BakeryStatus = (typeof BAKERY_STATUSES)[number];
 
+// Categorías "semilla" (las originales). Ahora las categorías son dinámicas
+// (tabla bakery_categories), así que el tipo es string libre — estas quedan
+// solo como defaults/fallback de labels.
 export const BAKERY_CATEGORIES = ["pan", "sandwich", "hamburguesa", "canape", "dulce"] as const;
-export type BakeryCategory = (typeof BAKERY_CATEGORIES)[number];
+export type BakeryCategory = string;
 
 export const PRICING_MODES = ["unit", "kg"] as const;
 export type PricingMode = (typeof PRICING_MODES)[number];
@@ -15,7 +18,7 @@ export const bakeryProductObjectSchema = z.object({
     name: z.string().min(1, "Nombre requerido").max(120),
     description: z.string().max(500).optional().nullable(),
     imageUrl: z.string().url().optional().nullable().or(z.literal("")),
-    category: z.enum(BAKERY_CATEGORIES),
+    category: z.string().min(1, "Categoría requerida").max(40),
     pricingMode: z.enum(PRICING_MODES),
     price: z.number().int().min(0),
     gramsPerUnit: z.number().int().min(1).optional().nullable(),

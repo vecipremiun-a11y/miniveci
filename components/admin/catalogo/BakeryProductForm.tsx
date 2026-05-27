@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm, type Resolver } from "react-hook-form";
@@ -9,7 +9,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import {
     ArrowLeft, Cookie, Loader2, Save, Image as ImageIcon, Sparkles,
-    AlertCircle, Calculator, Eye, EyeOff,
+    AlertCircle, Calculator, Eye, EyeOff, Plus, Check, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,8 +17,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { bakeryProductSchema, BAKERY_CATEGORIES, type BakeryCategory } from "@/lib/validations/bakery";
-import { BAKERY_CATEGORY_LABELS, calcBakeryItemSubtotal, formatCLP, formatKg } from "@/lib/bakery-shared";
+import { bakeryProductSchema, type BakeryCategory } from "@/lib/validations/bakery";
+import { calcBakeryItemSubtotal, formatCLP, formatKg } from "@/lib/bakery-shared";
+
+interface CategoryOption {
+    id: string;
+    slug: string;
+    label: string;
+}
 
 type FormValues = z.infer<typeof bakeryProductSchema>;
 
@@ -59,6 +65,57 @@ export function BakeryProductForm({ mode, initialData }: BakeryProductFormProps)
             sortOrder: initialData?.sortOrder ?? 0,
         },
     });
+
+    // Categorías dinámicas (cargadas del API; creables inline)
+    const [categories, setCategories] = useState<CategoryOption[]>([]);
+    const [creatingCat, setCreatingCat] = useState(false);
+    const [newCatName, setNewCatName] = useState("");
+    const [savingCat, setSavingCat] = useState(false);
+
+    useEffect(() => {
+        fetch("/api/bakery/categories")
+            .then((r) => r.json())
+            .then((data) => {
+                if (!Array.isArray(data)) return;
+                const list: CategoryOption[] = data;
+                // Si el producto ya tiene una categoría que no está en la lista (ej. inactiva), no perderla
+                const cur = form.getValues("category");
+                if (cur && !list.some((c) => c.slug === cur)) {
+                    list.push({ id: cur, slug: cur, label: cur });
+                }
+                setCategories(list);
+            })
+            .catch(() => { /* silent */ });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleCreateCategory = async () => {
+        const name = newCatName.trim();
+        if (!name) return;
+        setSavingCat(true);
+        try {
+            const res = await fetch("/api/admin/bakery/categories", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                toast.error(data.message || "No se pudo crear la categoría");
+                return;
+            }
+            const opt: CategoryOption = { id: data.id, slug: data.slug, label: data.label };
+            setCategories((prev) => (prev.some((c) => c.slug === opt.slug) ? prev : [...prev, opt]));
+            form.setValue("category", opt.slug, { shouldValidate: true });
+            setNewCatName("");
+            setCreatingCat(false);
+            toast.success(`Categoría "${opt.label}" lista`);
+        } catch {
+            toast.error("Error de conexión");
+        } finally {
+            setSavingCat(false);
+        }
+    };
 
     const pricingMode = form.watch("pricingMode");
     const price = form.watch("price") || 0;
@@ -162,18 +219,45 @@ export function BakeryProductForm({ mode, initialData }: BakeryProductFormProps)
                                     maxLength={120}
                                 />
                             </Field>
-                            <Field label="Categoría" required error={errors.category?.message}>
-                                <Select
-                                    value={form.watch("category")}
-                                    onValueChange={(v) => form.setValue("category", v as BakeryCategory, { shouldValidate: true })}
-                                >
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {BAKERY_CATEGORIES.map((c) => (
-                                            <SelectItem key={c} value={c}>{BAKERY_CATEGORY_LABELS[c]}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <Field label="Categoría" required error={errors.category?.message} hint={creatingCat ? "Escribe el nombre y confirma con ✓" : undefined}>
+                                {creatingCat ? (
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            autoFocus
+                                            placeholder="Ej: Tortas, Kuchen, Empanadas..."
+                                            value={newCatName}
+                                            maxLength={40}
+                                            onChange={(e) => setNewCatName(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") { e.preventDefault(); handleCreateCategory(); }
+                                                if (e.key === "Escape") { setCreatingCat(false); setNewCatName(""); }
+                                            }}
+                                        />
+                                        <Button type="button" size="icon" variant="outline" className="shrink-0" onClick={handleCreateCategory} disabled={savingCat || !newCatName.trim()} title="Crear y seleccionar">
+                                            {savingCat ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                        </Button>
+                                        <Button type="button" size="icon" variant="ghost" className="shrink-0" onClick={() => { setCreatingCat(false); setNewCatName(""); }} title="Cancelar">
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <Select
+                                            value={form.watch("category")}
+                                            onValueChange={(v) => form.setValue("category", v, { shouldValidate: true })}
+                                        >
+                                            <SelectTrigger className="flex-1"><SelectValue placeholder="Elige una categoría" /></SelectTrigger>
+                                            <SelectContent>
+                                                {categories.map((c) => (
+                                                    <SelectItem key={c.slug} value={c.slug}>{c.label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setCreatingCat(true)}>
+                                            <Plus className="h-4 w-4 mr-1" /> Nueva
+                                        </Button>
+                                    </div>
+                                )}
                             </Field>
                         </div>
                         <Field label="Descripción" hint="Opcional · máx. 500 caracteres" error={errors.description?.message}>

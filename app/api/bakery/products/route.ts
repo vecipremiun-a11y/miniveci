@@ -3,14 +3,13 @@ import { db } from "@/lib/db";
 import { bakeryProducts } from "@/lib/db/schema";
 import { and, asc, eq } from "drizzle-orm";
 import { serializeProduct } from "@/lib/bakery";
-import { BAKERY_CATEGORIES } from "@/lib/validations/bakery";
 
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const category = searchParams.get("category");
         const conditions = [eq(bakeryProducts.active, true)];
-        if (category && (BAKERY_CATEGORIES as readonly string[]).includes(category)) {
+        if (category) {
             conditions.push(eq(bakeryProducts.category, category));
         }
         const rows = await db
