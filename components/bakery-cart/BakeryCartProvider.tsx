@@ -13,6 +13,7 @@ export interface BakeryCartItem {
     pricingMode: "unit" | "kg";
     unitPrice: number;
     gramsPerUnit: number | null;
+    leadTimeHours?: number | null; // anticipación propia del producto (horas); null = usa el general
     quantity: number;
     notes: string | null;
     allowsNotes: boolean;

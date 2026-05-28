@@ -91,3 +91,14 @@ export function formatCLP(value: number): string {
 export function formatKg(grams: number): string {
     return `${(grams / 1000).toFixed(2)} kg`;
 }
+
+/** Anticipación humanizada: 4 → "4 h", 24 → "1 día", 48 → "2 días", 30 → "1 d 6 h". */
+export function formatLeadTime(hours: number): string {
+    const h = Math.max(0, Math.round(hours));
+    if (h === 0) return "Sin anticipación";
+    if (h < 24) return `${h} h`;
+    const days = Math.floor(h / 24);
+    const rem = h - days * 24;
+    if (rem === 0) return days === 1 ? "1 día" : `${days} días`;
+    return `${days} d ${rem} h`;
+}

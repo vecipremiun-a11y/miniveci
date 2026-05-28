@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
             pricingMode: data.pricingMode,
             price: data.price,
             gramsPerUnit: data.gramsPerUnit ?? null,
+            leadTimeHours: data.leadTimeHours ?? null,
             allowsNotes: data.allowsNotes,
             active: data.active,
             sortOrder: data.sortOrder,

@@ -6,6 +6,7 @@ import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { getBakeryUser } from "@/lib/bakery-auth";
 import {
     calcItemSubtotal,
+    effectiveMinHours,
     generatePublicCode,
     loadBakeryConfig,
     serializeOrder,
@@ -29,12 +30,8 @@ export async function POST(req: NextRequest) {
         const body = await req.json().catch(() => ({}));
         const data = bakeryCreateOrderSchema.parse(body);
 
-        // 1. Cargar config y validar fecha/hora
+        // 1. Cargar config
         const cfg = await loadBakeryConfig();
-        const dateCheck = validateScheduledFor(data.scheduledFor, cfg);
-        if (!dateCheck.ok) {
-            return NextResponse.json({ message: dateCheck.reason }, { status: 400 });
-        }
 
         // 2. Validar delivery offered
         if (data.method === "delivery" && !cfg.offersDelivery) {
@@ -53,6 +50,14 @@ export async function POST(req: NextRequest) {
             if (!productMap.has(item.productId)) {
                 return NextResponse.json({ message: `Producto no disponible: ${item.productId}` }, { status: 400 });
             }
+        }
+
+        // 3b. Anticipación efectiva = máx(general, mayor lead time de los productos del carrito).
+        //     Validar la fecha/hora contra ese mínimo (autoridad final, server-side).
+        const effMin = effectiveMinHours(cfg.minHoursAhead, products.map((p) => p.leadTimeHours));
+        const dateCheck = validateScheduledFor(data.scheduledFor, { ...cfg, minHoursAhead: effMin });
+        if (!dateCheck.ok) {
+            return NextResponse.json({ message: dateCheck.reason }, { status: 400 });
         }
 
         // 4. Calcular subtotales server-side (autoridad final)

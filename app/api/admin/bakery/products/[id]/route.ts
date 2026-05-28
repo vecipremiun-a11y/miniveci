@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         }
 
         const update: any = { updatedAt: new Date().toISOString() };
-        const fields = ["name", "description", "imageUrl", "category", "pricingMode", "price", "gramsPerUnit", "allowsNotes", "active", "sortOrder"] as const;
+        const fields = ["name", "description", "imageUrl", "category", "pricingMode", "price", "gramsPerUnit", "leadTimeHours", "allowsNotes", "active", "sortOrder"] as const;
         for (const f of fields) if (data[f] !== undefined) update[f] = data[f];
 
         await db.update(bakeryProducts).set(update).where(eq(bakeryProducts.id, id));

@@ -9,7 +9,11 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ message: "date requerida en formato YYYY-MM-DD" }, { status: 400 });
         }
         const cfg = await loadBakeryConfig();
-        const result = availableSlotsForDate(date, cfg);
+        // Anticipación del carrito (máximo lead time de sus productos). El server
+        // toma el máximo con el general — nunca permite ir más rápido que el general.
+        const leadHours = parseInt(searchParams.get("leadHours") || "0", 10) || 0;
+        const effMin = Math.max(cfg.minHoursAhead, leadHours);
+        const result = availableSlotsForDate(date, { ...cfg, minHoursAhead: effMin });
         if (!result.ok) {
             return NextResponse.json({ message: result.reason, slots: [] }, { status: 400 });
         }

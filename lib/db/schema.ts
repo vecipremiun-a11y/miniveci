@@ -515,6 +515,9 @@ export const bakeryProducts = sqliteTable("bakery_products", {
     pricingMode: text("pricing_mode").notNull(), // 'unit' | 'kg'
     price: integer("price").notNull(),           // CLP por unidad o por kg
     gramsPerUnit: integer("grams_per_unit"),     // requerido si pricingMode='kg'
+    // Anticipación mínima propia del producto (horas). null/0 → usa el general
+    // (bakery_config.min_hours_ahead). Ej: empanada = 24. El encargo toma el MÁX del carrito.
+    leadTimeHours: integer("lead_time_hours"),
     allowsNotes: integer("allows_notes", { mode: "boolean" }).notNull().default(false),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
     sortOrder: integer("sort_order").default(0),

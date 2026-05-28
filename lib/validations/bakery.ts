@@ -22,6 +22,7 @@ export const bakeryProductObjectSchema = z.object({
     pricingMode: z.enum(PRICING_MODES),
     price: z.number().int().min(0),
     gramsPerUnit: z.number().int().min(1).optional().nullable(),
+    leadTimeHours: z.number().int().min(0).max(720).optional().nullable(),
     allowsNotes: z.boolean().default(false),
     active: z.boolean().default(true),
     sortOrder: z.number().int().default(0),

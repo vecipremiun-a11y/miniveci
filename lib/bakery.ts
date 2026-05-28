@@ -209,10 +209,21 @@ export function serializeProduct(p: typeof bakeryProducts.$inferSelect) {
         pricingMode: p.pricingMode as "unit" | "kg",
         price: p.price,
         gramsPerUnit: p.gramsPerUnit,
+        leadTimeHours: p.leadTimeHours ?? null,
         allowsNotes: !!p.allowsNotes,
         active: !!p.active,
         sortOrder: p.sortOrder ?? 0,
     };
+}
+
+/**
+ * Anticipación mínima efectiva (horas) para un encargo: el máximo entre el
+ * mínimo general y el mayor lead time de los productos del carrito. Un producto
+ * nunca puede ir más rápido que el general.
+ */
+export function effectiveMinHours(globalMin: number, leadHours: Array<number | null | undefined>): number {
+    const maxLead = leadHours.reduce<number>((m, h) => Math.max(m, h ?? 0), 0);
+    return Math.max(globalMin, maxLead);
 }
 
 export interface SerializedOrderItem {

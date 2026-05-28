@@ -63,13 +63,29 @@ export default function EncargarPage() {
             .catch(() => {});
     }, []);
 
+    // Anticipación efectiva = máx(general, mayor lead time de los productos del carrito).
+    const { cartLeadHours, effMinHours, leadDriver } = useMemo(() => {
+        let maxLead = 0;
+        let driver: { name: string; hours: number } | null = null;
+        for (const it of items) {
+            const h = it.leadTimeHours ?? 0;
+            if (h > maxLead) { maxLead = h; driver = { name: it.name, hours: h }; }
+        }
+        const globalMin = config?.minHoursAhead ?? 0;
+        return {
+            cartLeadHours: maxLead,
+            effMinHours: Math.max(globalMin, maxLead),
+            leadDriver: maxLead > globalMin ? driver : null,
+        };
+    }, [items, config]);
+
     // Load slots when date changes
     useEffect(() => {
         if (!date) { setSlots([]); setSlotsError(null); return; }
         const dateStr = format(date, "yyyy-MM-dd");
         setSlotsLoading(true);
         setSlotsError(null);
-        fetch(`/api/bakery/availability?date=${dateStr}`)
+        fetch(`/api/bakery/availability?date=${dateStr}&leadHours=${cartLeadHours}`)
             .then(async (r) => {
                 const data = await r.json();
                 if (!r.ok) {
@@ -83,7 +99,7 @@ export default function EncargarPage() {
             .catch(() => setSlotsError("Error al cargar horarios"))
             .finally(() => setSlotsLoading(false));
         setTimeSlot(null);
-    }, [date]);
+    }, [date, cartLeadHours]);
 
     const deliveryFee = useMemo(() => (method === "delivery" && config ? config.deliveryFee : 0), [method, config]);
     const total = subtotal + deliveryFee;
@@ -104,7 +120,12 @@ export default function EncargarPage() {
         // ISO weekday: 1=Lun ... 7=Dom
         const jsDay = day.getDay(); // 0=Dom ... 6=Sab
         const iso = jsDay === 0 ? 7 : jsDay;
-        return config.closedWeekdays.includes(iso);
+        if (config.closedWeekdays.includes(iso)) return true;
+        // Si el cierre de ese día ya cae antes de la anticipación efectiva, no hay slots → deshabilitar.
+        const dayClose = new Date(day);
+        dayClose.setHours(config.closeHour, 0, 0, 0);
+        if (dayClose.getTime() < Date.now() + effMinHours * 3600 * 1000) return true;
+        return false;
     };
 
     const canSubmit = useMemo(() => {
@@ -284,10 +305,15 @@ export default function EncargarPage() {
                                         onSelect={setDate}
                                         disabled={isDayDisabled}
                                         locale={es}
-                                        className="bg-white rounded-2xl border border-slate-200 p-2"
+                                        className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 w-full sm:w-[340px] shrink-0 [--cell-size:2.6rem] [&_table]:w-full [&_.rdp-weekday]:text-[0.72rem] [&_.rdp-day]:text-sm"
                                     />
                                     <div className="flex-1 min-w-0 space-y-2 text-xs text-slate-600">
-                                        <p>Mínimo <strong>{config.minHoursAhead} h</strong> de anticipación.</p>
+                                        <p>Mínimo <strong>{effMinHours} h</strong> de anticipación.</p>
+                                        {leadDriver && (
+                                            <p className="text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 leading-snug">
+                                                Incluye <strong>{leadDriver.name}</strong> · necesita {leadDriver.hours} h de preparación.
+                                            </p>
+                                        )}
                                         <p>Hasta <strong>{config.maxDaysAhead} días</strong> a futuro.</p>
                                         {config.closedWeekdays.length > 0 && (
                                             <p>Cerramos: {config.closedWeekdays.map((d) => ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"][d - 1]).join(", ")}.</p>

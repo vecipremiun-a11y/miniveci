@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Cookie, Loader2, Calendar, Clock, MapPin } from "lucide-react";
 import { Footer } from "@/components/Footer";
 import { BakeryProductCard, type BakeryProductInput } from "@/components/amasanderia/BakeryProductCard";
-import { BAKERY_CATEGORY_LABELS, BAKERY_CATEGORY_ORDER } from "@/lib/bakery-shared";
+import { BAKERY_CATEGORY_LABELS, BAKERY_CATEGORY_ORDER, formatLeadTime } from "@/lib/bakery-shared";
 import type { BakeryCategory } from "@/lib/validations/bakery";
 
 type Filter = "all" | BakeryCategory;
@@ -13,6 +13,7 @@ export default function AmasanderiaPage() {
     const [products, setProducts] = useState<BakeryProductInput[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<Filter>("all");
+    const [defaultLeadHours, setDefaultLeadHours] = useState<number>(0);
 
     useEffect(() => {
         let cancel = false;
@@ -22,6 +23,13 @@ export default function AmasanderiaPage() {
             .then((data) => { if (!cancel && Array.isArray(data)) setProducts(data); })
             .catch(() => {})
             .finally(() => { if (!cancel) setLoading(false); });
+
+        // Config: el "mínimo general" se usa como fallback en cada card.
+        fetch("/api/bakery/config")
+            .then((r) => r.json())
+            .then((c) => { if (!cancel && c && typeof c.minHoursAhead === "number") setDefaultLeadHours(c.minHoursAhead); })
+            .catch(() => {});
+
         return () => { cancel = true; };
     }, []);
 
@@ -78,7 +86,7 @@ export default function AmasanderiaPage() {
                         </div>
                         <div className="flex items-center gap-2 bg-white/60 backdrop-blur rounded-2xl px-3 py-2.5">
                             <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                            <span><strong>Mínimo 12 h</strong> de anticipación</span>
+                            <span><strong>Mínimo {defaultLeadHours > 0 ? formatLeadTime(defaultLeadHours) : "—"}</strong> de anticipación</span>
                         </div>
                         <div className="flex items-center gap-2 bg-white/60 backdrop-blur rounded-2xl px-3 py-2.5">
                             <MapPin className="w-4 h-4 text-amber-600 shrink-0" />
@@ -132,12 +140,12 @@ export default function AmasanderiaPage() {
                                     <h2 className="text-xl sm:text-2xl font-bold text-slate-800">{BAKERY_CATEGORY_LABELS[cat]}</h2>
                                     <span className="text-xs text-slate-500">{list.length} producto{list.length === 1 ? "" : "s"}</span>
                                 </div>
-                                <Grid items={list} />
+                                <Grid items={list} defaultLeadHours={defaultLeadHours} />
                             </div>
                         ))}
                     </div>
                 ) : (
-                    <Grid items={visible} />
+                    <Grid items={visible} defaultLeadHours={defaultLeadHours} />
                 )}
             </section>
 
@@ -146,11 +154,11 @@ export default function AmasanderiaPage() {
     );
 }
 
-function Grid({ items }: { items: BakeryProductInput[] }) {
+function Grid({ items, defaultLeadHours }: { items: BakeryProductInput[]; defaultLeadHours: number }) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
             {items.map((p) => (
-                <BakeryProductCard key={p.id} product={p} />
+                <BakeryProductCard key={p.id} product={p} defaultLeadHours={defaultLeadHours} />
             ))}
         </div>
     );

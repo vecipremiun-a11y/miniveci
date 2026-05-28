@@ -39,6 +39,7 @@ export interface BakeryProductFormProps {
         pricingMode: "unit" | "kg";
         price: number;
         gramsPerUnit: number | null;
+        leadTimeHours: number | null;
         allowsNotes: boolean;
         active: boolean;
         sortOrder: number;
@@ -60,6 +61,7 @@ export function BakeryProductForm({ mode, initialData }: BakeryProductFormProps)
             pricingMode: initialData?.pricingMode ?? "unit",
             price: initialData?.price ?? 0,
             gramsPerUnit: initialData?.gramsPerUnit ?? null,
+            leadTimeHours: initialData?.leadTimeHours ?? null,
             allowsNotes: initialData?.allowsNotes ?? false,
             active: initialData?.active ?? true,
             sortOrder: initialData?.sortOrder ?? 0,
@@ -145,6 +147,7 @@ export function BakeryProductForm({ mode, initialData }: BakeryProductFormProps)
                 description: values.description?.trim() || null,
                 imageUrl: values.imageUrl?.trim() || null,
                 gramsPerUnit: values.pricingMode === "kg" ? values.gramsPerUnit : null,
+                leadTimeHours: values.leadTimeHours && values.leadTimeHours > 0 ? values.leadTimeHours : null,
             };
 
             const url = mode === "create"
@@ -391,6 +394,27 @@ export function BakeryProductForm({ mode, initialData }: BakeryProductFormProps)
                             checked={active}
                             onChange={(v) => form.setValue("active", v)}
                         />
+                        <Field
+                            label="Tiempo mínimo de anticipación (horas)"
+                            hint="Vacío = usa el mínimo general de la amasandería. Ej: 24 = 1 día (empanadas, productos que requieren más preparación)."
+                            error={errors.leadTimeHours?.message}
+                        >
+                            <div className="relative w-40">
+                                <Input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    max={720}
+                                    step={1}
+                                    placeholder="General"
+                                    className="pr-8"
+                                    {...form.register("leadTimeHours", {
+                                        setValueAs: (v) => (v === "" || v === null || v === undefined ? null : Number(v)),
+                                    })}
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">h</span>
+                            </div>
+                        </Field>
                         <Field
                             label="Orden"
                             hint="Número más bajo aparece antes. Útil para destacar productos."

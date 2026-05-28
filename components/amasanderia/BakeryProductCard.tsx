@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Cookie, Minus, Plus, ShoppingBag } from "lucide-react";
+import { Clock, Cookie, Minus, Plus, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import type { BakeryCategory } from "@/lib/validations/bakery";
-import { BAKERY_CATEGORY_LABELS, calcBakeryItemSubtotal, formatCLP, formatKg } from "@/lib/bakery-shared";
+import { BAKERY_CATEGORY_LABELS, calcBakeryItemSubtotal, formatCLP, formatKg, formatLeadTime } from "@/lib/bakery-shared";
 import { useBakeryCart } from "@/components/bakery-cart/BakeryCartProvider";
 import { PriceDisplay } from "./PriceDisplay";
 
@@ -17,6 +17,7 @@ export interface BakeryProductInput {
     pricingMode: "unit" | "kg";
     price: number;
     gramsPerUnit: number | null;
+    leadTimeHours?: number | null;
     allowsNotes: boolean;
 }
 
@@ -36,9 +37,14 @@ const CATEGORY_BADGE: Record<BakeryCategory, string> = {
     dulce: "bg-pink-100 text-pink-700 border-pink-200",
 };
 
-export function BakeryProductCard({ product }: { product: BakeryProductInput }) {
+export function BakeryProductCard({ product, defaultLeadHours = 0 }: { product: BakeryProductInput; defaultLeadHours?: number }) {
     const [qty, setQty] = useState(1);
     const { addItem } = useBakeryCart();
+
+    // Anticipación efectiva del producto: su propio leadTimeHours si lo tiene, o el general.
+    const productLead = product.leadTimeHours ?? 0;
+    const effectiveLead = Math.max(defaultLeadHours, productLead);
+    const isException = productLead > defaultLeadHours; // este producto necesita más que el general
 
     const subtotal = useMemo(
         () => calcBakeryItemSubtotal(
@@ -61,6 +67,7 @@ export function BakeryProductCard({ product }: { product: BakeryProductInput }) 
                 pricingMode: product.pricingMode,
                 unitPrice: product.price,
                 gramsPerUnit: product.gramsPerUnit,
+                leadTimeHours: product.leadTimeHours ?? null,
                 allowsNotes: product.allowsNotes,
             },
             qty,
@@ -92,6 +99,21 @@ export function BakeryProductCard({ product }: { product: BakeryProductInput }) 
                 <h3 className="font-bold text-slate-800 text-base sm:text-lg leading-tight">{product.name}</h3>
                 {product.description && (
                     <p className="text-xs sm:text-sm text-slate-500 mt-1.5 line-clamp-2 min-h-[2.5em]">{product.description}</p>
+                )}
+
+                {/* Badge de tiempo de preparación */}
+                {effectiveLead > 0 && (
+                    <div
+                        className={`mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border self-start ${
+                            isException
+                                ? "bg-orange-100 text-orange-800 border-orange-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
+                        }`}
+                        title={isException ? "Este producto requiere más anticipación que el resto" : "Tiempo mínimo de preparación"}
+                    >
+                        <Clock className="w-3 h-3" />
+                        Pedir con {formatLeadTime(effectiveLead)} de anticipación
+                    </div>
                 )}
 
                 <div className="mt-3">
