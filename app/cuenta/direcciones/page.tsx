@@ -142,22 +142,6 @@ export default function DireccionesPage() {
                 onAddressChange={({ address, comuna, city }) => setForm(f => ({ ...f, address, comuna, city }))}
                 onManualAddressChange={(address) => setForm(f => ({ ...f, address }))}
             />
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Comuna *</label>
-                    <input type="text" value={form.comuna}
-                        onChange={e => setForm(f => ({ ...f, comuna: e.target.value }))}
-                        placeholder="Ej: Providencia"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/50 text-sm focus:ring-2 focus:ring-veci-primary/20 focus:border-veci-primary outline-none transition-all" />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Ciudad</label>
-                    <input type="text" value={form.city}
-                        onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
-                        placeholder="Santiago"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white/50 text-sm focus:ring-2 focus:ring-veci-primary/20 focus:border-veci-primary outline-none transition-all" />
-                </div>
-            </div>
             <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Notas de entrega</label>
                 <textarea value={form.addressNotes}

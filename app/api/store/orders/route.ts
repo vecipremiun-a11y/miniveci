@@ -5,8 +5,9 @@ import { randomUUID } from "crypto";
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { ZodError } from "zod";
 import {
-    extractRaffleItems, isRaffleItemId, linkRaffleEntriesToOrder,
+    extractRaffleItems, linkRaffleEntriesToOrder,
 } from "@/lib/raffle-checkout";
+import { recalcStorePricing } from "@/lib/store-pricing";
 import { extractBearer, verifyAccessToken, AuthHttpError } from "@/lib/mobile-auth";
 import { generatePublicCode } from "@/lib/bakery";
 import { storeMobileOrderSchema } from "@/lib/validations/store-mobile";
@@ -393,10 +394,6 @@ async function handleLegacyWebOrder(req: NextRequest) {
             paymentMethod,
             paymentId,
             couponCode,
-            subtotal,
-            discount,
-            shippingCost,
-            total,
             items: cartItems,
         } = body;
 
@@ -406,9 +403,13 @@ async function handleLegacyWebOrder(req: NextRequest) {
         if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
             return NextResponse.json({ error: "El carrito está vacío" }, { status: 400 });
         }
-        if (typeof total !== "number" || total < 0) {
-            return NextResponse.json({ error: "Total inválido" }, { status: 400 });
+
+        // SEGURIDAD: recalcular montos server-side. No confiar en price/total del cliente.
+        const pricing = await recalcStorePricing(cartItems, { deliveryType, couponCode });
+        if (!pricing.ok) {
+            return NextResponse.json({ error: pricing.error || "Carrito inválido" }, { status: 400 });
         }
+        const { items: pricedItems, subtotal, discount, shippingCost, total } = pricing;
 
         const orderId = randomUUID();
         const orderNumber = generateLegacyOrderNumber();
@@ -440,36 +441,35 @@ async function handleLegacyWebOrder(req: NextRequest) {
             paymentId: paymentId || null,
             paymentStatus,
             subtotal,
-            discount: discount || 0,
-            shippingCost: shippingCost || 0,
+            discount,
+            shippingCost,
             total,
-            couponCode: couponCode || null,
+            couponCode: pricing.appliedCoupon,
             createdAt: now,
             updatedAt: now,
         });
 
         const insertedItems: Array<{ id: string; productId: string | null; productName: string; quantity: number; unitPrice: number; totalPrice: number }> = [];
-        for (const item of cartItems) {
-            const isRaffle = isRaffleItemId(item.id);
+        for (const item of pricedItems) {
             const itemId = randomUUID();
             await db.insert(orderItems).values({
                 id: itemId,
                 orderId,
-                productId: isRaffle ? null : (item.id || null),
+                productId: item.isRaffle ? null : item.id,
                 productName: item.name,
-                productSku: item.sku || item.id || "",
+                productSku: item.sku,
                 quantity: item.quantity,
-                unitPrice: item.price,
-                totalPrice: item.price * item.quantity,
+                unitPrice: item.unitPrice,
+                totalPrice: item.totalPrice,
                 createdAt: now,
             });
             insertedItems.push({
                 id: itemId,
-                productId: isRaffle ? null : (item.id || null),
+                productId: item.isRaffle ? null : item.id,
                 productName: item.name,
                 quantity: item.quantity,
-                unitPrice: item.price,
-                totalPrice: item.price * item.quantity,
+                unitPrice: item.unitPrice,
+                totalPrice: item.totalPrice,
             });
         }
 

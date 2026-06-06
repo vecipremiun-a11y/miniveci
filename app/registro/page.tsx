@@ -151,9 +151,7 @@ export default function RegisterPage() {
             <div className="w-full max-w-lg p-8 bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl relative z-10 mx-4">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-veci-primary to-veci-secondary flex items-center justify-center text-white font-bold text-3xl shadow-lg mx-auto mb-4 transform -rotate-3">
-                        N
-                    </div>
+                    <img src="/logo%20veci.png" alt="MiniVeci" className="w-24 h-24 object-contain mx-auto mb-4 drop-shadow-md" />
                     <h1 className="text-3xl font-bold text-veci-dark mb-2">Crear tu cuenta</h1>
                     <p className="text-slate-500">
                         {step === 1 ? 'Completa tus datos personales' : 'Agrega tu dirección de entrega'}

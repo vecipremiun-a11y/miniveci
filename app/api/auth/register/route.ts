@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
-import { customers } from "@/lib/db/schema";
+import { customers, customerAddresses } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth-utils";
 import { claimUnclaimedOrdersForCustomer, rutTakenByOtherCustomer, syncCustomerToPosveci } from "@/lib/pos-customer-match";
@@ -62,6 +62,23 @@ export async function POST(req: NextRequest) {
             city: data.city?.trim() || "Santiago",
             addressNotes: data.addressNotes?.trim() || null,
         });
+
+        // Si el cliente cargó dirección + comuna en el registro, crear también una
+        // entrada en customerAddresses (predeterminada) para que aparezca preseleccionada
+        // en el checkout y listada en "Mis Direcciones". Sin esto la dirección quedaría
+        // solo en el perfil y el cliente tendría que reescribirla al pedir.
+        if (data.address?.trim() && data.comuna?.trim()) {
+            await db.insert(customerAddresses).values({
+                id: crypto.randomUUID(),
+                customerId: id,
+                label: "Casa",
+                address: data.address.trim(),
+                comuna: data.comuna.trim(),
+                city: data.city?.trim() || "Santiago",
+                addressNotes: data.addressNotes?.trim() || null,
+                isDefault: true,
+            });
+        }
 
         // Post-registro (background): sincronizar cliente a POSVECI por ID maestro y
         // reclamar encargos presenciales pendientes con estos identificadores.

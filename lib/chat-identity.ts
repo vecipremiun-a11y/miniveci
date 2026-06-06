@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { chatConversations, customers } from "@/lib/db/schema";
 import { getServerSession } from "@/lib/auth-utils";
 import { publishChatEvent } from "@/lib/chat-live-updates";
+import { extractBearer, verifyAccessToken } from "@/lib/mobile-auth";
 import { and, eq, isNull } from "drizzle-orm";
 
 export interface CustomerIdentity {
@@ -38,6 +39,31 @@ export async function resolveClientIdentity(
                 name: `${customer.firstName} ${customer.lastName}`.trim(),
                 email: customer.email,
             };
+        }
+    }
+
+    // Bearer JWT (app Flutter) — mismo token que usan los endpoints /bakery/*.
+    // El payload trae sub = customerId, userType = "customer".
+    const token = extractBearer(req);
+    if (token) {
+        try {
+            const payload = await verifyAccessToken(token);
+            if (payload.userType === "customer") {
+                const customer = await db.query.customers.findFirst({
+                    where: eq(customers.id, payload.sub),
+                });
+                if (customer) {
+                    return {
+                        kind: "customer",
+                        customerId: customer.id,
+                        name: `${customer.firstName} ${customer.lastName}`.trim(),
+                        email: customer.email,
+                    };
+                }
+            }
+        } catch {
+            // Token inválido/expirado → cae a guestId. El cliente Flutter
+            // refresca el access token y reintenta por su cuenta.
         }
     }
 

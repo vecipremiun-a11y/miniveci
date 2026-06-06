@@ -3,11 +3,82 @@ import { db } from "@/lib/db";
 import { chatConversations, chatMessages, customers } from "@/lib/db/schema";
 import { resolveClientIdentity, ownsConversation } from "@/lib/chat-identity";
 import { publishChatEvent } from "@/lib/chat-live-updates";
-import { eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 const MAX_BODY = 2000;
+
+/**
+ * GET /api/chat/conversation/[id]/messages[?guestId=...]
+ * Devuelve el historial de un hilo del cliente (abierto o cerrado) para poder
+ * releerlo desde el historial. Marca como leídos los mensajes del agente.
+ */
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+    try {
+        const { id: conversationId } = await context.params;
+        const url = new URL(req.url);
+        const guestId = url.searchParams.get("guestId") || undefined;
+
+        const identity = await resolveClientIdentity(req, guestId);
+        if (!identity) {
+            return NextResponse.json({ error: "Sin identidad" }, { status: 401 });
+        }
+
+        const conversation = await db.query.chatConversations.findFirst({
+            where: eq(chatConversations.id, conversationId),
+        });
+        if (!conversation) {
+            return NextResponse.json({ error: "Conversación no encontrada" }, { status: 404 });
+        }
+        if (!ownsConversation(identity, conversation)) {
+            return NextResponse.json({ error: "Sin acceso" }, { status: 403 });
+        }
+
+        const messages = await db
+            .select()
+            .from(chatMessages)
+            .where(eq(chatMessages.conversationId, conversationId))
+            .orderBy(asc(chatMessages.createdAt))
+            .limit(200);
+
+        if (conversation.unreadCustomer && conversation.unreadCustomer > 0) {
+            await db
+                .update(chatConversations)
+                .set({ unreadCustomer: 0 })
+                .where(eq(chatConversations.id, conversationId));
+        }
+
+        return NextResponse.json({
+            conversation: {
+                id: conversation.id,
+                status: conversation.status,
+                createdAt: conversation.createdAt,
+            },
+            messages: messages.map(m => ({
+                id: m.id,
+                conversationId: m.conversationId,
+                senderType: m.senderType,
+                senderId: m.senderId,
+                senderName: m.senderName,
+                body: m.body,
+                messageType: (m as any).messageType || "text",
+                attachmentUrl: (m as any).attachmentUrl ?? null,
+                attachmentName: (m as any).attachmentName ?? null,
+                attachmentSize: (m as any).attachmentSize ?? null,
+                mimeType: (m as any).mimeType ?? null,
+                createdAt: m.createdAt,
+            })),
+            identity: {
+                kind: identity.kind,
+                name: identity.kind === "customer" ? identity.name : null,
+            },
+        });
+    } catch (error) {
+        console.error("[CHAT_MESSAGES_GET]", error);
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    }
+}
 
 /**
  * POST /api/chat/conversation/[id]/messages

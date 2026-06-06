@@ -75,6 +75,15 @@ export default function AddressAutocomplete({
     const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
     const [mapsReady, setMapsReady] = useState(false);
 
+    // Mantener la última callback y los valores actuales en refs para que el listener
+    // de Google (creado una sola vez) lea siempre los valores frescos sin recrearse.
+    const onAddressChangeRef = useRef(onAddressChange);
+    const comunaRef = useRef(comuna);
+    const cityRef = useRef(city);
+    useEffect(() => { onAddressChangeRef.current = onAddressChange; }, [onAddressChange]);
+    useEffect(() => { comunaRef.current = comuna; }, [comuna]);
+    useEffect(() => { cityRef.current = city; }, [city]);
+
     useEffect(() => {
         loadGoogleMaps().then(() => {
             if (window.google?.maps?.places) {
@@ -113,12 +122,20 @@ export default function AddressAutocomplete({
                 }
             }
 
-            const fullAddress = streetNumber ? `${route} ${streetNumber}` : route || place.formatted_address || '';
+            // Construir SOLO la calle (sin comuna/ciudad/país). Si Google no entregó una
+            // `route`, usar el primer segmento de la direccion formateada (antes de la 1ra
+            // coma) para no arrastrar la ciudad dentro del campo de direccion.
+            let streetAddress = '';
+            if (route) {
+                streetAddress = streetNumber ? `${route} ${streetNumber}` : route;
+            } else if (place.formatted_address) {
+                streetAddress = place.formatted_address.split(',')[0].trim();
+            }
 
-            onAddressChange({
-                address: fullAddress,
-                comuna: newComuna || comuna,
-                city: newCity || city,
+            onAddressChangeRef.current({
+                address: streetAddress,
+                comuna: newComuna || comunaRef.current,
+                city: newCity || cityRef.current,
             });
         });
 
@@ -130,7 +147,7 @@ export default function AddressAutocomplete({
                 autocompleteRef.current = null;
             }
         };
-    }, [mapsReady, city, comuna, onAddressChange]);
+    }, [mapsReady]);
 
     const handleManualChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         if (onManualAddressChange) {

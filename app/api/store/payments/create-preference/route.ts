@@ -3,7 +3,8 @@ import { mpPreference } from "@/lib/mercadopago";
 import { db } from "@/lib/db";
 import { orders, orderItems, orderStatusHistory } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
-import { extractRaffleItems, isRaffleItemId, linkRaffleEntriesToOrder } from "@/lib/raffle-checkout";
+import { extractRaffleItems, linkRaffleEntriesToOrder } from "@/lib/raffle-checkout";
+import { recalcStorePricing } from "@/lib/store-pricing";
 
 function generateOrderNumber() {
     const now = new Date();
@@ -33,10 +34,6 @@ export async function POST(req: NextRequest) {
             shippingCity,
             shippingNotes,
             couponCode,
-            subtotal,
-            discount,
-            shippingCost,
-            total,
             items: cartItems,
         } = body;
 
@@ -46,9 +43,14 @@ export async function POST(req: NextRequest) {
         if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
             return NextResponse.json({ error: "El carrito está vacío" }, { status: 400 });
         }
-        if (typeof total !== "number" || total < 0) {
-            return NextResponse.json({ error: "Total inválido" }, { status: 400 });
+
+        // SEGURIDAD: recalcular precios/subtotal/envío/descuento/total server-side.
+        // Nunca confiar en los montos que envía el navegador (price tampering).
+        const pricing = await recalcStorePricing(cartItems, { deliveryType, couponCode });
+        if (!pricing.ok) {
+            return NextResponse.json({ error: pricing.error || "Carrito inválido" }, { status: 400 });
         }
+        const { items: pricedItems, subtotal, discount, shippingCost, total } = pricing;
 
         // Create order first with status "pending_payment"
         const orderId = randomUUID();
@@ -76,25 +78,24 @@ export async function POST(req: NextRequest) {
             paymentId: null,
             paymentStatus: "pending",
             subtotal,
-            discount: discount || 0,
-            shippingCost: shippingCost || 0,
+            discount,
+            shippingCost,
             total,
-            couponCode: couponCode || null,
+            couponCode: pricing.appliedCoupon,
             createdAt: now,
             updatedAt: now,
         });
 
-        for (const item of cartItems) {
-            const isRaffle = isRaffleItemId(item.id);
+        for (const item of pricedItems) {
             await db.insert(orderItems).values({
                 id: randomUUID(),
                 orderId,
-                productId: isRaffle ? null : (item.id || null),
+                productId: item.isRaffle ? null : item.id,
                 productName: item.name,
-                productSku: item.sku || item.id || "",
+                productSku: item.sku,
                 quantity: item.quantity,
-                unitPrice: item.price,
-                totalPrice: item.price * item.quantity,
+                unitPrice: item.unitPrice,
+                totalPrice: item.totalPrice,
                 createdAt: now,
             });
         }
@@ -116,12 +117,12 @@ export async function POST(req: NextRequest) {
             createdAt: now,
         });
 
-        // Build MP preference items
-        const mpItems = cartItems.map((item: { name: string; quantity: number; price: number }) => ({
+        // Build MP preference items (precios ya verificados server-side)
+        const mpItems = pricedItems.map((item) => ({
             id: orderId,
             title: item.name.substring(0, 256),
-            quantity: Math.max(1, Math.round(item.quantity)),
-            unit_price: item.price,
+            quantity: item.quantity,
+            unit_price: item.unitPrice,
             currency_id: "CLP" as const,
         }));
 

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mpPayment, mpPreApproval } from "@/lib/mercadopago";
 import { db } from "@/lib/db";
-import { orders, orderStatusHistory, subscriptions } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { orders, orderItems, orderStatusHistory, products, subscriptions } from "@/lib/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { confirmRaffleEntriesForOrder, cancelRaffleEntriesForOrder } from "@/lib/raffle-checkout";
+import { emitProductChange } from "@/lib/product-live-updates";
 
 async function handleSubscriptionPreApproval(preApprovalId: string) {
     try {
@@ -213,43 +214,115 @@ export async function POST(req: NextRequest) {
 
             const now = new Date().toISOString();
 
-            // Update order
-            await db.update(orders)
-                .set({
-                    paymentStatus,
-                    paymentId: String(paymentId),
-                    status: orderStatus,
-                    updatedAt: now,
-                })
-                .where(eq(orders.orderNumber, orderNumber));
-
-            // Add status history
-            await db.insert(orderStatusHistory).values({
-                id: randomUUID(),
-                orderId: "", // We'll get it from a subquery
-                status: orderStatus,
-                changedBy: "mercadopago",
-                notes: historyNote,
-                createdAt: now,
-            });
-
-            // Get orderId for accurate history
+            // Buscar la orden PRIMERO para tener su id real. Así el historial se
+            // inserta con el orderId correcto y evitamos el patrón peligroso de
+            // insertar con orderId="" y luego UPDATE ... WHERE orderId="" (que
+            // bajo webhooks concurrentes reasignaba filas a la orden equivocada).
             const [order] = await db.select({ id: orders.id })
                 .from(orders)
                 .where(eq(orders.orderNumber, orderNumber))
                 .limit(1);
 
-            if (order) {
-                await db.update(orderStatusHistory)
-                    .set({ orderId: order.id })
-                    .where(eq(orderStatusHistory.orderId, ""));
+            if (!order) {
+                // Número de orden desconocido — nada que actualizar.
+                return NextResponse.json({ received: true });
+            }
+            const orderId = order.id;
 
-                // Sync raffle entries
-                if (paymentStatus === "paid") {
-                    await confirmRaffleEntriesForOrder(order.id);
-                } else if (paymentStatus === "failed" || paymentStatus === "refunded") {
-                    await cancelRaffleEntriesForOrder(order.id);
+            const ACTIVE_STATES = ["paid", "preparing", "ready", "shipped", "delivered"];
+            const TERMINAL_STATES = ["cancelled", "refunded"];
+
+            // Productos cuyo stock cambió, para emitir SSE fuera de la transacción.
+            let touchedProducts: Array<{ productId: string; slug: string | null }> = [];
+
+            await db.transaction(async (tx) => {
+                // Releer el estado DENTRO de la transacción → read-decide-write atómico.
+                // MP reintrega el mismo webhook varias veces; esto evita descontar stock dos veces.
+                const [cur] = await tx.select({ status: orders.status })
+                    .from(orders).where(eq(orders.id, orderId)).limit(1);
+                const currentStatus = cur?.status || "new";
+
+                // Anti-regresión de estado: un webhook tardío no debe degradar ni
+                // resucitar una orden. (Ej: un "pending" que llega después de "paid".)
+                let targetStatus = orderStatus;
+                if (TERMINAL_STATES.includes(currentStatus) && orderStatus !== "refunded") {
+                    targetStatus = currentStatus; // no resucitar canceladas/reembolsadas
+                } else if (orderStatus === "new" && ACTIVE_STATES.includes(currentStatus)) {
+                    targetStatus = currentStatus; // conservar el avance ya alcanzado
                 }
+
+                // 1. Update order (paymentStatus siempre refleja MP; status con anti-regresión)
+                await tx.update(orders)
+                    .set({
+                        paymentStatus,
+                        paymentId: String(paymentId),
+                        status: targetStatus,
+                        updatedAt: now,
+                    })
+                    .where(eq(orders.id, orderId));
+
+                // 2. Historial solo si el estado cambió (evita duplicados por reintentos de MP)
+                if (targetStatus !== currentStatus) {
+                    await tx.insert(orderStatusHistory).values({
+                        id: randomUUID(),
+                        orderId,
+                        status: targetStatus,
+                        changedBy: "mercadopago",
+                        notes: historyNote,
+                        createdAt: now,
+                    });
+                }
+
+                // 3. Stock — idempotente gracias a las guardas de transición:
+                //    descuenta al pasar de "new" a un estado activo (pago confirmado),
+                //    repone al cancelar/reembolsar una orden cuyo stock ya se había descontado.
+                let stockAction: "deduct" | "restore" | null = null;
+                if (currentStatus === "new" && ACTIVE_STATES.includes(targetStatus)) {
+                    stockAction = "deduct";
+                } else if (TERMINAL_STATES.includes(targetStatus) && currentStatus !== "new" && !TERMINAL_STATES.includes(currentStatus)) {
+                    stockAction = "restore";
+                }
+
+                if (stockAction) {
+                    const itemRows = await tx.select({
+                        productId: orderItems.productId,
+                        quantity: orderItems.quantity,
+                        slug: products.slug,
+                    })
+                        .from(orderItems)
+                        .leftJoin(products, eq(orderItems.productId, products.id))
+                        .where(eq(orderItems.orderId, orderId));
+
+                    for (const it of itemRows) {
+                        if (!it.productId) continue;
+                        const expr = stockAction === "deduct"
+                            ? sql`${products.webStock} - ${it.quantity}`
+                            : sql`${products.webStock} + ${it.quantity}`;
+                        await tx.update(products).set({ webStock: expr }).where(eq(products.id, it.productId));
+                    }
+
+                    touchedProducts = itemRows
+                        .filter((i) => !!i.productId)
+                        .map((i) => ({ productId: i.productId as string, slug: i.slug ?? null }));
+                }
+            });
+
+            // Emitir actualización de stock en vivo (fuera de la transacción)
+            if (touchedProducts.length > 0) {
+                const uniq = new Map(touchedProducts.map((p) => [p.productId, p.slug]));
+                await Promise.all(Array.from(uniq).map(([productId, slug]) =>
+                    emitProductChange(productId, {
+                        slug,
+                        reason: "mp-webhook:payment",
+                        changedFields: ["stock"],
+                    })));
+            }
+
+            // Sync raffle entries (según el pago real de MP; idempotente)
+            if (paymentStatus === "paid") {
+                await confirmRaffleEntriesForOrder(orderId);
+            } else if (paymentStatus === "failed" || paymentStatus === "refunded") {
+                await cancelRaffleEntriesForOrder(orderId);
             }
         }
 

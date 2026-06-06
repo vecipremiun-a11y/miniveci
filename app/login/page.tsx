@@ -65,9 +65,7 @@ export default function LoginPage() {
 
             <div className="w-full max-w-md p-5 sm:p-8 bg-white/60 backdrop-blur-xl border border-white/60 rounded-2xl sm:rounded-3xl shadow-2xl relative z-10 mx-3 sm:mx-4">
                 <div className="text-center mb-5 sm:mb-8">
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-veci-primary to-veci-secondary flex items-center justify-center text-white font-bold text-2xl sm:text-3xl shadow-lg mx-auto mb-3 sm:mb-4 transform rotate-3">
-                        N
-                    </div>
+                    <img src="/logo%20veci.png" alt="MiniVeci" className="w-20 h-20 sm:w-24 sm:h-24 object-contain mx-auto mb-3 sm:mb-4 drop-shadow-md" />
                     <h1 className="text-2xl sm:text-3xl font-bold text-veci-dark mb-1 sm:mb-2">¡Hola de nuevo!</h1>
                     <p className="text-slate-500 text-sm sm:text-base">Ingresa a tu cuenta para continuar</p>
                 </div>
