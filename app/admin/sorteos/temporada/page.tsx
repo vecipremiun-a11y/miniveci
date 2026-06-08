@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Save, Trophy, Users, ExternalLink, Download, Dices, ImagePlus, Trash2 } from "lucide-react";
+import { Loader2, Save, Trophy, Users, ExternalLink, Download, Dices, ImagePlus, Trash2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ export default function AdminSorteoTemporadaPage() {
     const [drawAt, setDrawAt] = useState("");
     const [coverImage, setCoverImage] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
+    const [boletaMinAmount, setBoletaMinAmount] = useState(0);
+    const [boletaFromDate, setBoletaFromDate] = useState("");
     const [entryFields, setEntryFields] = useState<RaffleEntryFields>({ ...DEFAULT_RAFFLE_ENTRY_FIELDS });
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [winner, setWinner] = useState<Participant | null>(null);
@@ -55,6 +57,8 @@ export default function AdminSorteoTemporadaPage() {
                 setActive(data.raffle.status === "active");
                 setDrawAt(data.raffle.drawAt ? String(data.raffle.drawAt).slice(0, 16) : "");
                 setCoverImage(data.raffle.coverImage ?? null);
+                setBoletaMinAmount(data.raffle.boletaMinAmount ?? 0);
+                setBoletaFromDate(data.raffle.boletaFromDate ? String(data.raffle.boletaFromDate).slice(0, 10) : "");
                 setEntryFields(data.raffle.entryFields ?? { ...DEFAULT_RAFFLE_ENTRY_FIELDS });
             }
             setParticipants(data.participants ?? []);
@@ -119,6 +123,8 @@ export default function AdminSorteoTemporadaPage() {
                     drawAt: drawAt ? new Date(drawAt).toISOString() : null,
                     coverImage,
                     entryFields,
+                    boletaMinAmount,
+                    boletaFromDate: boletaFromDate || null,
                 }),
             });
             const data = await res.json();
@@ -292,19 +298,61 @@ export default function AdminSorteoTemporadaPage() {
                         Marca los datos que el cliente debe completar. Los campos marcados se muestran y son obligatorios.
                     </p>
                 </CardHeader>
-                <CardContent className="grid gap-2 sm:grid-cols-2">
-                    {RAFFLE_ENTRY_FIELD_META.map((field) => (
-                        <label
-                            key={field.key}
-                            className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors"
-                        >
-                            <div className="min-w-0">
-                                <p className="text-sm font-medium">{field.label}</p>
-                                {field.hint && <p className="text-[11px] text-muted-foreground">{field.hint}</p>}
+                <CardContent className="space-y-4">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                        {RAFFLE_ENTRY_FIELD_META.map((field) => (
+                            <label
+                                key={field.key}
+                                className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors"
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium">{field.label}</p>
+                                    {field.hint && <p className="text-[11px] text-muted-foreground">{field.hint}</p>}
+                                </div>
+                                <Switch checked={entryFields[field.key]} onCheckedChange={(v) => toggleField(field.key, v)} className={SWITCH_CLASS} />
+                            </label>
+                        ))}
+                    </div>
+
+                    {/* Verificación de boleta — solo si se pide N° de boleta. La valida POSVECI. */}
+                    {entryFields.receiptNumber && (
+                        <div className="rounded-xl border bg-muted/30 p-4 space-y-4">
+                            <div>
+                                <p className="text-sm font-semibold flex items-center gap-1.5">
+                                    <Receipt className="h-4 w-4" />
+                                    Verificación de boleta (opcional)
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Comprobamos el N° contra la venta real (folio SII o N° de ticket). Solo se aceptan boletas reales que cumplan estas reglas.
+                                </p>
                             </div>
-                            <Switch checked={entryFields[field.key]} onCheckedChange={(v) => toggleField(field.key, v)} className={SWITCH_CLASS} />
-                        </label>
-                    ))}
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <Label>Monto mínimo de la boleta</Label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            className="pl-7"
+                                            value={boletaMinAmount}
+                                            onChange={(e) => setBoletaMinAmount(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+                                        />
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground">Deja en 0 para inscribir sin comprobar el monto.</p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Boletas válidas desde</Label>
+                                    <Input
+                                        type="date"
+                                        value={boletaFromDate}
+                                        onChange={(e) => setBoletaFromDate(e.target.value)}
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">Solo cuentan boletas emitidas desde esta fecha.</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 

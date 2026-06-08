@@ -48,6 +48,8 @@ export async function GET() {
                 drawAt: raffle.drawAt,
                 coverImage: raffle.coverImage,
                 entryFields: parseEntryFields(raffle.entryFields),
+                boletaMinAmount: raffle.boletaMinAmount ?? 0,
+                boletaFromDate: raffle.boletaFromDate,
             },
             participants,
         });
@@ -70,6 +72,8 @@ export async function PUT(req: NextRequest) {
             drawAt?: string | null;
             coverImage?: string | null;
             entryFields?: RaffleEntryFields;
+            boletaMinAmount?: number | null;
+            boletaFromDate?: string | null;
         };
 
         const name = (body.name ?? "").trim();
@@ -83,6 +87,11 @@ export async function PUT(req: NextRequest) {
         const status = body.status ?? "active";
         const drawAt = body.drawAt ?? null;
         const coverImage = body.coverImage ?? null;
+        // Verificación de boleta: solo aplica si se pide N° de boleta.
+        const boletaMinAmount = entryFields.receiptNumber
+            ? Math.max(0, Math.round(Number(body.boletaMinAmount) || 0))
+            : 0;
+        const boletaFromDate = entryFields.receiptNumber ? (body.boletaFromDate?.trim() || null) : null;
         const now = new Date().toISOString();
 
         const existing = await db.query.raffles.findFirst({
@@ -105,6 +114,8 @@ export async function PUT(req: NextRequest) {
                 drawAt,
                 coverImage,
                 entryFields: JSON.stringify(entryFields),
+                boletaMinAmount,
+                boletaFromDate,
                 createdAt: now,
                 updatedAt: now,
             });
@@ -113,7 +124,7 @@ export async function PUT(req: NextRequest) {
 
         await db
             .update(raffles)
-            .set({ name, status, drawAt, coverImage, entryFields: JSON.stringify(entryFields), updatedAt: now })
+            .set({ name, status, drawAt, coverImage, entryFields: JSON.stringify(entryFields), boletaMinAmount, boletaFromDate, updatedAt: now })
             .where(eq(raffles.id, existing.id));
 
         return NextResponse.json({ id: existing.id, created: false });
