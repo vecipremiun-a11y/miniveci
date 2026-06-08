@@ -23,6 +23,7 @@ import {
     MessageCircle,
     Ticket,
     Cookie,
+    Trophy,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -51,7 +52,13 @@ const menuItems: MenuItem[] = [
             { name: "Suscriptores", href: "/admin/membresias/suscriptores", icon: UsersRound },
         ],
     },
-    { name: "Sorteos", href: "/admin/sorteos", icon: Ticket },
+    {
+        name: "Sorteos", href: "/admin/sorteos", icon: Ticket,
+        children: [
+            { name: "Sorteos de pago", href: "/admin/sorteos", icon: Ticket },
+            { name: "Sorteo de temporada", href: "/admin/sorteos/temporada", icon: Trophy },
+        ],
+    },
     { name: "Promociones", href: "/admin/promociones", icon: Tag },
     { name: "Contenido", href: "/admin/contenido", icon: Palette },
     { name: "Envíos", href: "/admin/envios", icon: Truck },

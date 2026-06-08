@@ -61,7 +61,8 @@ export default function AdminSorteosPage() {
             if (status !== "all") params.set("status", status);
             const res = await fetch(`/api/admin/raffles?${params}`);
             const data = await res.json();
-            setRaffles(data.raffles || []);
+            // La temporada (in_store) se administra en su propio panel.
+            setRaffles((data.raffles || []).filter((r: RaffleRow) => (r.type as string) !== "in_store"));
         } finally {
             setLoading(false);
         }

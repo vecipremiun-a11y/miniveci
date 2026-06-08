@@ -4,8 +4,14 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Sparkles, Trophy, Gift, Loader2, CheckCircle2, User, MapPin, Phone, Receipt,
-    PartyPopper, Calendar, Share2,
+    PartyPopper, Mail, FileText,
 } from "lucide-react";
+import {
+    RAFFLE_ENTRY_FIELD_META,
+    DEFAULT_RAFFLE_ENTRY_FIELDS,
+    type RaffleEntryFieldKey,
+    type RaffleEntryFields,
+} from "@/lib/raffle-entry-fields";
 
 interface Raffle {
     id: string;
@@ -18,19 +24,44 @@ interface Raffle {
     endsAt: string | null;
     coverImage: string | null;
     terms: string | null;
+    entryFields: RaffleEntryFields;
+    boletaMinAmount: number;
     images: Array<{ id: string; url: string; isPrimary: boolean }>;
     prizes: Array<{ id: string; position: number; name: string; description: string | null }>;
     entriesCount: number;
     winners: Array<{ position: number; prizeName: string; number: number; winnerName: string | null }>;
 }
 
+// Metadatos de UI por campo (ícono, placeholder, tipo de input).
+const FIELD_UI: Record<RaffleEntryFieldKey, {
+    icon: any;
+    placeholder: string;
+    type?: string;
+    autoComplete?: string;
+    inputMode?: "text" | "numeric" | "tel" | "email";
+}> = {
+    name: { icon: User, placeholder: "Tu nombre completo", autoComplete: "name" },
+    phone: { icon: Phone, placeholder: "Celular (ej: +56 9 1234 5678)", type: "tel", autoComplete: "tel" },
+    rut: { icon: FileText, placeholder: "RUT (ej: 12.345.678-9)" },
+    email: { icon: Mail, placeholder: "Correo electrónico", type: "email", autoComplete: "email", inputMode: "email" },
+    receiptNumber: { icon: Receipt, placeholder: "N° de boleta (la que te dieron en el local)", inputMode: "numeric" },
+    address: { icon: MapPin, placeholder: "Dirección", autoComplete: "street-address" },
+};
+
+const EMPTY_FORM: Record<RaffleEntryFieldKey, string> = {
+    name: "", phone: "", rut: "", email: "", receiptNumber: "", address: "",
+};
+
 export default function TemporadaPage() {
     const [raffle, setRaffle] = useState<Raffle | null>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<{ number: number; raffleName: string } | null>(null);
-    const [form, setForm] = useState({ name: "", address: "", phone: "", receiptNumber: "" });
+    const [success, setSuccess] = useState<{ number: number; receiptNumber: string | null; raffleName: string; name: string | null } | null>(null);
+    const [form, setForm] = useState<Record<RaffleEntryFieldKey, string>>({ ...EMPTY_FORM });
+
+    const entryFields = raffle?.entryFields ?? DEFAULT_RAFFLE_ENTRY_FIELDS;
+    const activeFields = RAFFLE_ENTRY_FIELD_META.filter((f) => entryFields[f.key]);
 
     useEffect(() => {
         const ac = new AbortController();
@@ -63,25 +94,37 @@ export default function TemporadaPage() {
         e.preventDefault();
         setError(null);
 
-        if (!form.name.trim() || !form.address.trim() || !form.phone.trim() || !form.receiptNumber.trim()) {
+        // Validar solo los campos activos del sorteo
+        const missing = activeFields.some((f) => !form[f.key].trim());
+        if (missing) {
             setError("Completa todos los campos");
             return;
         }
+
+        // Enviar únicamente los campos solicitados
+        const payload: Partial<Record<RaffleEntryFieldKey, string>> = {};
+        for (const f of activeFields) payload[f.key] = form[f.key].trim();
 
         setSubmitting(true);
         try {
             const res = await fetch("/api/raffles/temporada/inscribir", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(form),
+                body: JSON.stringify(payload),
             });
             const data = await res.json();
             if (!res.ok) {
                 setError(data.error || "No se pudo inscribir");
                 return;
             }
-            setSuccess({ number: data.number, raffleName: data.raffleName });
-            setForm({ name: "", address: "", phone: "", receiptNumber: "" });
+            // POSVECI devuelve ticketNumber; el flujo local devuelve number/receiptNumber.
+            setSuccess({
+                number: data.ticketNumber ?? data.number,
+                receiptNumber: data.receiptNumber ?? null,
+                raffleName: data.raffleName,
+                name: form.name.trim() || null,
+            });
+            setForm({ ...EMPTY_FORM });
         } catch {
             setError("Error de conexión. Intenta de nuevo.");
         } finally {
@@ -106,44 +149,26 @@ export default function TemporadaPage() {
     }
 
     const heroImage = raffle.coverImage || raffle.images.find((i) => i.isPrimary)?.url || raffle.images[0]?.url || null;
-    const remainingDays = raffle.endsAt || raffle.drawAt
-        ? Math.max(0, Math.ceil((new Date((raffle.endsAt || raffle.drawAt)!).getTime() - Date.now()) / 86400000))
-        : null;
+    const countdownTarget = raffle.endsAt || raffle.drawAt;
 
     return (
         <main className="min-h-screen relative overflow-hidden bg-slate-900">
             {/* Imagen de fondo full screen */}
             {heroImage && (
-                <div className="absolute inset-0 -z-10">
+                <div className="absolute inset-0 z-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={heroImage} alt="" className="h-full w-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-b from-violet-900/50 via-violet-900/70 to-violet-950/95" />
                 </div>
             )}
             {!heroImage && (
-                <div className="absolute inset-0 -z-10 bg-gradient-to-br from-violet-700 via-veci-primary to-fuchsia-800">
+                <div className="absolute inset-0 z-0 bg-gradient-to-br from-violet-700 via-veci-primary to-fuchsia-800">
                     <div aria-hidden className="absolute -top-32 -left-32 h-[500px] w-[500px] rounded-full bg-amber-400/20 blur-3xl" />
                     <div aria-hidden className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-pink-400/20 blur-3xl" />
                 </div>
             )}
 
-            <div className="relative min-h-screen flex flex-col items-center px-4 py-8 sm:py-12">
-                {/* Header minimal */}
-                <header className="w-full max-w-2xl flex items-center justify-between mb-6 sm:mb-8">
-                    <span className="inline-flex items-center gap-2 text-white">
-                        <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur border border-white/30 flex items-center justify-center">
-                            <Sparkles className="h-4 w-4" />
-                        </div>
-                        <span className="font-extrabold text-sm">MiniVeci · Sorteo de Temporada</span>
-                    </span>
-                    {remainingDays !== null && (
-                        <span className="text-xs text-white/80 inline-flex items-center gap-1.5 bg-white/10 backdrop-blur rounded-full px-3 py-1 border border-white/20">
-                            <Calendar className="h-3 w-3" />
-                            {remainingDays === 0 ? "Último día" : `${remainingDays}d restantes`}
-                        </span>
-                    )}
-                </header>
-
+            <div className="relative z-10 min-h-screen flex flex-col items-center px-4 py-10 sm:py-14">
                 <AnimatePresence mode="wait">
                     {success ? (
                         <SuccessCard key="success" success={success} prizes={raffle.prizes} drawAt={raffle.drawAt} />
@@ -166,6 +191,7 @@ export default function TemporadaPage() {
                                     <Sparkles className="h-3 w-3" />
                                     SORTEO ACTIVO
                                 </motion.div>
+                                {countdownTarget && <Countdown target={countdownTarget} />}
                                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight drop-shadow-lg">
                                     {raffle.name}
                                 </h1>
@@ -190,39 +216,33 @@ export default function TemporadaPage() {
                                 <div className="text-center mb-2">
                                     <h2 className="text-lg font-extrabold text-slate-900">¡Inscríbete gratis!</h2>
                                     <p className="text-xs text-slate-500 mt-0.5">
-                                        Completa tus datos con el número de tu boleta
+                                        {entryFields.receiptNumber
+                                            ? "Completa tus datos con el número de tu boleta"
+                                            : "Completa tus datos para participar"}
                                     </p>
+                                    {raffle.boletaMinAmount > 0 && (
+                                        <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-[11px] font-bold text-amber-700">
+                                            <Receipt className="h-3 w-3" />
+                                            Boletas desde ${raffle.boletaMinAmount.toLocaleString("es-CL")}
+                                        </span>
+                                    )}
                                 </div>
 
-                                <Field
-                                    icon={User}
-                                    placeholder="Tu nombre completo"
-                                    value={form.name}
-                                    onChange={(v) => setForm({ ...form, name: v })}
-                                    autoComplete="name"
-                                />
-                                <Field
-                                    icon={Phone}
-                                    placeholder="Celular (ej: +56 9 1234 5678)"
-                                    value={form.phone}
-                                    onChange={(v) => setForm({ ...form, phone: v })}
-                                    type="tel"
-                                    autoComplete="tel"
-                                />
-                                <Field
-                                    icon={MapPin}
-                                    placeholder="Dirección"
-                                    value={form.address}
-                                    onChange={(v) => setForm({ ...form, address: v })}
-                                    autoComplete="street-address"
-                                />
-                                <Field
-                                    icon={Receipt}
-                                    placeholder="N° de boleta (la que te dieron en el local)"
-                                    value={form.receiptNumber}
-                                    onChange={(v) => setForm({ ...form, receiptNumber: v })}
-                                    inputMode="numeric"
-                                />
+                                {activeFields.map((f) => {
+                                    const ui = FIELD_UI[f.key];
+                                    return (
+                                        <Field
+                                            key={f.key}
+                                            icon={ui.icon}
+                                            placeholder={ui.placeholder}
+                                            value={form[f.key]}
+                                            onChange={(v) => setForm((prev) => ({ ...prev, [f.key]: v }))}
+                                            type={ui.type}
+                                            autoComplete={ui.autoComplete}
+                                            inputMode={ui.inputMode}
+                                        />
+                                    );
+                                })}
 
                                 {error && (
                                     <motion.div
@@ -281,6 +301,68 @@ export default function TemporadaPage() {
 
 // --- Subcomponentes ---
 
+function Countdown({ target }: { target: string }) {
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, []);
+
+    const targetMs = new Date(target).getTime();
+    const diff = Math.max(0, targetMs - now);
+    const finished = diff <= 0;
+
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+
+    const units = [
+        { value: days, label: "Días" },
+        { value: hours, label: "Horas" },
+        { value: minutes, label: "Min" },
+        { value: seconds, label: "Seg" },
+    ];
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mb-5 flex flex-col items-center gap-2.5"
+        >
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/60">
+                {finished ? "¡Es hoy! Sorteo en curso" : "Sorteamos en"}
+            </span>
+            <div className="flex items-stretch justify-center gap-2 sm:gap-2.5">
+                {units.map((u) => (
+                    <div
+                        key={u.label}
+                        className="flex min-w-[3.5rem] sm:min-w-[4.25rem] flex-col items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-3 py-2.5 shadow-lg shadow-black/20 backdrop-blur-md sm:px-4 sm:py-3"
+                    >
+                        <AnimatePresence mode="popLayout" initial={false}>
+                            <motion.span
+                                key={u.value}
+                                initial={{ y: -14, opacity: 0 }}
+                                animate={{ y: 0, opacity: 1 }}
+                                exit={{ y: 14, opacity: 0 }}
+                                transition={{ duration: 0.25, ease: "easeOut" }}
+                                className="block text-2xl font-black leading-none tabular-nums text-white drop-shadow sm:text-3xl"
+                            >
+                                {String(u.value).padStart(2, "0")}
+                            </motion.span>
+                        </AnimatePresence>
+                        <span className="mt-1.5 text-[8px] font-bold uppercase tracking-[0.15em] text-white/55 sm:text-[9px]">
+                            {u.label}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </motion.div>
+    );
+}
+
 function Field({
     icon: Icon, placeholder, value, onChange, type = "text", autoComplete, inputMode,
 }: {
@@ -313,10 +395,14 @@ function Field({
 function SuccessCard({
     success, prizes, drawAt,
 }: {
-    success: { number: number; raffleName: string };
+    success: { number: number; receiptNumber: string | null; raffleName: string; name: string | null };
     prizes: Array<{ position: number; prizeName?: string; name?: string }>;
     drawAt: string | null;
 }) {
+    const firstName = success.name?.trim().split(/\s+/)[0] ?? null;
+    // Si la persona ingresó N° de boleta, esa es su número de la suerte; si no, el asignado.
+    const luckyNumber = success.receiptNumber?.trim() || success.number;
+    const luckyLabel = success.receiptNumber?.trim() ? "Tu boleta participa con el N°" : "Tu número de la suerte";
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -334,13 +420,17 @@ function SuccessCard({
                     <CheckCircle2 className="h-10 w-10 text-white" />
                 </motion.div>
 
-                <h2 className="mt-5 text-2xl font-black text-slate-900">¡Estás participando!</h2>
-                <p className="text-sm text-slate-500 mt-1">{success.raffleName}</p>
+                <h2 className="mt-5 text-2xl font-black text-slate-900">
+                    {firstName ? `¡Gracias, ${firstName}!` : "¡Estás participando!"}
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                    {firstName ? `Ya estás participando en ${success.raffleName}` : success.raffleName}
+                </p>
 
                 <div className="mt-6 mb-2">
-                    <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">Tu número de la suerte</p>
+                    <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">{luckyLabel}</p>
                     <p className="mt-2 text-6xl font-black bg-gradient-to-br from-veci-primary to-violet-600 bg-clip-text text-transparent">
-                        {success.number}
+                        {luckyNumber}
                     </p>
                 </div>
 

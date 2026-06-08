@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { raffles, raffleImages, rafflePrizes, raffleEntries, raffleWinners, customers } from "@/lib/db/schema";
 import { and, eq, desc, ne, inArray } from "drizzle-orm";
+import { parseEntryFields } from "@/lib/raffle-entry-fields";
 
 /**
  * Devuelve el sorteo de temporada activo (tipo "in_store").
@@ -99,6 +100,8 @@ function serializeRaffle(
         drawAt: raffle.drawAt,
         coverImage: raffle.coverImage,
         terms: raffle.terms,
+        entryFields: parseEntryFields(raffle.entryFields),
+        boletaMinAmount: raffle.boletaMinAmount ?? 0,
         images,
         prizes,
         entriesCount,

@@ -181,14 +181,8 @@ export function RaffleForm({ initial, mode }: { initial?: RaffleFormInitial; mod
                                 <SelectContent>
                                     <SelectItem value="paid">Pagado (online)</SelectItem>
                                     <SelectItem value="free">Gratis (online)</SelectItem>
-                                    <SelectItem value="in_store">Temporada (local físico · QR)</SelectItem>
                                 </SelectContent>
                             </Select>
-                            {form.type === "in_store" && (
-                                <p className="text-[11px] text-amber-600 leading-tight">
-                                    El cliente se inscribe desde QR del local con nombre, dirección, celular y N° de boleta. Aparece en <code>/sorteos/temporada</code>.
-                                </p>
-                            )}
                         </div>
 
                         {form.type === "paid" && (

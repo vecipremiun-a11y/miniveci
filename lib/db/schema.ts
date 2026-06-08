@@ -411,6 +411,16 @@ export const raffles = sqliteTable("raffles", {
     coverImage: text("cover_image"),
     terms: text("terms"), // términos y condiciones
     featured: integer("featured", { mode: "boolean" }).default(false), // destacado en home
+    // Config JSON de campos de inscripción (solo type "in_store"/temporada):
+    // {name,phone,rut,email,receiptNumber,address}. null → usa los campos por defecto.
+    entryFields: text("entry_fields"),
+    // --- Integración sorteo de temporada con POSVECI (solo type "in_store") ---
+    // Token entregado por POSVECI; lo usa el backend para reenviar inscripciones.
+    sorteoToken: text("sorteo_token"),
+    // Monto mínimo de la boleta para participar (CLP). 0/null = no se muestra ni exige.
+    boletaMinAmount: integer("boleta_min_amount"),
+    // Boletas válidas desde esta fecha (YYYY-MM-DD). null = sin filtro. Lo valida POSVECI.
+    boletaFromDate: text("boleta_from_date"),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
@@ -449,6 +459,7 @@ export const raffleEntries = sqliteTable("raffle_entries", {
     guestEmail: text("guest_email"),
     guestPhone: text("guest_phone"),
     guestAddress: text("guest_address"),
+    guestRut: text("guest_rut"), // RUT del inscrito (sorteos in-store / temporada, si el admin lo pide)
     receiptNumber: text("receipt_number"), // Número de boleta del local físico (sorteos in-store / temporada)
     status: text("status").notNull(), // "reserved" | "paid" | "free" | "cancelled"
     reservedAt: text("reserved_at").default(sql`CURRENT_TIMESTAMP`),
