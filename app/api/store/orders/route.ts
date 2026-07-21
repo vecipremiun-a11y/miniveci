@@ -13,6 +13,7 @@ import { generatePublicCode } from "@/lib/bakery";
 import { storeMobileOrderSchema } from "@/lib/validations/store-mobile";
 import { publishStoreOrderEvent, type SerializedStoreOrder } from "@/lib/store-live-updates";
 import { notifyOrderStatusChanged } from "@/lib/fcm";
+import { sendStoreOrderToPosveci } from "@/lib/posveci-store";
 
 // Costo de envío hardcoded. TODO: mover a una tabla settings/config (igual que bakery_config).
 const STORE_DELIVERY_FEE_CLP = 1990;
@@ -335,9 +336,19 @@ async function handleMobileOrder(req: NextRequest, token: string) {
         // 12. Publicar SSE para admin
         publishStoreOrderEvent({ type: "order.created", order: serialized, occurredAt: now });
 
-        // 13. Push FCM al cliente: "Recibimos tu pedido" — background after response
-        if (userType === "customer") {
-            after(async () => {
+        // 13. Trabajo en background DESPUÉS de responder (Vercel `after()` mantiene
+        // viva la lambda — mismo patrón que los encargos de amasandería).
+        after(async () => {
+            // POSVECI: publica el pedido de tienda al POS (order_type: "store").
+            // Se envía al confirmarse el pedido, sin esperar el pago.
+            try {
+                await sendStoreOrderToPosveci(orderId);
+            } catch (err) {
+                console.error(`[POSVECI] publisher threw para ${orderNumber}:`, (err as Error).message);
+            }
+
+            // Push FCM al cliente: "Recibimos tu pedido"
+            if (userType === "customer") {
                 try {
                     await notifyOrderStatusChanged({
                         userId,
@@ -349,8 +360,8 @@ async function handleMobileOrder(req: NextRequest, token: string) {
                 } catch (err) {
                     console.error(`[FCM] notify threw para ${orderNumber}:`, (err as Error).message);
                 }
-            });
-        }
+            }
+        });
 
         return NextResponse.json(serialized, { status: 201 });
     } catch (error: any) {
@@ -512,9 +523,19 @@ async function handleLegacyWebOrder(req: NextRequest) {
         };
         publishStoreOrderEvent({ type: "order.created", order: serialized, occurredAt: now });
 
-        // Push FCM si el cliente está identificado (logueado web) — background after response
-        if (customerId) {
-            after(async () => {
+        // Background post-response: POSVECI + FCM (mismo patrón que el flujo móvil)
+        after(async () => {
+            // POSVECI: publica el pedido de tienda al POS (order_type: "store").
+            // Contra entrega y transferencia entran por aquí; Mercado Pago web
+            // usa create-preference y se publica al aprobarse el pago (webhook).
+            try {
+                await sendStoreOrderToPosveci(orderId);
+            } catch (err) {
+                console.error(`[POSVECI] publisher threw para ${orderNumber}:`, (err as Error).message);
+            }
+
+            // Push FCM si el cliente está identificado (logueado web)
+            if (customerId) {
                 try {
                     await notifyOrderStatusChanged({
                         userId: customerId,
@@ -526,8 +547,8 @@ async function handleLegacyWebOrder(req: NextRequest) {
                 } catch (err) {
                     console.error(`[FCM] notify threw para ${orderNumber}:`, (err as Error).message);
                 }
-            });
-        }
+            }
+        });
 
         return NextResponse.json({
             success: true,

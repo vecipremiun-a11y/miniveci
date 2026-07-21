@@ -72,8 +72,10 @@ export const posDeliverySchema = z.object({
 });
 
 // Cambio de estado. `delivery` es opcional (típicamente llega con status='delivered').
+// `reason` acompaña cancelaciones (POSVECI lo envía para pedidos de tienda).
 export const bakeryUpdateStatusSchema = z.object({
     status: z.enum(BAKERY_STATUSES),
+    reason: z.string().max(500).optional().nullable(),
     delivery: posDeliverySchema.optional(),
 });
 

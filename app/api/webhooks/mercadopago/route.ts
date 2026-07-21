@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { mpPayment, mpPreApproval } from "@/lib/mercadopago";
 import { db } from "@/lib/db";
 import { orders, orderItems, orderStatusHistory, products, subscriptions } from "@/lib/db/schema";
@@ -6,6 +6,9 @@ import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { confirmRaffleEntriesForOrder, cancelRaffleEntriesForOrder } from "@/lib/raffle-checkout";
 import { emitProductChange } from "@/lib/product-live-updates";
+import { sendStoreOrderToPosveci } from "@/lib/posveci-store";
+import { publishPreorderCancelled } from "@/lib/posveci-publisher";
+import { STORE_ACTIVE_STATES } from "@/lib/store-status";
 
 async function handleSubscriptionPreApproval(preApprovalId: string) {
     try {
@@ -229,11 +232,15 @@ export async function POST(req: NextRequest) {
             }
             const orderId = order.id;
 
-            const ACTIVE_STATES = ["paid", "preparing", "ready", "shipped", "delivered"];
+            const ACTIVE_STATES = STORE_ACTIVE_STATES;
             const TERMINAL_STATES = ["cancelled", "refunded"];
 
             // Productos cuyo stock cambió, para emitir SSE fuera de la transacción.
             let touchedProducts: Array<{ productId: string; slug: string | null }> = [];
+            // Estado previo/final del pedido, para decidir notificaciones a POSVECI
+            // fuera de la transacción.
+            let previousStatus = "new";
+            let finalStatus = orderStatus;
 
             await db.transaction(async (tx) => {
                 // Releer el estado DENTRO de la transacción → read-decide-write atómico.
@@ -249,7 +256,14 @@ export async function POST(req: NextRequest) {
                     targetStatus = currentStatus; // no resucitar canceladas/reembolsadas
                 } else if (orderStatus === "new" && ACTIVE_STATES.includes(currentStatus)) {
                     targetStatus = currentStatus; // conservar el avance ya alcanzado
+                } else if (orderStatus === "paid" && ACTIVE_STATES.includes(currentStatus)) {
+                    // El POS ya avanzó el pedido (confirmed/preparing/...): un webhook
+                    // de pago tardío no debe retroceder el fulfillment. paymentStatus
+                    // igual queda "paid" abajo.
+                    targetStatus = currentStatus;
                 }
+                previousStatus = currentStatus;
+                finalStatus = targetStatus;
 
                 // 1. Update order (paymentStatus siempre refleja MP; status con anti-regresión)
                 await tx.update(orders)
@@ -323,6 +337,28 @@ export async function POST(req: NextRequest) {
                 await confirmRaffleEntriesForOrder(orderId);
             } else if (paymentStatus === "failed" || paymentStatus === "refunded") {
                 await cancelRaffleEntriesForOrder(orderId);
+            }
+
+            // POSVECI — en background post-response (`after()` mantiene viva la lambda):
+            //  - Pago aprobado sobre un pedido que seguía "new": el flujo web de
+            //    Mercado Pago crea la orden en create-preference y recién aquí se
+            //    confirma → publicarla al POS. Si ya se había enviado al crearla
+            //    (flujo móvil), POSVECI responde duplicate:true — inofensivo.
+            //  - Pedido que pasó a cancelled/refunded: avisar la cancelación al POS
+            //    (si el POS no lo conocía, ignora el external_order_id — inofensivo).
+            const becameTerminal = TERMINAL_STATES.includes(finalStatus) && !TERMINAL_STATES.includes(previousStatus);
+            if ((paymentStatus === "paid" && previousStatus === "new") || becameTerminal) {
+                after(async () => {
+                    try {
+                        if (becameTerminal) {
+                            await publishPreorderCancelled(orderId, historyNote);
+                        } else {
+                            await sendStoreOrderToPosveci(orderId);
+                        }
+                    } catch (err) {
+                        console.error(`[POSVECI] webhook MP publisher threw para ${orderNumber}:`, (err as Error).message);
+                    }
+                });
             }
         }
 

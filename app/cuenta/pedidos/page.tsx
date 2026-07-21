@@ -43,6 +43,7 @@ interface Order {
 
 const statusLabels: Record<string, { label: string; color: string }> = {
     new: { label: 'Nuevo', color: 'bg-blue-100 text-blue-700' },
+    confirmed: { label: 'Confirmado', color: 'bg-cyan-100 text-cyan-700' },
     paid: { label: 'Pagado', color: 'bg-green-100 text-green-700' },
     preparing: { label: 'Preparando', color: 'bg-yellow-100 text-yellow-700' },
     ready: { label: 'Listo', color: 'bg-indigo-100 text-indigo-700' },

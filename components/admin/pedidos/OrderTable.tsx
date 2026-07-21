@@ -54,6 +54,7 @@ interface OrderTableProps {
 
 export const statusConfig: Record<string, { label: string, color: string, icon?: any }> = {
     new: { label: "Nuevo", color: "bg-blue-100 text-blue-800 border-blue-200" },
+    confirmed: { label: "Confirmado", color: "bg-cyan-100 text-cyan-800 border-cyan-200" },
     paid: { label: "Pagado", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     preparing: { label: "Preparando", color: "bg-orange-100 text-orange-800 border-orange-200" },
     ready: { label: "Listo para Entregar", color: "bg-green-100 text-green-800 border-green-200" },

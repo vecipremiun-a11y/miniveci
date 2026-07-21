@@ -132,6 +132,7 @@ export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: s
                         </SelectTrigger>
                         <SelectContent align="end">
                             <SelectItem value="new">Nuevo</SelectItem>
+                            <SelectItem value="confirmed">Confirmado</SelectItem>
                             <SelectItem value="paid">Pagado</SelectItem>
                             <SelectItem value="preparing">Preparando</SelectItem>
                             <SelectItem value="ready">Listo</SelectItem>

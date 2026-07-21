@@ -5,19 +5,9 @@ import { requireAuth, AuthError } from "@/lib/auth-utils";
 import { emitProductChange } from "@/lib/product-live-updates";
 import { notifyOrderStatusChanged } from "@/lib/fcm";
 import { syncPaidOrderToPos } from "@/services/pos-sync";
+import { publishPreorderCancelled } from "@/lib/posveci-publisher";
+import { STORE_VALID_TRANSITIONS as validTransitions, STORE_ACTIVE_STATES } from "@/lib/store-status";
 import { eq, sql } from "drizzle-orm";
-
-// Basic state machine logic for order transitions
-const validTransitions: Record<string, string[]> = {
-    "new": ["paid", "preparing", "cancelled"],
-    "paid": ["preparing", "cancelled", "refunded"],
-    "preparing": ["ready", "cancelled"],
-    "ready": ["shipped", "delivered", "cancelled"],
-    "shipped": ["delivered", "cancelled", "refunded"],
-    "delivered": ["refunded"],
-    "cancelled": [],
-    "refunded": []
-};
 
 export async function PUT(
     req: NextRequest,
@@ -78,7 +68,7 @@ export async function PUT(
             });
 
             // 3. Stock Management
-            const activeStates = ["paid", "preparing", "ready", "shipped", "delivered"];
+            const activeStates = STORE_ACTIVE_STATES;
 
             if (currentStatus === "new" && activeStates.includes(newStatus)) {
                 // Deduct stock
@@ -123,6 +113,16 @@ export async function PUT(
 
         // Push FCM al cliente — background after response
         after(async () => {
+            // Si admin canceló desde miniveci, avisar a POSVECI (mismo PATCH que
+            // encargos; idempotente — si el POS no conoce el pedido, lo ignora).
+            // La cancelación originada en POSVECI entra por /api/pos/... y no pasa por aquí.
+            if (newStatus === "cancelled") {
+                try {
+                    await publishPreorderCancelled(id, notes || "Cancelado por admin desde miniveci");
+                } catch (err) {
+                    console.error(`[POSVECI] cancellation threw para ${order.orderNumber}:`, (err as Error).message);
+                }
+            }
             try {
                 await notifyOrderStatusChanged({
                     userId: order.customerId,

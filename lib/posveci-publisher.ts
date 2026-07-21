@@ -62,6 +62,43 @@ interface PreorderCancelledPayload {
     occurred_at: string;
 }
 
+// --- Pedidos normales de tienda (order_type: "store") ---
+// POSVECI acepta los pedidos de tienda por el MISMO endpoint de preorders,
+// distinguidos con `order_type: "store"`. A diferencia de los encargos:
+// scheduled_for es opcional y payment_method es el método real del checkout.
+
+export interface StoreOrderItemPayload {
+    product_external_id: string | null;
+    product_name: string;
+    quantity: number;
+    unit_price: number;
+    line_subtotal: number;
+}
+
+export interface StoreOrderClientPayload {
+    external_id: string | null;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    rut: string | null;
+}
+
+export interface StoreOrderCreatedPayload {
+    external_order_id: string;
+    public_code: string;
+    order_type: "store";
+    payment_method: "webpay" | "transferencia" | "contra_entrega";
+    method: "pickup" | "delivery";
+    address: string | null;
+    delivery_fee: number;
+    client: StoreOrderClientPayload;
+    items: StoreOrderItemPayload[];
+    subtotal: number;
+    total: number;
+    scheduled_for?: string; // ISO 8601 — solo si el cliente eligió horario
+    occurred_at: string;
+}
+
 interface ClientUpsertPayload {
     external_id: string; // ID de la cuenta en miniveci — llave maestra permanente
     name: string;
@@ -208,6 +245,69 @@ export async function publishPreorderCancelled(
         return;
     }
     console.log(`[POSVECI] cancellation ${externalOrderId} publicada OK`);
+}
+
+/** Pausa `ms` milisegundos (para el backoff entre reintentos). */
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Delays entre intentos del POST de pedidos store (el endpoint es idempotente
+ * por external_order_id, así que reenviar es seguro). */
+const STORE_RETRY_DELAYS_MS = [2000, 5000];
+
+/**
+ * Publica un pedido normal de tienda a POSVECI (order_type: "store").
+ *
+ * Mismo endpoint y Bearer que los encargos. Reintenta con backoff ante error
+ * de red o 5xx (idempotente por external_order_id). Respuestas:
+ *   201 {success:true, preorder:{...}}   → OK
+ *   200 {success:true, duplicate:true}   → ya enviado, tratar como éxito
+ *   4xx                                  → error definitivo, no reintentar
+ * Best-effort: si POSVECI no está configurado o falla definitivamente,
+ * log y seguir — nunca bloquea la creación del pedido en miniveci.
+ */
+export async function publishStoreOrderCreated(payload: StoreOrderCreatedPayload): Promise<void> {
+    const cfg = getConfig();
+    if (!cfg) {
+        console.log("[POSVECI] env vars no configuradas, omitiendo publish de pedido store");
+        return;
+    }
+
+    const init: RequestInit = {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${cfg.token}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+    };
+
+    const maxAttempts = STORE_RETRY_DELAYS_MS.length + 1;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const res = await sendWithTimeout(cfg.url, init, TIMEOUT_MS);
+
+        if (res && res.ok) {
+            console.log(`[POSVECI] pedido store ${payload.public_code} publicado OK (intento ${attempt})`);
+            return;
+        }
+        if (res && res.status < 500) {
+            // 4xx: reenviar no lo va a arreglar
+            const text = await res.text().catch(() => "");
+            console.error(`[POSVECI] pedido store ${payload.public_code} rechazado ${res.status}:`, text.slice(0, 300));
+            return;
+        }
+
+        // Red/timeout o 5xx → reintentar con backoff
+        const detail = res ? `HTTP ${res.status}` : "timeout/red";
+        if (attempt < maxAttempts) {
+            const delay = STORE_RETRY_DELAYS_MS[attempt - 1];
+            console.warn(`[POSVECI] pedido store ${payload.public_code} falló (${detail}), reintento ${attempt + 1}/${maxAttempts} en ${delay}ms`);
+            await sleep(delay);
+        } else {
+            console.error(`[POSVECI] pedido store ${payload.public_code} falló definitivamente tras ${maxAttempts} intentos (${detail})`);
+        }
+    }
 }
 
 /**
