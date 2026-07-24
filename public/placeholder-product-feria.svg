@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" fill="none">
+  <!-- Sin fondo: se funde con la vitrina de la ficha -->
+  <!-- Bolsa de feria -->
+  <path d="M138 168h124l-12 116a20 20 0 0 1-20 18h-60a20 20 0 0 1-20-18z" fill="#FFFFFF" fill-opacity="0.65" stroke="#4B7A2B" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M166 168v-26a34 34 0 0 1 68 0v26" stroke="#4B7A2B" stroke-width="6" stroke-linecap="round"/>
+  <!-- Hoja de lechuga asomando -->
+  <path d="M200 244c0-26 17-40 41-40 0 26-16 40-41 40z" fill="#A9DC4C" stroke="#4B7A2B" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M200 244c-2-24-18-36-41-34 4 23 18 34 41 34z" fill="#A9DC4C" stroke="#4B7A2B" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M200 244v26" stroke="#4B7A2B" stroke-width="5" stroke-linecap="round"/>
+  <!-- Marca -->
+  <text x="200" y="336" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="30" fill="#16311C">MiniVeci</text>
+  <text x="200" y="358" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="500" font-size="14" fill="#4B7A2B">Sin imagen disponible</text>
+</svg>

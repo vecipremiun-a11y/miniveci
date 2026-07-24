@@ -148,16 +148,16 @@ export function ProductShowcase() {
         {/* Header: título a la izquierda, "Ver más" arriba a la derecha */}
         <div className="flex items-center justify-between gap-4 mb-5 sm:mb-8">
           <div className="text-left">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-veci-dark mb-1 sm:mb-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-hoja mb-1 sm:mb-2">
               Explora nuestros productos
             </h2>
-            <p className="text-slate-500 text-sm sm:text-lg">
+            <p className="text-tinta text-sm sm:text-lg">
               Encuentra lo que necesitas al mejor precio
             </p>
           </div>
           <Link
             href={currentConfig.viewMoreHref}
-            className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 sm:px-6 sm:py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold rounded-full shadow-lg shadow-purple-200/50 hover:shadow-xl hover:shadow-purple-300/50 hover:-translate-y-0.5 transition-all duration-300 text-sm"
+            className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 sm:px-6 sm:py-3 bg-lechuga hover:bg-lechuga-viva text-hoja font-bold rounded-full shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 text-sm"
           >
             <span className="hidden sm:inline">Ver más productos</span>
             <span className="sm:hidden">Ver</span>
@@ -167,7 +167,7 @@ export function ProductShowcase() {
 
         {/* Filter Tabs */}
         <div className="flex justify-start mb-8">
-          <div className="inline-flex items-center gap-2 p-1.5 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 shadow-lg shadow-slate-100/50">
+          <div className="inline-flex items-center gap-2 p-1.5 bg-papel rounded-2xl border border-cerco">
             {FILTER_CONFIG.map((filter) => {
               const isActive = activeFilter === filter.key;
               return (
@@ -179,13 +179,13 @@ export function ProductShowcase() {
                   {isActive && (
                     <motion.div
                       layoutId="showcaseTab"
-                      className="absolute inset-0 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl shadow-md shadow-purple-200/50"
+                      className="absolute inset-0 bg-lechuga rounded-xl shadow-sm"
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     />
                   )}
                   <span
                     className={`relative z-10 flex items-center gap-2 ${
-                      isActive ? "text-white" : "text-slate-500 hover:text-slate-700"
+                      isActive ? "text-hoja font-bold" : "text-tinta hover:text-hoja"
                     }`}
                   >
                     {filter.icon}
@@ -226,7 +226,7 @@ export function ProductShowcase() {
           {/* Loading state */}
           {isLoading && (
             <div className="flex justify-center items-center py-24">
-              <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+              <Loader2 className="h-8 w-8 animate-spin text-tallo" />
             </div>
           )}
 

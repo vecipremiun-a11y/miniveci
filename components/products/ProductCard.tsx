@@ -1,13 +1,16 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Plus, Minus, Percent, Tag, Zap } from 'lucide-react';
+import { Plus, Minus, TrendingDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from '@/components/cart/CartProvider';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import { useRouter } from 'next/navigation';
 
-const PLACEHOLDER_IMAGE = '/placeholder-product.svg';
+const PLACEHOLDER_IMAGE = '/placeholder-product-feria.svg';
+
+const fmtCLP = (value: number) =>
+    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
 
 interface ProductCardProps {
     id: string;
@@ -54,26 +57,27 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
         setQuantity(mode === 'kg' ? 0.5 : 1);
     };
 
-    const formattedPrice = useMemo(() =>
-        new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(displayPrice),
-        [displayPrice]
-    );
-    const formattedOriginal = useMemo(() => {
-        if (!hasOffer) return '';
-        return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(price);
-    }, [hasOffer, price]);
-    const formattedKgPrice = useMemo(() =>
-        new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(tieredPrice),
-        [tieredPrice]
-    );
-    const cardSubtotal = useMemo(() => {
-        const total = kgMode
+    const formattedPrice = useMemo(() => fmtCLP(displayPrice), [displayPrice]);
+    const formattedOriginal = useMemo(() => hasOffer ? fmtCLP(price) : '', [hasOffer, price]);
+    const formattedKgPrice = useMemo(() => fmtCLP(tieredPrice), [tieredPrice]);
+
+    const subtotalValue = useMemo(() => (
+        kgMode
             ? Math.round(quantity * tieredPrice)
-            : equiv ? quantity * displayPrice : Math.round(quantity * tieredPrice);
-        return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(total);
-    }, [equiv, kgMode, quantity, displayPrice, tieredPrice]);
+            : equiv ? quantity * displayPrice : Math.round(quantity * tieredPrice)
+    ), [equiv, kgMode, quantity, displayPrice, tieredPrice]);
+
+    const cardSubtotal = useMemo(() => fmtCLP(subtotalValue), [subtotalValue]);
+
+    // Lo que la escala le ahorra en esta compra frente al precio de lista
+    const tierSavings = useMemo(() => {
+        if (!priceTiers || priceTiers.length === 0) return 0;
+        const baseUnit = equiv && !kgMode ? Math.round(rawPrice * equivWeight!) : rawPrice;
+        return Math.max(0, Math.round(quantity * baseUnit) - subtotalValue);
+    }, [priceTiers, equiv, kgMode, rawPrice, equivWeight, quantity, subtotalValue]);
     // Stock label always shows real kg for equiv products
     const stockLabel = outOfStock ? 'Sin stock' : (isWeightUnit(unit) ? `${stock} ${(unit ?? 'Kg').toUpperCase()}` : `${stock} UND`);
+    const lowStock = !outOfStock && stock <= 5;
 
     const handleAdd = () => {
         if (kgMode) {
@@ -91,135 +95,135 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
     return (
         <motion.div
-            whileHover={{ y: -5 }}
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
+            whileHover={{ y: -3 }}
+            initial={{ opacity: 0, y: 8 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             onClick={goToDetail}
-            className="glass-card p-2.5 sm:p-4 rounded-2xl sm:rounded-[2rem] flex flex-col items-center relative group cursor-pointer"
+            className={`feria-card rounded-2xl flex flex-col overflow-hidden relative group cursor-pointer ${outOfStock ? 'opacity-70' : ''}`}
         >
-            {/* Badges */}
-            <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5">
-                {hasOffer && (
-                    <span className="inline-flex items-center gap-1 bg-gradient-to-r from-red-500 to-rose-500 text-white text-xs font-extrabold px-2.5 py-1 rounded-full shadow-md shadow-red-200/50 animate-pulse">
-                        <Percent className="w-3 h-3" />
-                        -{discountPercent}%
-                    </span>
-                )}
-                {isPopular && (
-                    <span className="bg-orange-100 text-orange-500 text-xs font-bold px-3 py-1 rounded-full">
-                        Popular
-                    </span>
-                )}
-            </div>
-
-            {/* Offer ribbon */}
-            {hasOffer && (
-                <div className="absolute top-0 left-4 z-20">
-                    <div className="bg-gradient-to-b from-red-500 to-rose-600 text-white text-[10px] font-extrabold uppercase tracking-wider px-2 py-1.5 rounded-b-lg shadow-md">
-                        Oferta
-                    </div>
-                </div>
-            )}
-
-            {/* Image Area */}
-            <div className="w-full h-28 sm:h-40 flex items-center justify-center relative mb-2 sm:mb-4 overflow-hidden rounded-xl sm:rounded-2xl bg-white">
+            {/* Vitrina: imagen + estado */}
+            <div className="relative aspect-square flex items-center justify-center bg-white border-b border-cerco-suave overflow-hidden">
                 <img
                     src={imageSrc}
                     alt={name}
-                    className="relative z-10 max-h-full max-w-full object-contain transform group-hover:scale-110 transition-transform duration-300"
+                    className="w-full h-full object-contain p-1.5 sm:p-2 transform group-hover:scale-[1.06] transition-transform duration-300"
                 />
+
+                <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-1.5 pointer-events-none">
+                    <div className="flex flex-col gap-1">
+                        {hasOffer && (
+                            <span className="bg-tomate text-white text-[10px] leading-tight font-extrabold uppercase tracking-wide px-2 py-[3px] rounded-full">
+                                −{discountPercent}%
+                            </span>
+                        )}
+                        {isPopular && !hasOffer && (
+                            <span className="bg-choclo-suave text-choclo ring-1 ring-choclo text-[10px] leading-tight font-extrabold uppercase tracking-wide px-2 py-[3px] rounded-full">
+                                Popular
+                            </span>
+                        )}
+                    </div>
+                    <span className={`shrink-0 bg-white text-[10px] leading-tight font-bold px-2 py-[3px] rounded-full ring-1 tabular-nums ${
+                        outOfStock
+                            ? 'text-tomate ring-tomate'
+                            : lowStock
+                                ? 'text-tomate ring-tomate/40'
+                                : 'text-tinta ring-cerco'
+                    }`}>
+                        {lowStock && !outOfStock ? `Quedan ${stockLabel}` : stockLabel}
+                    </span>
+                </div>
             </div>
 
-            {/* Content */}
-            <div className="w-full space-y-1.5 sm:space-y-2">
+            {/* Cuerpo */}
+            <div className="flex flex-col gap-2 p-2.5 sm:p-3 flex-1">
                 <h3
-                    className="font-bold text-slate-800 text-xs sm:text-base leading-snug line-clamp-2 min-h-[2.1rem] sm:min-h-[2.6rem]"
+                    className="font-semibold text-hoja text-xs sm:text-[13.5px] leading-snug line-clamp-2 min-h-[2.6em]"
                     title={name}
                 >
                     {name}
                 </h3>
-                <div className="flex items-center justify-between gap-2 sm:gap-3 flex-wrap">
-                    <div className="flex items-baseline gap-1.5 sm:gap-2 flex-wrap">
-                        {equiv ? (
-                            <>
-                                <p className={`font-extrabold text-base sm:text-xl ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>
-                                    {formattedKgPrice}<span className="text-[10px] sm:text-sm font-bold text-slate-400">/kg</span>
-                                </p>
-                                {hasOffer && (
-                                    <p className="text-[10px] sm:text-sm text-slate-400 line-through font-medium">{formattedOriginal}</p>
-                                )}
-                            </>
-                        ) : (
-                            <>
-                                <p className={`font-extrabold text-base sm:text-xl ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>
-                                    {formattedPrice}
-                                </p>
-                                {hasOffer && (
-                                    <p className="text-[10px] sm:text-sm text-slate-400 line-through font-medium">{formattedOriginal}</p>
-                                )}
-                            </>
-                        )}
-                    </div>
-                    <div className={`shrink-0 inline-flex items-center rounded-full px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[11px] font-semibold uppercase tracking-wide ring-1 ${outOfStock ? 'bg-red-50 text-red-600 ring-red-100' : 'bg-emerald-50 text-emerald-700 ring-emerald-100'}`}>
-                        {stockLabel}
-                    </div>
+
+                {/* Precio: lo primero que se lee */}
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                    {equiv ? (
+                        <>
+                            <p className={`font-extrabold text-lg sm:text-[22px] leading-none tracking-tight tabular-nums ${hasOffer ? 'text-tomate' : 'text-hoja'}`}>
+                                {formattedKgPrice}<span className="text-[11px] font-bold text-tinta-clara">/kg</span>
+                            </p>
+                            {hasOffer && (
+                                <p className="text-[11px] sm:text-xs text-tinta-clara line-through tabular-nums">{formattedOriginal}</p>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <p className={`font-extrabold text-lg sm:text-[22px] leading-none tracking-tight tabular-nums ${hasOffer ? 'text-tomate' : 'text-hoja'}`}>
+                                {formattedPrice}
+                            </p>
+                            {hasOffer && (
+                                <p className="text-[11px] sm:text-xs text-tinta-clara line-through tabular-nums">{formattedOriginal}</p>
+                            )}
+                            <span className="text-[11px] font-semibold text-tinta-clara">c/u</span>
+                        </>
+                    )}
                 </div>
 
-                {/* Mini Price Tiers */}
+                {/* Tramos por cantidad: se leen como boleta, no como aviso */}
                 {priceTiers && priceTiers.length > 0 && (
-                    <div className="rounded-xl bg-gradient-to-r from-violet-50 to-fuchsia-50 border-2 border-purple-300 shadow-sm shadow-purple-100 p-2 space-y-1" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1.5 mb-1">
-                            <Tag className="h-3 w-3 text-purple-500" />
-                            <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Compra más, paga menos</span>
+                    <div className="rounded-xl bg-white border border-lechuga-viva p-1.5 space-y-1" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1 px-0.5">
+                            <TrendingDown className="w-3 h-3 text-tallo shrink-0" strokeWidth={2.5} />
+                            <span className="text-[9px] sm:text-[9.5px] font-extrabold uppercase tracking-[0.1em] text-tallo leading-tight">
+                                Lleva más, paga menos
+                            </span>
                         </div>
+
                         {priceTiers.map((tier, idx) => {
-                            const fmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
                             const isActive = quantity >= tier.minQty && (tier.maxQty === null || quantity <= tier.maxQty);
                             const isLastTier = tier.maxQty === null;
-                            const colors = ['bg-blue-400', 'bg-emerald-400', 'bg-amber-400', 'bg-rose-400', 'bg-violet-400'];
                             return (
                                 <div
                                     key={idx}
-                                    className={`flex items-center justify-between py-1 px-2 rounded-lg text-[11px] transition-all ${
-                                        isActive
-                                            ? 'bg-purple-100 ring-1 ring-purple-300 font-extrabold text-purple-800'
-                                            : 'text-slate-600'
+                                    className={`flex items-center justify-between gap-1.5 rounded-lg px-1.5 py-[3px] text-[11px] tabular-nums transition-colors ${
+                                        isActive ? 'bg-lechuga text-hoja' : 'text-tinta'
                                     }`}
                                 >
-                                    <div className="flex items-center gap-1.5">
-                                        <span className={`w-1.5 h-1.5 rounded-full ${colors[idx % colors.length]} ${isActive ? 'ring-1 ring-offset-1 ring-purple-400' : ''}`} />
-                                        <span>{isLastTier ? `${tier.minQty}+` : `${tier.minQty}-${tier.maxQty}`} und</span>
-                                        {isLastTier && (
-                                            <Zap className="h-2.5 w-2.5 text-amber-500" />
-                                        )}
-                                    </div>
-                                    <span className={`font-bold ${isActive ? 'text-purple-700' : 'text-slate-700'}`}>
-                                        {fmt.format(tier.price)}
+                                    <span className={isActive ? 'font-extrabold' : 'font-semibold'}>
+                                        {isLastTier ? `${tier.minQty}+` : `${tier.minQty}–${tier.maxQty}`} und
+                                    </span>
+                                    <span className={isActive ? 'font-extrabold' : 'font-bold text-hoja'}>
+                                        {fmtCLP(tier.price)}
                                     </span>
                                 </div>
                             );
                         })}
+
+                        {tierSavings > 0 && (
+                            <p className="text-[10px] font-bold text-tallo text-center leading-tight pt-0.5">
+                                Ahorras {fmtCLP(tierSavings)}
+                            </p>
+                        )}
                     </div>
                 )}
+
                 {equiv && !outOfStock && (
                     <div className="space-y-1.5">
-                        <p className="text-xs font-semibold text-amber-700">c/u ≈ {formattedPrice} ({equivWeight} kg)</p>
-                        <p className="text-xs font-semibold text-emerald-600">~{availableUnits} {equivUnitLabel} disponibles</p>
-                        {/* Compact buy mode toggle */}
-                        <div className="flex rounded-lg bg-slate-100 p-0.5" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-[11px] font-semibold text-tinta">c/u ≈ {formattedPrice} ({equivWeight} kg)</p>
+                        <p className="text-[11px] font-semibold text-tallo">~{availableUnits} {equivUnitLabel} disponibles</p>
+                        {/* Modo de compra */}
+                        <div className="flex rounded-full bg-papel-hondo p-0.5 border border-cerco" onClick={(e) => e.stopPropagation()}>
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleBuyModeChange('unit'); }}
-                                className={`flex-1 text-[11px] font-bold py-1 rounded-md transition-all ${
-                                    buyMode === 'unit' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                                className={`flex-1 text-[11px] font-bold py-1 rounded-full transition-all ${
+                                    buyMode === 'unit' ? 'bg-white text-hoja shadow-sm' : 'text-tinta hover:text-hoja'
                                 }`}
                             >
                                 Unidad
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleBuyModeChange('kg'); }}
-                                className={`flex-1 text-[11px] font-bold py-1 rounded-md transition-all ${
-                                    buyMode === 'kg' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                                className={`flex-1 text-[11px] font-bold py-1 rounded-full transition-all ${
+                                    buyMode === 'kg' ? 'bg-white text-hoja shadow-sm' : 'text-tinta hover:text-hoja'
                                 }`}
                             >
                                 Kilogramo
@@ -228,52 +232,53 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                     </div>
                 )}
 
-                {/* Actions */}
-                <div className="flex flex-col gap-1.5 sm:gap-2 mt-2 sm:mt-4" onClick={(e) => e.stopPropagation()}>
-                    {/* Quantity Selector */}
-                    <div className="flex items-center justify-between bg-white/60 rounded-full px-1.5 sm:px-2 py-1 sm:py-1.5 border border-white/50 shadow-sm">
+                {/* Acciones */}
+                <div className="flex items-stretch gap-1.5 mt-auto pt-0.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center shrink-0 bg-papel rounded-full border border-cerco p-0.5">
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setQuantity((q) => Math.max(minQty, Math.round((q - step) * 100) / 100));
                             }}
-                            className="w-7 h-7 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                            aria-label="Quitar uno"
+                            className="w-6 h-6 flex items-center justify-center rounded-full text-tinta hover:bg-brote hover:text-tallo transition-colors"
                         >
                             <Minus className="w-3.5 h-3.5" />
                         </button>
-                        <span className="text-sm font-bold text-slate-700 min-w-[2rem] text-center select-none">{(kgMode || isWeight) ? quantity.toFixed(1) : quantity}</span>
+                        <span className="text-[13px] font-bold text-hoja min-w-[1.6rem] text-center select-none tabular-nums">
+                            {(kgMode || isWeight) ? quantity.toFixed(1) : quantity}
+                        </span>
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setQuantity((q) => Math.min(maxQty, Math.round((q + step) * 100) / 100));
                             }}
                             disabled={quantity >= maxQty}
-                            className="w-7 h-7 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            aria-label="Agregar uno"
+                            className="w-6 h-6 flex items-center justify-center rounded-full text-tinta hover:bg-brote hover:text-tallo transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             <Plus className="w-3.5 h-3.5" />
                         </button>
                     </div>
 
-                    {/* Add Button */}
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
                             handleAdd();
                         }}
                         disabled={outOfStock}
-                        className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-[11px] sm:text-sm font-bold py-2 sm:py-2.5 rounded-full shadow-lg hover:shadow-xl hover:shadow-purple-200 transition-all flex items-center justify-center gap-1 sm:gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                        className="flex-1 min-w-0 bg-lechuga hover:bg-lechuga-viva active:scale-[0.97] text-hoja text-[12px] sm:text-[13px] font-extrabold py-1.5 rounded-full transition-all flex items-center justify-center gap-1 tabular-nums disabled:bg-papel-hondo disabled:text-tinta-clara disabled:cursor-not-allowed disabled:active:scale-100"
                     >
                         {outOfStock ? 'Sin stock' : (
                             <>
                                 <span>Agregar</span>
-                                <span className="opacity-75">·</span>
+                                <span className="opacity-45">·</span>
                                 <span>{cardSubtotal}</span>
                             </>
                         )}
                     </button>
                 </div>
             </div>
-
         </motion.div>
     );
 }

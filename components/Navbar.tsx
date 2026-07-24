@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ShoppingCart, Search, User, LogOut, Shield, ChevronDown, Loader2 } from 'lucide-react';
+import { ShoppingCart, Search, User, LogOut, Shield, ChevronDown, Loader2, Truck, LifeBuoy, PackageSearch } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -47,10 +47,24 @@ export function Navbar() {
   const abortRef = useRef<AbortController | null>(null);
   const userTypingRef = useRef(false);
   const closeCart = useCallback(() => setCartOpen(false), []);
+  const navRef = useRef<HTMLElement>(null);
 
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
 
   useEffect(() => { setHasMounted(true); }, []);
+
+  // Publica la altura real del navbar como --nav-h para que el contenido
+  // que va debajo (banner del home) se apegue sin franja ni solape,
+  // sea cual sea el breakpoint o el estado de sesión.
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const setH = () => document.documentElement.style.setProperty('--nav-h', `${el.offsetHeight}px`);
+    setH();
+    const ro = new ResizeObserver(setH);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasMounted]);
 
   // Cerrar dropdown de sorteos al hacer click afuera
   useEffect(() => {
@@ -296,15 +310,41 @@ export function Navbar() {
 
   return (
     <>
-    <nav className={cn(
-      "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-3 sm:px-6 md:px-12 border-b",
-      "bg-white/95 backdrop-blur-md shadow-md border-slate-200/70 md:border-transparent md:shadow-sm",
-      scrolled ? "md:bg-white/80 md:backdrop-blur-md md:shadow-sm py-1.5 sm:py-2 md:border-white/50" : "md:bg-transparent md:backdrop-blur-none md:shadow-none py-2 sm:py-4"
-    )}>
-      <div className="max-w-7xl mx-auto flex flex-col gap-1.5 sm:gap-4">
+    <nav ref={navRef} className="fixed top-0 left-0 right-0 z-50">
+
+      {/* Franja de servicio */}
+      <div className="hidden md:block bg-tallo-claro text-white">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between py-1.5 text-[12px]">
+          <span className="flex items-center gap-1.5 text-white/90">
+            <Truck className="w-3.5 h-3.5" />
+            Envíos en Iquique y Alto Hospicio
+          </span>
+          <div className="flex items-center gap-5 text-white/90">
+            <Link href="/contacto" className="flex items-center gap-1.5 hover:text-white transition-colors">
+              <LifeBuoy className="w-3.5 h-3.5" />
+              Ayuda
+            </Link>
+            <Link href="/cuenta/pedidos" className="flex items-center gap-1.5 hover:text-white transition-colors">
+              <PackageSearch className="w-3.5 h-3.5" />
+              Seguimiento de pedido
+            </Link>
+            <Link href="/cuenta" className="flex items-center gap-1.5 hover:text-white transition-colors">
+              <User className="w-3.5 h-3.5" />
+              Mi cuenta
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Header principal */}
+      <div className={cn(
+        "bg-white px-3 sm:px-6 md:px-12 transition-shadow duration-300",
+        scrolled ? "shadow-md" : "shadow-sm"
+      )}>
+        <div className="max-w-7xl mx-auto flex flex-col gap-1.5">
 
         {/* Top Row: Logo - Search - Actions */}
-        <div className="flex items-center justify-between w-full gap-2 sm:gap-4">
+        <div className="flex items-center justify-between w-full gap-2 sm:gap-4 pt-2 sm:py-2.5">
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
@@ -314,8 +354,7 @@ export function Navbar() {
 
           {/* Centered Search Bar - Desktop */}
           <div ref={searchBoxRef} className="hidden md:block flex-1 max-w-xl mx-auto relative">
-            <form onSubmit={handleSearchSubmit} className="flex items-center bg-white/80 border-2 border-purple-300 hover:border-purple-400 backdrop-blur-md rounded-full px-4 py-2.5 transition-all group focus-within:ring-2 focus-within:ring-purple-400/40 focus-within:border-purple-500 focus-within:bg-white focus-within:shadow-md shadow-sm">
-              <Search className="w-5 h-5 text-purple-400 group-focus-within:text-purple-600 transition-colors" />
+            <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 bg-white border-2 border-cerco hover:border-lechuga-viva rounded-full pl-4 pr-1 py-1 transition-all focus-within:border-lechuga-viva focus-within:ring-2 focus-within:ring-lechuga/40">
               <input
                 type="text"
                 placeholder="Buscar productos..."
@@ -323,9 +362,15 @@ export function Navbar() {
                 onChange={(event) => { userTypingRef.current = true; setSearchQuery(event.target.value); }}
                 onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
                 onKeyDown={handleKeyDown}
-                className="bg-transparent border-none outline-none text-sm ml-3 w-full text-slate-700 placeholder:text-slate-400 font-medium"
+                className="bg-transparent border-none outline-none text-sm w-full text-hoja placeholder:text-tinta-clara font-medium py-1.5"
               />
-              <button type="submit" className="sr-only">Buscar</button>
+              <button
+                type="submit"
+                aria-label="Buscar"
+                className="shrink-0 w-9 h-9 rounded-full bg-lechuga hover:bg-lechuga-viva text-hoja flex items-center justify-center transition-colors"
+              >
+                <Search className="w-4 h-4" strokeWidth={2.5} />
+              </button>
             </form>
             {suggestionsDropdown}
           </div>
@@ -339,9 +384,9 @@ export function Navbar() {
               <div className="relative" ref={menuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 px-1.5 py-1 sm:px-3 sm:py-2 rounded-full bg-white/50 hover:bg-white/80 border border-white/60 backdrop-blur-md transition-all"
+                  className="flex items-center gap-2 px-1.5 py-1 sm:px-3 sm:py-2 rounded-full bg-papel hover:bg-brote border border-cerco transition-all"
                 >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-veci-primary to-veci-secondary flex items-center justify-center text-white text-sm font-bold overflow-hidden">
+                  <div className="w-8 h-8 rounded-full bg-tallo flex items-center justify-center text-white text-sm font-bold overflow-hidden">
                     {avatarUrl ? (
                       <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                     ) : (
@@ -404,27 +449,27 @@ export function Navbar() {
               </div>
             ) : (
               /* Not logged in */
-              <Link href="/login" className="hidden lg:block text-slate-600 font-medium hover:text-veci-primary transition-colors text-sm">
+              <Link href="/login" className="hidden lg:block text-tinta font-medium hover:text-tallo transition-colors text-sm">
                 Iniciar sesión
               </Link>
             )}
             <button
               onClick={() => setCartOpen(true)}
               className={cn(
-                "relative btn-primary pl-3 pr-2 sm:pl-4 py-2 rounded-full font-bold flex items-center gap-2 sm:gap-2.5 text-sm shadow-md hover:shadow-lg transition-all",
+                "relative bg-lechuga hover:bg-lechuga-viva text-hoja pl-3 pr-2 sm:pl-4 py-2 rounded-full font-bold flex items-center gap-2 sm:gap-2.5 text-sm shadow-sm hover:shadow-md transition-all",
                 cartPulse && "animate-cart-pulse"
               )}
             >
               <div className="relative">
-                <ShoppingCart className="w-4 h-4" />
+                <ShoppingCart className="w-4 h-4" strokeWidth={2.5} />
                 {hasMounted && totalItems > 0 && (
-                  <span className="absolute -top-2 -right-2.5 bg-white text-veci-primary text-[10px] font-extrabold min-w-[18px] h-[18px] rounded-full inline-flex items-center justify-center px-1 ring-2 ring-veci-primary/30 shadow-sm">
+                  <span className="absolute -top-2 -right-2.5 bg-hoja text-lechuga text-[10px] font-extrabold min-w-[18px] h-[18px] rounded-full inline-flex items-center justify-center px-1 shadow-sm">
                     {totalItems}
                   </span>
                 )}
               </div>
               {hasMounted && totalItems > 0 ? (
-                <span className="bg-white/25 text-white text-[11px] sm:text-xs font-extrabold rounded-full px-2 sm:px-3 py-1 sm:py-1.5 tabular-nums min-w-[4.5rem] sm:min-w-[5rem] text-center">
+                <span className="bg-white/55 text-hoja text-[11px] sm:text-xs font-extrabold rounded-full px-2 sm:px-3 py-1 sm:py-1.5 tabular-nums min-w-[4.5rem] sm:min-w-[5rem] text-center">
                   {cartTotalText}
                 </span>
               ) : (
@@ -436,9 +481,8 @@ export function Navbar() {
         </div>
 
         {/* Mobile Search */}
-        <div ref={searchBoxMobileRef} className="md:hidden relative">
-          <form onSubmit={handleSearchSubmit} className="flex items-center bg-white/90 border-2 border-purple-300 hover:border-purple-400 backdrop-blur-md rounded-full px-3 py-2 transition-all group focus-within:ring-2 focus-within:ring-purple-400/40 focus-within:border-purple-500 focus-within:bg-white focus-within:shadow-md shadow-sm">
-            <Search className="w-4 h-4 text-purple-400 group-focus-within:text-purple-600 transition-colors" />
+        <div ref={searchBoxMobileRef} className="md:hidden relative pb-2">
+          <form onSubmit={handleSearchSubmit} className="flex items-center gap-1.5 bg-white border-2 border-cerco rounded-full pl-3.5 pr-1 py-0.5 transition-all focus-within:border-lechuga-viva focus-within:ring-2 focus-within:ring-lechuga/40">
             <input
               type="text"
               placeholder="Buscar productos..."
@@ -446,15 +490,26 @@ export function Navbar() {
               onChange={(event) => { userTypingRef.current = true; setSearchQuery(event.target.value); }}
               onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
               onKeyDown={handleKeyDown}
-              className="bg-transparent border-none outline-none text-sm ml-2 w-full text-slate-700 placeholder:text-slate-400 font-medium"
+              className="bg-transparent border-none outline-none text-sm w-full text-hoja placeholder:text-tinta-clara font-medium py-1.5"
             />
-            <button type="submit" className="sr-only">Buscar</button>
+            <button
+              type="submit"
+              aria-label="Buscar"
+              className="shrink-0 w-8 h-8 rounded-full bg-lechuga text-hoja flex items-center justify-center"
+            >
+              <Search className="w-4 h-4" strokeWidth={2.5} />
+            </button>
           </form>
           {suggestionsDropdown}
         </div>
 
-        {/* Bottom Row: Navigation Links */}
-        <div className="flex items-center justify-start sm:justify-center gap-1.5 sm:gap-8 font-medium text-slate-600 text-xs sm:text-sm overflow-x-auto sm:overflow-visible pb-1 md:pb-0 scrollbar-hide w-full -mx-1 px-1">
+        </div>
+      </div>
+
+      {/* Barra de navegación */}
+      <div className="bg-tallo-claro text-white px-3 sm:px-6 md:px-12 shadow-sm">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div className="flex items-center justify-start gap-0.5 sm:gap-1 font-medium text-xs sm:text-sm max-md:overflow-x-auto scrollbar-hide -mx-1 px-1">
           {[
             { href: '/', label: 'Inicio' },
             { href: '/productos', label: 'Tienda' },
@@ -471,10 +526,10 @@ export function Navbar() {
                     type="button"
                     onClick={() => setSorteosMenuOpen((o) => !o)}
                     className={cn(
-                      "inline-flex items-center gap-1 transition-colors px-2.5 sm:px-0 py-1 sm:py-0 rounded-full sm:rounded-none cursor-pointer",
+                      "inline-flex items-center gap-1 whitespace-nowrap transition-colors px-2.5 sm:px-3 py-2.5 border-b-2 cursor-pointer",
                       isActive || sorteosMenuOpen
-                        ? "bg-veci-primary/10 text-veci-primary font-bold sm:bg-transparent"
-                        : "bg-white/60 sm:bg-transparent text-slate-700 sm:text-slate-600 hover:text-veci-primary"
+                        ? "text-white font-bold border-lechuga"
+                        : "text-white/85 hover:text-white border-transparent hover:border-white/40"
                     )}
                   >
                     {item.label}
@@ -487,36 +542,36 @@ export function Navbar() {
                     <>
                       {/* Overlay mobile que oscurece el resto y permite cerrar al tocar fuera */}
                       <div
-                        className="sm:hidden fixed inset-0 bg-black/30 z-40"
+                        className="md:hidden fixed inset-0 bg-black/30 z-40"
                         onClick={() => setSorteosMenuOpen(false)}
                       />
                       <div
                         className="
-                          z-50 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden
+                          z-[60] bg-white rounded-2xl shadow-2xl border border-cerco overflow-hidden
                           fixed left-3 right-3 top-32
-                          sm:absolute sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-full sm:mt-2 sm:w-[280px]
+                          md:absolute md:inset-auto md:left-1/2 md:-translate-x-1/2 md:top-full md:mt-2 md:w-[280px]
                         "
                       >
-                        <Link href="/sorteos" className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition">
-                          <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0 text-base">
+                        <Link href="/sorteos" className="flex items-start gap-3 px-4 py-3 hover:bg-brote transition">
+                          <div className="w-10 h-10 rounded-xl bg-brote flex items-center justify-center flex-shrink-0 text-base">
                             🎟️
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-bold text-slate-800 text-sm leading-tight">Sorteos online</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5 whitespace-normal">Elige tu número y participa</p>
+                            <p className="font-bold text-hoja text-sm leading-tight">Sorteos online</p>
+                            <p className="text-[11px] text-tinta mt-0.5 whitespace-normal">Elige tu número y participa</p>
                           </div>
                         </Link>
-                        <div className="h-px bg-slate-100 mx-3" />
-                        <Link href="/sorteos/temporada" className="flex items-start gap-3 px-4 py-3 hover:bg-amber-50 transition">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0 text-base shadow-md shadow-amber-200">
+                        <div className="h-px bg-cerco mx-3" />
+                        <Link href="/sorteos/temporada" className="flex items-start gap-3 px-4 py-3 hover:bg-choclo-suave transition">
+                          <div className="w-10 h-10 rounded-xl bg-choclo flex items-center justify-center flex-shrink-0 text-base shadow-md shadow-choclo/30">
                             ✨
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-bold text-slate-800 text-sm leading-tight flex items-center gap-1.5 flex-wrap whitespace-normal">
+                            <p className="font-bold text-hoja text-sm leading-tight flex items-center gap-1.5 flex-wrap whitespace-normal">
                               Sorteo de Temporada
-                              <span className="text-[9px] font-extrabold bg-amber-500 text-white px-1.5 py-0.5 rounded">QR LOCAL</span>
+                              <span className="text-[9px] font-extrabold bg-choclo text-white px-1.5 py-0.5 rounded">QR LOCAL</span>
                             </p>
-                            <p className="text-[11px] text-slate-500 mt-0.5 whitespace-normal">Inscribe tu boleta del local físico</p>
+                            <p className="text-[11px] text-tinta mt-0.5 whitespace-normal">Inscribe tu boleta del local físico</p>
                           </div>
                         </Link>
                       </div>
@@ -530,10 +585,10 @@ export function Navbar() {
                 key={item.label}
                 href={item.href}
                 className={cn(
-                  "whitespace-nowrap transition-colors px-2.5 sm:px-0 py-1 sm:py-0 rounded-full sm:rounded-none",
+                  "whitespace-nowrap transition-colors px-2.5 sm:px-3 py-2.5 border-b-2",
                   isActive
-                    ? "bg-veci-primary/10 text-veci-primary font-bold sm:bg-transparent"
-                    : "bg-white/60 sm:bg-transparent text-slate-700 sm:text-slate-600 hover:text-veci-primary"
+                    ? "text-white font-bold border-lechuga"
+                    : "text-white/85 hover:text-white border-transparent hover:border-white/40"
                 )}
               >
                 {item.label}
@@ -542,6 +597,16 @@ export function Navbar() {
           })}
         </div>
 
+        {/* Promesa de entrega */}
+        <span className="hidden lg:flex items-center gap-2 shrink-0 text-white/85">
+          <Truck className="w-4 h-4 shrink-0" />
+          <span className="leading-tight">
+            <span className="block text-[12px] font-bold text-white">Envíos el mismo día</span>
+            <span className="block text-[11px] text-white/70">En compras antes de las 13:00 hrs</span>
+          </span>
+        </span>
+
+        </div>
       </div>
 
     </nav>

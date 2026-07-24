@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fdfcff;
-  --foreground: #1e1b4b;
+  --background: #ffffff;
+  --foreground: #16311c;
 
   /* Brand Colors */
   --brand-solid: #ff8e8e;
@@ -25,6 +25,49 @@
 
   --animate-blob: blob 7s infinite;
   --animate-cart-pulse: cart-pulse 0.6s ease-out;
+
+  /* ── Paleta "Feria" — identidad verde de la tienda ──────────────
+     Convive con los tokens veci-* para migrar pantalla por pantalla.
+     Regla: relleno lechuga + tinta hoja encima (9:1 de contraste),
+     como los carteles de precio escritos a mano en la feria.        */
+  --color-lechuga: #a9dc4c;       /* acción principal, activo        */
+  --color-lechuga-viva: #8cc733;  /* hover del verde                 */
+  --color-tallo: #4b7a2b;         /* íconos, rótulos, precio mayor   */
+  --color-tallo-claro: #6faf3f;   /* barra de navegación (tinta hoja) */
+  --color-hoja: #16311c;          /* texto y tinta sobre el verde    */
+  --color-papel: #f3f5ea;         /* fondo de página                 */
+  --color-papel-hondo: #eaeedc;   /* superficie hundida, media       */
+  --color-cerco: #dbe1cb;         /* bordes                          */
+  --color-cerco-suave: #e7ebda;   /* divisiones internas             */
+  --color-tinta: #5b6b57;         /* texto secundario (gris verdoso) */
+  --color-tinta-clara: #869180;   /* texto terciario                 */
+  --color-brote: #edf7dc;         /* fondo suave del verde           */
+  --color-tomate: #ce4126;        /* solo ofertas y stock crítico    */
+  --color-tomate-suave: #fbe9e4;
+  --color-choclo: #e9a519;        /* solo destacados                 */
+  --color-choclo-suave: #fcf1da;
+}
+
+/* Toldo de feria: banda rayada verde/blanco */
+.feria-toldo {
+  background: repeating-linear-gradient(
+    115deg,
+    #a9dc4c 0 14px,
+    #ffffff 14px 28px
+  );
+}
+
+/* Superficie base de la tienda: papel sólido, sin glass ni degradados */
+.feria-card {
+  background: #ffffff;
+  border: 1px solid var(--color-cerco);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 1px 2px rgba(22, 49, 28, 0.05);
+}
+
+.feria-card:hover {
+  border-color: var(--color-lechuga-viva);
+  box-shadow: 0 1px 2px rgba(22, 49, 28, 0.06), 0 10px 26px -14px rgba(22, 49, 28, 0.35);
 }
 
 @keyframes cart-pulse {
@@ -53,12 +96,7 @@
 }
 
 body {
-  background:
-    radial-gradient(circle at 10% 20%, rgba(255, 221, 225, 0.4) 0%, transparent 40%),
-    radial-gradient(circle at 90% 10%, rgba(215, 200, 255, 0.4) 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.8) 0%, transparent 100%),
-    radial-gradient(circle at 10% 90%, rgba(180, 220, 255, 0.4) 0%, transparent 50%),
-    #f3f0ff;
+  background: #ffffff;
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   min-height: 100vh;

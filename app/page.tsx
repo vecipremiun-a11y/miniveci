@@ -8,7 +8,7 @@ import { Footer } from "@/components/Footer";
 
 export default function Home() {
   return (
-    <main className="min-h-screen relative font-[family-name:var(--font-geist-sans)] selection:bg-veci-primary selection:text-white">
+    <main className="min-h-screen relative bg-white text-hoja font-[family-name:var(--font-geist-sans)] selection:bg-lechuga selection:text-hoja">
       <BannerCarousel />
       <OfferCarousel />
       <ProductShowcase />

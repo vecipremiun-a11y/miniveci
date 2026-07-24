@@ -138,7 +138,7 @@ export function FreshCarousel() {
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold uppercase tracking-wide mb-2">
                             <Leaf className="w-3.5 h-3.5" /> Fresco del día
                         </span>
-                        <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-veci-dark mb-1 sm:mb-2">
+                        <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-hoja mb-1 sm:mb-2">
                             Frutas y Verduras
                         </h2>
                         <p className="text-slate-500 text-sm sm:text-lg">
@@ -178,7 +178,7 @@ export function FreshCarousel() {
                                 {cat.name}
                                 <span
                                     className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
-                                        isActive ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-600"
+                                        isActive ? "bg-white/20 text-white" : "bg-brote text-tallo"
                                     }`}
                                 >
                                     {cat.productCount}

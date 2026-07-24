@@ -249,10 +249,26 @@ function ProductsPageContent() {
     const endIdx = Math.min(meta.page * meta.limit, meta.total);
 
     return (
-        <main className="min-h-screen bg-veci-bg selection:bg-veci-primary selection:text-white pb-20">
+        <main className="min-h-screen bg-white text-hoja selection:bg-lechuga selection:text-hoja pb-20">
 
             {/* Spacer for fixed navbar */}
             <div className="h-36 md:h-44"></div>
+
+            {/* Franja de mercado: toldo + estado del puesto */}
+            <div className="px-3 sm:px-4 md:px-8 mb-4">
+                <div className="rounded-2xl overflow-hidden border border-cerco bg-white">
+                    <div className="feria-toldo h-[7px]" />
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-4 py-3">
+                        <h1 className="text-base sm:text-lg font-bold tracking-tight text-hoja">
+                            Puesto abierto · retiro en tienda o despacho
+                        </h1>
+                        <span className="flex items-center gap-2 text-xs sm:text-[13px] font-semibold text-tallo">
+                            <span className="w-[7px] h-[7px] rounded-full bg-lechuga-viva" />
+                            Stock actualizado en vivo desde la caja
+                        </span>
+                    </div>
+                </div>
+            </div>
 
             <div className="w-full px-3 sm:px-4 md:px-8 flex flex-col md:flex-row gap-4 md:gap-6">
 
@@ -271,11 +287,11 @@ function ProductsPageContent() {
                 {/* Sidebar - Mobile Drawer */}
                 {mobileFiltersOpen && (
                     <div className="md:hidden fixed inset-0 z-[80] flex">
-                        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileFiltersOpen(false)} />
-                        <div className="relative ml-auto w-[85%] max-w-sm h-full bg-veci-bg overflow-y-auto p-3 animate-in slide-in-from-right duration-200">
+                        <div className="absolute inset-0 bg-hoja/50 backdrop-blur-sm" onClick={() => setMobileFiltersOpen(false)} />
+                        <div className="relative ml-auto w-[85%] max-w-sm h-full bg-white overflow-y-auto p-3 animate-in slide-in-from-right duration-200">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="font-bold text-slate-700">Filtros</span>
-                                <button onClick={() => setMobileFiltersOpen(false)} className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-slate-500">
+                                <span className="font-bold text-hoja">Filtros</span>
+                                <button onClick={() => setMobileFiltersOpen(false)} className="w-9 h-9 rounded-full bg-white border border-cerco flex items-center justify-center text-tinta">
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>
@@ -295,30 +311,30 @@ function ProductsPageContent() {
                 <div className="flex-1 min-w-0">
 
                     {/* Top Bar */}
-                    <div className="flex flex-row items-center justify-between mb-4 sm:mb-8 gap-2 sm:gap-4 bg-white/40 backdrop-blur-md p-2.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-white">
+                    <div className="flex flex-row items-center justify-between mb-4 sm:mb-5 gap-2 sm:gap-4 feria-card p-2.5 sm:p-3 rounded-2xl">
                         <button
                             onClick={() => setMobileFiltersOpen(true)}
-                            className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/80 border border-white text-xs font-bold text-slate-700 shrink-0"
+                            className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-papel border border-cerco text-xs font-bold text-hoja shrink-0"
                         >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
                             Filtros
                         </button>
-                        <span className="text-slate-500 text-[11px] sm:text-sm font-medium whitespace-nowrap truncate">
+                        <span className="text-tinta text-[11px] sm:text-[13px] font-medium whitespace-nowrap truncate tabular-nums">
                             {meta.total > 0
-                                ? <><span className="hidden sm:inline">Mostrando </span>{startIdx}-{endIdx} de {meta.total}<span className="hidden sm:inline"> productos</span></>
+                                ? <><span className="hidden sm:inline">Mostrando </span><b className="font-bold text-hoja">{startIdx}-{endIdx}</b> de <b className="font-bold text-hoja">{meta.total.toLocaleString('es-CL')}</b><span className="hidden sm:inline"> productos</span></>
                                 : 'Sin productos'}
                         </span>
 
                         <div className="flex items-center gap-2 sm:gap-4 self-end xl:self-auto">
                             {/* Sort */}
                             <div className="relative group">
-                                <button className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-bold text-slate-700 cursor-pointer hover:text-veci-purple transition-colors">
-                                    <span><span className="hidden sm:inline">Ordenar por: </span><span className="text-veci-dark">
+                                <button className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-[13px] font-semibold text-tinta cursor-pointer hover:text-hoja transition-colors bg-papel border border-cerco rounded-full px-3 py-1.5">
+                                    <span><span className="hidden sm:inline">Ordenar: </span><span className="font-bold text-hoja">
                                         {sortBy === 'featured' ? 'Destacados' : sortBy === 'newest' ? 'Nuevos' : sortBy === 'price_asc' ? 'Menor precio' : 'Mayor precio'}
                                     </span></span>
-                                    <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />
+                                    <ChevronDown className="w-3.5 h-3.5 transition-transform group-hover:rotate-180" />
                                 </button>
-                                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-cerco py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                                     {[
                                         { value: 'newest' as const, label: 'Nuevos' },
                                         { value: 'featured' as const, label: 'Destacados' },
@@ -330,8 +346,8 @@ function ProductsPageContent() {
                                             onClick={() => { setSortBy(opt.value); updateURL({ page: null }); }}
                                             className={`w-full text-left px-4 py-2 text-sm transition-colors ${
                                                 sortBy === opt.value
-                                                    ? 'bg-purple-50 text-purple-700 font-bold'
-                                                    : 'text-slate-600 hover:bg-slate-50 font-medium'
+                                                    ? 'bg-brote text-hoja font-bold'
+                                                    : 'text-tinta hover:bg-papel font-medium'
                                             }`}
                                         >
                                             {opt.label}
@@ -340,18 +356,20 @@ function ProductsPageContent() {
                                 </div>
                             </div>
 
-                            <div className="hidden sm:block h-6 w-px bg-slate-300"></div>
-
-                            <div className="hidden sm:flex items-center gap-2 bg-white/50 p-1 rounded-lg">
+                            <div className="hidden sm:flex items-center gap-0.5 bg-papel border border-cerco p-0.5 rounded-full">
                                 <button
                                     onClick={() => setViewMode('grid')}
-                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-veci-purple text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    aria-label="Vista de grilla"
+                                    aria-pressed={viewMode === 'grid'}
+                                    className={`p-1.5 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-lechuga text-hoja' : 'text-tinta-clara hover:text-hoja'}`}
                                 >
                                     <LayoutGrid className="w-4 h-4" />
                                 </button>
                                 <button
                                     onClick={() => setViewMode('list')}
-                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-veci-purple text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                                    aria-label="Vista de lista"
+                                    aria-pressed={viewMode === 'list'}
+                                    className={`p-1.5 rounded-full transition-colors ${viewMode === 'list' ? 'bg-lechuga text-hoja' : 'text-tinta-clara hover:text-hoja'}`}
                                 >
                                     <List className="w-4 h-4" />
                                 </button>
@@ -362,21 +380,21 @@ function ProductsPageContent() {
                     {/* Loading */}
                     {loading ? (
                         <div className="flex flex-col items-center justify-center h-64 gap-4">
-                            <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-                            <p className="text-slate-400 text-sm">Cargando productos...</p>
+                            <Loader2 className="w-8 h-8 animate-spin text-tallo" />
+                            <p className="text-tinta text-sm">Cargando productos...</p>
                         </div>
                     ) : products.length === 0 ? (
                         /* Empty State */
-                        <div className="flex flex-col items-center justify-center h-64 gap-4 bg-white/30 backdrop-blur-md rounded-3xl border border-white">
-                            <PackageOpen className="w-16 h-16 text-slate-300" />
-                            <h3 className="text-xl font-bold text-slate-500">No hay productos disponibles</h3>
-                            <p className="text-slate-400 text-sm">
+                        <div className="flex flex-col items-center justify-center h-64 gap-3 feria-card rounded-2xl">
+                            <PackageOpen className="w-14 h-14 text-cerco" strokeWidth={1.5} />
+                            <h3 className="text-lg font-bold text-hoja">No hay productos disponibles</h3>
+                            <p className="text-tinta text-sm text-center px-4">
                                 {selectedCategory || search ? 'No se encontraron productos con los filtros actuales.' : 'Pronto habrá productos disponibles.'}
                             </p>
                             {(selectedCategory || search) && (
                                 <button
                                     onClick={clearFilters}
-                                    className="mt-2 px-4 py-2 bg-purple-100 text-purple-600 rounded-full text-sm font-bold hover:bg-purple-200 transition-colors"
+                                    className="mt-1 px-4 py-2 bg-lechuga text-hoja rounded-full text-sm font-bold hover:bg-lechuga-viva transition-colors"
                                 >
                                     Limpiar filtros
                                 </button>
@@ -408,21 +426,21 @@ function ProductsPageContent() {
 
                             {/* Pagination */}
                             {meta.totalPages > 1 && (
-                                <div className="flex justify-center gap-2 mt-10">
+                                <div className="flex justify-center items-center gap-2 mt-10">
                                     <button
                                         onClick={() => updateURL({ page: page > 2 ? String(page - 1) : null })}
                                         disabled={page === 1}
-                                        className="px-4 py-2 rounded-full bg-white/50 border border-white text-sm font-bold text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                        className="px-4 py-2 rounded-full bg-white border border-cerco text-sm font-bold text-hoja hover:border-lechuga-viva disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-cerco transition-colors"
                                     >
                                         Anterior
                                     </button>
-                                    <span className="flex items-center px-4 text-sm font-bold text-slate-600">
+                                    <span className="flex items-center px-4 text-sm font-semibold text-tinta tabular-nums">
                                         Página {meta.page} de {meta.totalPages}
                                     </span>
                                     <button
                                         onClick={() => updateURL({ page: String(page + 1) })}
                                         disabled={page >= meta.totalPages}
-                                        className="px-4 py-2 rounded-full bg-white/50 border border-white text-sm font-bold text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                        className="px-4 py-2 rounded-full bg-lechuga border border-lechuga-viva text-sm font-bold text-hoja hover:bg-lechuga-viva disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                     >
                                         Siguiente
                                     </button>
@@ -443,10 +461,10 @@ function ProductsPageContent() {
 export default function ProductsPage() {
     return (
         <Suspense fallback={(
-            <main className="min-h-screen bg-veci-bg pb-20">
+            <main className="min-h-screen bg-white pb-20">
                 <div className="h-36 md:h-40"></div>
                 <div className="max-w-7xl mx-auto px-6 md:px-12 h-[50vh] flex items-center justify-center">
-                    <div className="flex items-center gap-3 text-slate-500 font-semibold">
+                    <div className="flex items-center gap-3 text-tinta font-semibold">
                         <Loader2 className="w-6 h-6 animate-spin" />
                         Cargando productos...
                     </div>

@@ -46,7 +46,7 @@ export function BannerCarousel() {
 
   // Reserva el espacio del navbar fixed aunque no haya banners
   if (!loaded || banners.length === 0) {
-    return <div className="pt-40 sm:pt-36 md:pt-40" aria-hidden />;
+    return <div className="pt-[var(--nav-h,150px)]" aria-hidden />;
   }
 
   const currentBanner = banners[current];
@@ -76,7 +76,7 @@ export function BannerCarousel() {
   );
 
   return (
-    <section className="relative w-full overflow-hidden bg-gray-100 pt-40 sm:pt-36 md:pt-40">
+    <section className="relative w-full overflow-hidden bg-gray-100 pt-[var(--nav-h,150px)]">
       {/* Slides */}
       {hasLink ? (
         <Link href={currentBanner.linkUrl!}>{slideContent}</Link>

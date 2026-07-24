@@ -165,7 +165,7 @@ export function BakeryCarousel() {
                                                 <p className="text-[11px] sm:text-xs text-slate-500 line-clamp-1">{p.description}</p>
                                             )}
                                             <div className="flex items-baseline gap-1">
-                                                <span className="font-extrabold text-lg sm:text-xl text-veci-dark">{formatCLP(p.price)}</span>
+                                                <span className="font-extrabold text-lg sm:text-xl text-hoja">{formatCLP(p.price)}</span>
                                                 <span className="text-[11px] sm:text-sm font-bold text-slate-400">{unitLabel}</span>
                                             </div>
 

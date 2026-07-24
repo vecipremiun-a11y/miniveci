@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Minus, Check, Loader2 } from 'lucide-react';
+import {
+    Apple, Baby, Bath, Beef, Candy, Carrot, Coffee, Cookie, Croissant, CupSoda,
+    Droplets, Egg, Fish, Flame, Ham, IceCreamCone, Leaf, Loader2, Milk, Package,
+    PawPrint, Popcorn, Check, ScrollText, ShoppingBasket, Snowflake, Soup,
+    Sparkles, SprayCan, Wheat,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Category {
@@ -20,16 +26,43 @@ interface ProductSidebarProps {
     onMaxPriceChange?: (value: number) => void;
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-    abarrotes: '🍞', bebidas: '🥤', lacteos: '🥛', snacks: '🍫',
-    limpieza: '🧼', congelados: '❄️', frutas: '🍎', verduras: '🥬',
-    carnes: '🥩', panaderia: '🥖', mascotas: '🐾', hogar: '🏠',
-};
-
-const CATEGORY_COLORS: Record<string, string> = {
-    abarrotes: 'bg-orange-100 text-orange-600', bebidas: 'bg-blue-100 text-blue-600',
-    lacteos: 'bg-indigo-100 text-indigo-600', snacks: 'bg-purple-100 text-purple-600',
-    limpieza: 'bg-teal-100 text-teal-600', congelados: 'bg-sky-100 text-sky-600',
+/* Íconos de sección: SVG en verde tallo, no emoji.
+   Las claves se comparan sin guiones ni tildes. */
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+    abarrotes: Package,
+    aguas: Droplets,
+    agua: Droplets,
+    ambientador: SprayCan,
+    aseo: Sparkles,
+    bebidas: CupSoda,
+    bebes: Baby,
+    cafes: Coffee,
+    cafe: Coffee,
+    carne: Beef,
+    carnes: Beef,
+    cecinas: Ham,
+    cereales: Wheat,
+    chocolates: Cookie,
+    confortservilleta: ScrollText,
+    confort: ScrollText,
+    congelados: Snowflake,
+    conservas: Soup,
+    detergentes: Sparkles,
+    dulces: Candy,
+    embutidos: Ham,
+    empanadas: Croissant,
+    frutas: Apple,
+    helados: IceCreamCone,
+    higiene: Bath,
+    huevos: Egg,
+    lacteos: Milk,
+    limpieza: Sparkles,
+    mascotas: PawPrint,
+    panaderia: Croissant,
+    parrilla: Flame,
+    pescados: Fish,
+    snacks: Popcorn,
+    verduras: Carrot,
 };
 
 const MAX_PRICE_LIMIT = 50000;
@@ -57,28 +90,27 @@ export function ProductSidebar({ selectedCategory, onCategoryChange, inOffer = f
             .finally(() => setLoading(false));
     }, []);
 
-    const getIcon = (slug: string) => {
-        const key = slug.toLowerCase().replace(/-/g, '');
-        return CATEGORY_ICONS[key] || '📦';
+    const getIcon = (slug: string): LucideIcon => {
+        const key = slug.toLowerCase()
+            .normalize('NFD')
+            .replace(/[^a-z]/g, '');
+        if (CATEGORY_ICONS[key]) return CATEGORY_ICONS[key];
+        const partial = Object.keys(CATEGORY_ICONS).find((k) => key.startsWith(k) || k.startsWith(key));
+        return partial ? CATEGORY_ICONS[partial] : Package;
     };
 
     return (
-        <div className="w-full md:w-64 shrink-0 space-y-6 md:space-y-8 p-4 md:p-6 bg-white/40 backdrop-blur-xl rounded-2xl md:rounded-[2rem] border border-white h-fit">
+        <div className="w-full md:w-60 shrink-0 feria-card rounded-2xl p-4 md:p-5 space-y-6 h-fit md:sticky md:top-40">
 
-            {/* Title */}
-            <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-veci-dark">Filtros</h3>
-                <button className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-400 hover:bg-indigo-100 transition-colors">
-                    <Minus className="w-4 h-4" />
-                </button>
-            </div>
-
-            {/* Price Filter */}
+            {/* Precio */}
             <div>
-                <h4 className="font-bold text-slate-700 mb-4">Precio</h4>
-                <div className="relative w-full h-2 mb-4">
-                    <div className="absolute inset-0 bg-indigo-100 rounded-full" />
-                    <div className="absolute left-0 top-0 h-full bg-gradient-to-r from-pink-300 to-purple-400 rounded-full" style={{ width: `${pricePercent}%` }} />
+                <h4 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-tallo mb-3">
+                    Precio
+                    <span className="flex-1 h-px bg-cerco" />
+                </h4>
+                <div className="relative w-full h-1.5 mb-3">
+                    <div className="absolute inset-0 bg-papel-hondo rounded-full" />
+                    <div className="absolute left-0 top-0 h-full bg-lechuga rounded-full" style={{ width: `${pricePercent}%` }} />
                     <input
                         type="range"
                         min={100}
@@ -86,77 +118,98 @@ export function ProductSidebar({ selectedCategory, onCategoryChange, inOffer = f
                         step={100}
                         value={maxPrice}
                         onChange={handlePriceInput}
+                        aria-label="Precio máximo"
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                     <div
-                        className="absolute top-1/2 -translate-y-1/2 w-5 h-5 bg-white border-2 border-purple-400 rounded-full shadow-md pointer-events-none"
-                        style={{ left: `calc(${pricePercent}% - 10px)` }}
+                        className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-[3px] border-lechuga-viva rounded-full shadow-sm pointer-events-none"
+                        style={{ left: `calc(${pricePercent}% - 8px)` }}
                     />
                 </div>
-                <div className="flex items-center justify-between text-sm font-bold text-slate-500">
+                <div className="flex items-center justify-between text-xs font-semibold text-tinta tabular-nums">
                     <span>$100</span>
-                    <span className="bg-white/50 px-3 py-1 rounded-full border border-white shadow-sm text-xs">Hasta {formatCLP(maxPrice)}</span>
+                    <span>Hasta {formatCLP(maxPrice)}</span>
                 </div>
             </div>
 
-            {/* Offer Checkbox */}
-            <div
-                onClick={() => onOfferChange?.(!inOffer)}
-                className="flex items-center gap-3 cursor-pointer group"
-            >
-                <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${inOffer ? 'bg-purple-500 text-white shadow-lg shadow-purple-200' : 'bg-slate-100 text-transparent border border-slate-200'}`}>
-                    <Check className="w-4 h-4" strokeWidth={3} />
-                </div>
-                <span className="font-medium text-slate-600 group-hover:text-purple-600 transition-colors">En oferta</span>
-            </div>
-
-            {/* Categories */}
+            {/* Ofertas */}
             <div>
-                <h4 className="font-bold text-slate-700 mb-4">Categorías</h4>
+                <h4 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-tallo mb-3">
+                    Ofertas
+                    <span className="flex-1 h-px bg-cerco" />
+                </h4>
+                <button
+                    type="button"
+                    onClick={() => onOfferChange?.(!inOffer)}
+                    aria-pressed={inOffer}
+                    className="flex items-center gap-2.5 w-full text-left group"
+                >
+                    <span className={cn(
+                        "w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0",
+                        inOffer
+                            ? "bg-lechuga border border-lechuga-viva text-hoja"
+                            : "bg-white border border-cerco text-transparent"
+                    )}>
+                        <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                    </span>
+                    <span className="text-sm font-semibold text-hoja">Solo productos en oferta</span>
+                </button>
+            </div>
+
+            {/* Secciones */}
+            <div>
+                <h4 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-tallo mb-3">
+                    Secciones
+                    <span className="flex-1 h-px bg-cerco" />
+                </h4>
                 {loading ? (
                     <div className="flex justify-center py-4">
-                        <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                        <Loader2 className="w-5 h-5 animate-spin text-tinta-clara" />
                     </div>
                 ) : categories.length === 0 ? (
-                    <p className="text-sm text-slate-400">No hay categorías</p>
+                    <p className="text-sm text-tinta-clara">No hay categorías</p>
                 ) : (
-                    <div className="flex flex-col gap-2">
-                        {/* All products */}
+                    <div className="flex flex-col gap-px">
                         <button
                             onClick={() => onCategoryChange?.(null)}
                             className={cn(
-                                "flex items-center justify-between p-2 rounded-xl transition-colors group text-left w-full",
-                                !selectedCategory ? "bg-purple-50 ring-1 ring-purple-200" : "hover:bg-white/60"
+                                "flex items-center gap-2.5 w-full px-2 py-1.5 rounded-lg text-left text-sm transition-colors",
+                                !selectedCategory
+                                    ? "bg-brote text-hoja font-bold shadow-[inset_2px_0_0_var(--color-lechuga-viva)]"
+                                    : "text-tinta hover:bg-papel-hondo hover:text-hoja"
                             )}
                         >
-                            <div className="flex items-center gap-3">
-                                <span className="text-xl">🛒</span>
-                                <span className={cn("font-medium transition-colors", !selectedCategory ? "text-purple-600" : "text-slate-600 group-hover:text-purple-600")}>Todos</span>
-                            </div>
+                            <ShoppingBasket className="w-[17px] h-[17px] text-tallo shrink-0" strokeWidth={1.7} />
+                            <span className="flex-1 truncate">Todos</span>
                         </button>
 
-                        {categories.map((cat) => (
-                            <button
-                                key={cat.id}
-                                onClick={() => onCategoryChange?.(cat.slug)}
-                                className={cn(
-                                    "flex items-center justify-between p-2 rounded-xl transition-colors group text-left w-full",
-                                    selectedCategory === cat.slug ? "bg-purple-50 ring-1 ring-purple-200" : "hover:bg-white/60"
-                                )}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xl">{getIcon(cat.slug)}</span>
-                                    <span className={cn("font-medium transition-colors", selectedCategory === cat.slug ? "text-purple-600" : "text-slate-600 group-hover:text-purple-600")}>{cat.name}</span>
-                                </div>
-                                <span className="text-xs font-bold text-slate-400 bg-white/50 px-2 py-1 rounded-full group-hover:bg-purple-100 group-hover:text-purple-600 transition-colors">
-                                    ({cat.productCount ?? 0})
-                                </span>
-                            </button>
-                        ))}
+                        {categories.map((cat) => {
+                            const Icon = getIcon(cat.slug);
+                            const active = selectedCategory === cat.slug;
+                            return (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => onCategoryChange?.(cat.slug)}
+                                    className={cn(
+                                        "flex items-center gap-2.5 w-full px-2 py-1.5 rounded-lg text-left text-sm transition-colors",
+                                        active
+                                            ? "bg-brote text-hoja font-bold shadow-[inset_2px_0_0_var(--color-lechuga-viva)]"
+                                            : "text-tinta hover:bg-papel-hondo hover:text-hoja"
+                                    )}
+                                >
+                                    <Icon className="w-[17px] h-[17px] text-tallo shrink-0" strokeWidth={1.7} />
+                                    <span className="flex-1 truncate">{cat.name}</span>
+                                    <span className="text-[11px] font-bold text-tinta-clara tabular-nums">
+                                        {cat.productCount ?? 0}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
             </div>
 
+            <Leaf className="w-4 h-4 text-cerco mx-auto" aria-hidden="true" />
         </div>
     );
 }
