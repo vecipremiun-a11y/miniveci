@@ -4,6 +4,7 @@ import { customers, customerAddresses } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth-utils";
 import { claimUnclaimedOrdersForCustomer, rutTakenByOtherCustomer, syncCustomerToPosveci } from "@/lib/pos-customer-match";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { z } from "zod";
 
 const registerSchema = z.object({
@@ -11,7 +12,7 @@ const registerSchema = z.object({
     lastName: z.string().min(2, "El apellido debe tener al menos 2 caracteres"),
     email: z.string().email("Correo electrónico inválido"),
     phone: z.string().min(8, "El teléfono debe tener al menos 8 dígitos"),
-    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+    password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
     rut: z.string().optional(),
     address: z.string().optional(),
     comuna: z.string().optional(),
@@ -20,6 +21,9 @@ const registerSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+    const limited = enforceRateLimit(req, RATE_LIMITS.register);
+    if (limited) return limited;
+
     try {
         const body = await req.json();
         const data = registerSchema.parse(body);

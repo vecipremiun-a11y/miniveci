@@ -63,6 +63,34 @@ export default function EncargarPage() {
             .catch(() => {});
     }, []);
 
+    // Precarga la dirección de envío del cliente (libreta de direcciones o, si no
+    // tiene, la del perfil) para no reescribirla en cada encargo. Solo rellena si
+    // el campo sigue vacío: nunca pisa lo que el cliente escribió.
+    useEffect(() => {
+        if (status !== "authenticated" || session?.user?.role !== "customer") return;
+        let cancelled = false;
+
+        (async () => {
+            interface SavedAddress { address: string; comuna: string; isDefault: boolean }
+            const addrs: SavedAddress[] = await fetch("/api/store/customer/addresses")
+                .then((r) => (r.ok ? r.json() : []))
+                .catch(() => []);
+            const def = Array.isArray(addrs) ? addrs.find((a) => a.isDefault) ?? addrs[0] : undefined;
+            let value = def ? [def.address, def.comuna].filter(Boolean).join(", ") : "";
+
+            if (!value) {
+                const profile = await fetch("/api/store/customer")
+                    .then((r) => (r.ok ? r.json() : null))
+                    .catch(() => null);
+                value = [profile?.address, profile?.comuna].filter(Boolean).join(", ");
+            }
+
+            if (!cancelled && value) setAddress((prev) => prev || value);
+        })();
+
+        return () => { cancelled = true; };
+    }, [status, session]);
+
     // Anticipación efectiva = máx(general, mayor lead time de los productos del carrito).
     const { cartLeadHours, effMinHours, leadDriver } = useMemo(() => {
         let maxLead = 0;

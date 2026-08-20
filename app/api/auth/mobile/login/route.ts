@@ -7,11 +7,21 @@ import { verifyPassword } from "@/lib/auth-utils";
 import { loginSchema } from "@/lib/validations/mobile-auth";
 import { issueTokens } from "@/lib/mobile-auth";
 import { adminToApiUser, customerToApiUser } from "@/lib/user-shape";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
+    // Límite por IP antes de tocar la base: frena la fuerza bruta de contraseñas.
+    const limitedByIp = enforceRateLimit(req, RATE_LIMITS.login);
+    if (limitedByIp) return limitedByIp;
+
     try {
         const body = await req.json().catch(() => ({}));
         const data = loginSchema.parse(body);
+
+        // Segundo límite acotado al email: evita que rotar IPs permita atacar
+        // una cuenta concreta sin freno.
+        const limitedByAccount = enforceRateLimit(req, RATE_LIMITS.login, data.email);
+        if (limitedByAccount) return limitedByAccount;
 
         // 1. Buscar primero en admins (users) — su email es único entre admins
         const admin = await db.query.users.findFirst({

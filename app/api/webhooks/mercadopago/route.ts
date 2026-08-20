@@ -221,7 +221,7 @@ export async function POST(req: NextRequest) {
             // inserta con el orderId correcto y evitamos el patrón peligroso de
             // insertar con orderId="" y luego UPDATE ... WHERE orderId="" (que
             // bajo webhooks concurrentes reasignaba filas a la orden equivocada).
-            const [order] = await db.select({ id: orders.id })
+            const [order] = await db.select({ id: orders.id, total: orders.total })
                 .from(orders)
                 .where(eq(orders.orderNumber, orderNumber))
                 .limit(1);
@@ -231,6 +231,29 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ received: true });
             }
             const orderId = order.id;
+
+            // SEGURIDAD: no basta con que MP diga "approved" — hay que comprobar
+            // que se pagó el monto de ESTA orden. Sin esto, un pago por un monto
+            // menor cuyo external_reference apunte a otro pedido lo dejaba como
+            // pagado. Tolerancia de $1 CLP por redondeos de MP.
+            if (paymentStatus === "paid") {
+                const paidAmount = Math.round(Number(payment.transaction_amount ?? 0));
+                const expectedAmount = Math.round(Number(order.total ?? 0));
+                if (Math.abs(paidAmount - expectedAmount) > 1) {
+                    console.error(
+                        `[WEBHOOK_MP] Monto no coincide para ${orderNumber}: pagado=${paidAmount} esperado=${expectedAmount} (pago ${paymentId}). No se marca como pagada.`,
+                    );
+                    await db.insert(orderStatusHistory).values({
+                        id: randomUUID(),
+                        orderId,
+                        status: "payment_mismatch",
+                        changedBy: "mercadopago",
+                        notes: `Monto pagado ($${paidAmount}) distinto del total del pedido ($${expectedAmount}). Pago ${paymentId}. Requiere revisión manual.`,
+                        createdAt: new Date().toISOString(),
+                    });
+                    return NextResponse.json({ received: true, mismatch: true });
+                }
+            }
 
             const ACTIVE_STATES = STORE_ACTIVE_STATES;
             const TERMINAL_STATES = ["cancelled", "refunded"];

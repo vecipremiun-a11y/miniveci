@@ -22,8 +22,13 @@ declare module "next-auth" {
     interface JWT {
         role: string;
         id: string;
+        /** Epoch ms de la última revalidación del rol contra la base. */
+        checkedAt?: number;
     }
 }
+
+/** Cada cuánto se recomprueba rol y estado activo del usuario en la base. */
+const ROLE_REVALIDATE_MS = 5 * 60 * 1000;
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
     providers: [
@@ -136,8 +141,48 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             if (user) {
                 token.role = user.role;
                 token.id = user.id!;
+                token.checkedAt = Date.now();
+                return token;
             }
-            return token;
+
+            // Revalidación periódica contra la base. Antes el rol se leía solo al
+            // iniciar sesión: desactivar o degradar a un admin en /admin/usuarios
+            // no tenía efecto hasta que expirara su JWT (hasta 30 días con un
+            // token de admin vivo). Ahora se recomprueba cada REVALIDATE_MS.
+            const checkedAt = typeof token.checkedAt === "number" ? token.checkedAt : 0;
+            if (Date.now() - checkedAt < ROLE_REVALIDATE_MS) return token;
+
+            const userId = token.id as string | undefined;
+            if (!userId) return token;
+
+            try {
+                const admin = await db.query.users.findFirst({
+                    where: eq(users.id, userId),
+                    columns: { role: true, active: true },
+                });
+                if (admin) {
+                    // Cuenta desactivada → invalidar la sesión.
+                    if (!admin.active) return null;
+                    token.role = admin.role;
+                    token.checkedAt = Date.now();
+                    return token;
+                }
+
+                const customer = await db.query.customers.findFirst({
+                    where: eq(customers.id, userId),
+                    columns: { active: true },
+                });
+                if (!customer || !customer.active) return null;
+
+                token.role = "customer";
+                token.checkedAt = Date.now();
+                return token;
+            } catch (err) {
+                // Si la base falla, no cerrar sesiones válidas: conservar el token
+                // y reintentar en la siguiente petición.
+                console.error("[auth] revalidación de rol falló:", err);
+                return token;
+            }
         },
         async session({ session, token }) {
             if (token) {
@@ -152,5 +197,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     session: {
         strategy: "jwt",
+        // 7 días en lugar de los 30 por defecto: acota la ventana en que un token
+        // robado sigue sirviendo.
+        maxAge: 7 * 24 * 60 * 60,
     },
 });

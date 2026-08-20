@@ -20,12 +20,30 @@ import { db } from "@/lib/db";
 import { refreshTokens } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 
-const SECRET_RAW = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || "";
-if (!SECRET_RAW) {
-    // En build no romper — pero las funciones siguientes lanzarán si se invocan sin secret.
-    console.warn("[mobile-auth] NEXTAUTH_SECRET / AUTH_SECRET no está definido");
+/**
+ * Clave de firma. Antes había un fallback embebido
+ * ("dev-insecure-secret-do-not-use-in-prod-please"): si a un entorno le faltaba
+ * la variable, la app seguía funcionando firmando y aceptando JWTs con un
+ * secreto que está en el repositorio — cualquiera podía forjarse un token de
+ * admin. Ahora se resuelve de forma perezosa y lanza si no está configurada, así
+ * el build no se rompe pero ninguna petición se atiende con un secreto conocido.
+ */
+let cachedSecret: Uint8Array | null = null;
+
+function getSecret(): Uint8Array {
+    if (cachedSecret) return cachedSecret;
+
+    const raw = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || "";
+    if (!raw) {
+        throw new AuthHttpError(
+            500,
+            "Configuración de autenticación incompleta",
+            "auth_secret_missing",
+        );
+    }
+    cachedSecret = new TextEncoder().encode(raw);
+    return cachedSecret;
 }
-const SECRET = new TextEncoder().encode(SECRET_RAW || "dev-insecure-secret-do-not-use-in-prod-please");
 
 const ACCESS_TTL = "15m";
 const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 días
@@ -79,7 +97,7 @@ export async function signAccessToken(payload: { userId: string; email: string; 
         .setSubject(payload.userId)
         .setIssuedAt()
         .setExpirationTime(ACCESS_TTL)
-        .sign(SECRET);
+        .sign(getSecret());
 }
 
 async function signRefreshToken(userId: string, userType: UserType, jti: string): Promise<{ token: string; expiresAt: Date }> {
@@ -90,13 +108,16 @@ async function signRefreshToken(userId: string, userType: UserType, jti: string)
         .setJti(jti)
         .setIssuedAt()
         .setExpirationTime(expiresAt)
-        .sign(SECRET);
+        .sign(getSecret());
     return { token, expiresAt };
 }
 
 export async function verifyAccessToken(token: string): Promise<AccessPayload> {
+    // Fuera del try: un secreto mal configurado debe salir como error 500 propio,
+    // no disfrazado de "token inválido".
+    const secret = getSecret();
     try {
-        const { payload } = await jwtVerify(token, SECRET, { algorithms: ["HS256"] });
+        const { payload } = await jwtVerify(token, secret, { algorithms: ["HS256"] });
         if (!payload.sub) throw new Error("missing sub");
         return payload as AccessPayload;
     } catch (err: any) {
@@ -106,8 +127,9 @@ export async function verifyAccessToken(token: string): Promise<AccessPayload> {
 }
 
 async function verifyRefreshTokenJwt(token: string): Promise<RefreshPayload> {
+    const secret = getSecret();
     try {
-        const { payload } = await jwtVerify(token, SECRET, { algorithms: ["HS256"] });
+        const { payload } = await jwtVerify(token, secret, { algorithms: ["HS256"] });
         if (!payload.sub || !payload.jti || (payload as any).type !== "refresh") {
             throw new Error("not a refresh token");
         }

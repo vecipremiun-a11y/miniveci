@@ -160,7 +160,9 @@ export async function GET(req: NextRequest) {
         });
 
     } catch (error) {
+        // El detalle del error va solo al log del servidor: devolverlo al cliente
+        // filtraba mensajes internos (esquema, conexión) en una ruta pública.
         console.error("[PUBLIC_API_PRODUCTS_GET]", error);
-        return NextResponse.json({ error: "Internal Server Error", details: String(error) }, { status: 500 });
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

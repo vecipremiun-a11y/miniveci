@@ -22,6 +22,13 @@ export const STORE_DELIVERY_FEE_CLP = 1990;
 const AUTO_DISCOUNT_THRESHOLD = 50000;
 const AUTO_DISCOUNT_RATE = 0.05;
 
+/**
+ * Tope de unidades por línea. Antes solo había piso (`Math.max(1, ...)`), así que
+ * se podía mandar `quantity: 999999999` y generar totales absurdos que además
+ * viajaban al POS.
+ */
+export const MAX_ITEM_QUANTITY = 500;
+
 /** Cupones válidos → porcentaje de descuento sobre el subtotal. */
 const COUPONS: Record<string, number> = {
     VECI10: 0.1,
@@ -104,7 +111,11 @@ export async function recalcStorePricing(
 
     for (const it of cartItems) {
         const id = String(it!.id);
-        const quantity = Math.max(1, Math.round(Number(it?.quantity) || 0));
+        const requestedQty = Math.round(Number(it?.quantity) || 0);
+        if (requestedQty > MAX_ITEM_QUANTITY) {
+            return fail(`Cantidad máxima por producto: ${MAX_ITEM_QUANTITY} unidades`);
+        }
+        const quantity = Math.max(1, requestedQty);
 
         if (isRaffleItemId(id)) {
             const m = id.match(RAFFLE_ID_PATTERN);

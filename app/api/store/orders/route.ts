@@ -14,23 +14,18 @@ import { storeMobileOrderSchema } from "@/lib/validations/store-mobile";
 import { publishStoreOrderEvent, type SerializedStoreOrder } from "@/lib/store-live-updates";
 import { notifyOrderStatusChanged } from "@/lib/fcm";
 import { sendStoreOrderToPosveci } from "@/lib/posveci-store";
+import { generateUniqueOrderNumber } from "@/lib/order-number";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { auth } from "@/lib/auth";
+import { persistCheckoutProfile } from "@/lib/checkout-profile";
 
 // Costo de envío hardcoded. TODO: mover a una tabla settings/config (igual que bakery_config).
 const STORE_DELIVERY_FEE_CLP = 1990;
 
-/** Genera order_number antiguo (web checkout legacy). */
-function generateLegacyOrderNumber() {
-    const now = new Date();
-    const y = now.getFullYear().toString().slice(-2);
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    const rand = Math.floor(Math.random() * 9000 + 1000);
-    return `MV-${y}${m}${d}-${rand}`;
-}
-
-const MAX_GENERATE_RETRIES = 5;
-
 export async function POST(req: NextRequest) {
+    const limited = enforceRateLimit(req, RATE_LIMITS.checkout);
+    if (limited) return limited;
+
     // Si trae Bearer → app móvil con el nuevo contrato.
     // Si no → seguir flujo web legacy intacto.
     const bearer = extractBearer(req);
@@ -239,15 +234,7 @@ async function handleMobileOrder(req: NextRequest, token: string) {
         const total = subtotal + shippingCost;
 
         // 6. Generar orderNumber MV-XXXXX único (con reintentos)
-        let orderNumber = generatePublicCode();
-        for (let i = 0; i < MAX_GENERATE_RETRIES; i++) {
-            const exists = await db.query.orders.findFirst({
-                where: eq(orders.orderNumber, orderNumber),
-                columns: { id: true },
-            });
-            if (!exists) break;
-            orderNumber = generatePublicCode();
-        }
+        const orderNumber = await generateUniqueOrderNumber(generatePublicCode);
 
         const orderId = randomUUID();
         const now = new Date().toISOString();
@@ -339,6 +326,18 @@ async function handleMobileOrder(req: NextRequest, token: string) {
         // 13. Trabajo en background DESPUÉS de responder (Vercel `after()` mantiene
         // viva la lambda — mismo patrón que los encargos de amasandería).
         after(async () => {
+            // Completa el perfil con los datos del pedido (la app pide teléfono y
+            // dirección en cada compra; así quedan guardados para la siguiente).
+            if (userType === "customer") {
+                await persistCheckoutProfile({
+                    customerId: userId,
+                    phone: data.phone,
+                    rut: customerRut,
+                    deliveryType: data.method,
+                    address: data.method === "delivery" ? data.address : null,
+                });
+            }
+
             // POSVECI: publica el pedido de tienda al POS (order_type: "store").
             // Se envía al confirmarse el pedido, sin esperar el pago.
             try {
@@ -388,13 +387,19 @@ async function handleLegacyWebOrder(req: NextRequest) {
     try {
         const body = await req.json();
 
+        // SEGURIDAD: el dueño del pedido sale de la sesión, NUNCA del body.
+        // Antes se confiaba en `body.customerId`, así que cualquiera podía crear
+        // pedidos a nombre de otra cuenta (envenenar su historial, asignarle
+        // números de sorteo y dispararle notificaciones push).
+        const session = await auth();
+        const customerId = session?.user?.role === "customer" ? session.user.id : null;
+
         const {
             customerName,
             customerLastName,
             customerEmail,
             customerPhone,
             customerRut,
-            customerId,
             deliveryType,
             deliveryDate,
             deliveryTimeSlot,
@@ -423,7 +428,7 @@ async function handleLegacyWebOrder(req: NextRequest) {
         const { items: pricedItems, subtotal, discount, shippingCost, total } = pricing;
 
         const orderId = randomUUID();
-        const orderNumber = generateLegacyOrderNumber();
+        const orderNumber = await generateUniqueOrderNumber();
         const now = new Date().toISOString();
 
         const fullName = customerLastName
@@ -523,8 +528,25 @@ async function handleLegacyWebOrder(req: NextRequest) {
         };
         publishStoreOrderEvent({ type: "order.created", order: serialized, occurredAt: now });
 
-        // Background post-response: POSVECI + FCM (mismo patrón que el flujo móvil)
+        // Background post-response: perfil + POSVECI + FCM (mismo patrón que el flujo móvil)
         after(async () => {
+            // Guarda en el perfil los datos que faltaban (teléfono, RUT, dirección)
+            // para que el próximo checkout del cliente salga precargado.
+            if (customerId) {
+                await persistCheckoutProfile({
+                    customerId,
+                    firstName: customerName,
+                    lastName: customerLastName,
+                    phone: customerPhone,
+                    rut: customerRut,
+                    deliveryType,
+                    address: shippingAddress,
+                    comuna: shippingComuna,
+                    city: shippingCity,
+                    addressNotes: shippingNotes,
+                });
+            }
+
             // POSVECI: publica el pedido de tienda al POS (order_type: "store").
             // Contra entrega y transferencia entran por aquí; Mercado Pago web
             // usa create-preference y se publica al aprobarse el pago (webhook).

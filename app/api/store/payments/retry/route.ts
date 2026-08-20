@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getSiteUrl } from "@/lib/site-url";
 
 export async function POST(req: NextRequest) {
     try {
@@ -65,10 +66,7 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
-            || req.headers.get("origin")
-            || req.headers.get("referer")?.replace(/\/[^/]*$/, "")
-            || "https://www.miniveci.cl";
+        const siteUrl = getSiteUrl();
         const isHttps = siteUrl.startsWith("https");
 
         const backUrls = {

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Footer } from '@/components/Footer';
 import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from '@/components/cart/CartProvider';
 import { ArrowLeft, CalendarDays, Clock3, CreditCard, MapPin, Store, Loader2, ChevronDown, Clock, Phone as PhoneIcon, Navigation, Upload, Copy, Check, X, ImageIcon, Pencil, User, Mail, Phone, FileText } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -12,6 +12,47 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { es } from 'date-fns/locale';
 import { useSession } from 'next-auth/react';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
+
+/**
+ * Ultimo checkout completado en este navegador. Precarga a los invitados y tambien
+ * a las cuentas cuyo perfil todavia no tiene el dato (ej. alta con Google, que no
+ * pide telefono). ownerId evita que los datos de una cuenta se filtren a otra
+ * cuando dos personas usan el mismo navegador.
+ */
+const CHECKOUT_SNAPSHOT_KEY = 'miniveci:ultimo-checkout';
+
+interface CheckoutSnapshot {
+    ownerId: string | null;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email: string;
+    rut: string;
+    address: string;
+    comuna: string;
+    city: string;
+    addressNotes: string;
+}
+
+function readCheckoutSnapshot(ownerId: string | null): CheckoutSnapshot | null {
+    try {
+        const raw = localStorage.getItem(CHECKOUT_SNAPSHOT_KEY);
+        if (!raw) return null;
+        const snap = JSON.parse(raw) as CheckoutSnapshot;
+        if ((snap.ownerId ?? null) !== ownerId) return null;
+        return snap;
+    } catch {
+        return null;
+    }
+}
+
+function saveCheckoutSnapshot(snap: CheckoutSnapshot) {
+    try {
+        localStorage.setItem(CHECKOUT_SNAPSHOT_KEY, JSON.stringify(snap));
+    } catch {
+        // localStorage lleno o bloqueado: la precarga es un extra, nunca rompe el pedido.
+    }
+}
 
 type DeliveryMethod = 'store' | 'delivery';
 type PaymentMethod = 'contrarembolso' | 'transferencia' | 'mercadopago';
@@ -25,7 +66,7 @@ const TIME_SLOTS = [
 
 export default function CheckoutPage() {
     const { items, subtotal, clearCart } = useCart();
-    const { data: session } = useSession();
+    const { data: session, status: sessionStatus } = useSession();
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
@@ -59,7 +100,7 @@ export default function CheckoutPage() {
     const [contactRut, setContactRut] = useState('');
     const [contactAddress, setContactAddress] = useState('');
     const [contactComuna, setContactComuna] = useState('');
-    const [contactCity, setContactCity] = useState('Santiago');
+    const [contactCity, setContactCity] = useState('');
     const [contactNotes, setContactNotes] = useState('');
 
     // Transfer receipt
@@ -74,35 +115,104 @@ export default function CheckoutPage() {
     const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
     const [selectedAddressId, setSelectedAddressId] = useState<string | 'custom'>('custom');
 
-    // Auto-fill from customer profile and load saved addresses
+    interface CustomerProfile {
+        firstName: string | null; lastName: string | null; phone: string | null;
+        email: string | null; rut: string | null;
+        address: string | null; comuna: string | null; city: string | null; addressNotes: string | null;
+    }
+
+    const prefillStarted = useRef(false);
+    const [prefillDone, setPrefillDone] = useState(false);
+
+    // Espejo del valor actual: la precarga es asincrona y necesita saber si ya hay
+    // direccion puesta (por un paso anterior o tipeada por el usuario) sin leer estado viejo.
+    const contactAddressRef = useRef('');
+    useEffect(() => { contactAddressRef.current = contactAddress; }, [contactAddress]);
+
+    // Precarga en cascada: perfil del cliente -> libreta de direcciones -> direccion
+    // legacy del perfil -> datos de la sesion -> ultimo checkout de este navegador.
+    // La cuenta SIEMPRE manda: cada paso solo rellena lo que sigue vacio, el navegador
+    // va ultimo y su copia solo aplica si es del mismo dueño (ver readCheckoutSnapshot).
     useEffect(() => {
-        if (session?.user?.role !== 'customer') return;
-        fetch('/api/store/customer')
-            .then(r => r.ok ? r.json() : null)
-            .then(data => {
-                if (!data) return;
-                setContactName(data.firstName || '');
-                setContactLastName(data.lastName || '');
-                setContactPhone(data.phone || '');
-                setContactEmail(data.email || '');
-                setContactRut(data.rut || '');
-            })
-            .catch(() => {});
-        fetch('/api/store/customer/addresses')
-            .then(r => r.ok ? r.json() : [])
-            .then((addrs: SavedAddress[]) => {
-                setSavedAddresses(addrs);
-                const def = addrs.find(a => a.isDefault) || addrs[0];
-                if (def) {
-                    setSelectedAddressId(def.id);
-                    setContactAddress(def.address);
-                    setContactComuna(def.comuna);
-                    setContactCity(def.city);
-                    setContactNotes(def.addressNotes || '');
+        if (sessionStatus === 'loading' || prefillStarted.current) return;
+        prefillStarted.current = true;
+
+        const fill = (setter: Dispatch<SetStateAction<string>>, value?: string | null) => {
+            const v = (value || '').trim();
+            if (v) setter(prev => prev || v);
+        };
+        // La direccion se aplica como bloque: o entera de una fuente, o ninguna. Evita
+        // pegar la calle de la cuenta con la comuna de un pedido viejo del navegador.
+        let addressApplied = false;
+        const fillAddress = (a: { address?: string | null; comuna?: string | null; city?: string | null; addressNotes?: string | null }) => {
+            if (!a.address?.trim()) return;
+            if (addressApplied || contactAddressRef.current.trim()) return;
+            addressApplied = true;
+            fill(setContactAddress, a.address);
+            fill(setContactComuna, a.comuna);
+            fill(setContactCity, a.city);
+            fill(setContactNotes, a.addressNotes);
+        };
+
+        const run = async () => {
+            const userId = session?.user?.id ?? null;
+
+            if (session?.user?.role === 'customer') {
+                const profile: CustomerProfile | null = await fetch('/api/store/customer')
+                    .then(r => (r.ok ? r.json() : null))
+                    .catch(() => null);
+
+                if (profile) {
+                    fill(setContactName, profile.firstName);
+                    fill(setContactLastName, profile.lastName);
+                    fill(setContactPhone, profile.phone);
+                    fill(setContactEmail, profile.email);
+                    fill(setContactRut, profile.rut);
                 }
-            })
-            .catch(() => {});
-    }, [session]);
+
+                const addrs: SavedAddress[] = await fetch('/api/store/customer/addresses')
+                    .then(r => (r.ok ? r.json() : []))
+                    .catch(() => []);
+
+                if (Array.isArray(addrs) && addrs.length > 0) {
+                    setSavedAddresses(addrs);
+                    const def = addrs.find(a => a.isDefault) || addrs[0];
+                    setSelectedAddressId(def.id);
+                    fillAddress(def);
+                } else if (profile?.address) {
+                    // Cuentas viejas (o registro sin comuna): la direccion solo vive en el perfil.
+                    fillAddress(profile);
+                }
+            }
+
+            // Sesion: cubre a cualquier usuario logueado que no tenga perfil de cliente.
+            if (session?.user) {
+                const parts = (session.user.name || '').trim().split(/\s+/).filter(Boolean);
+                fill(setContactName, parts[0]);
+                fill(setContactLastName, parts.slice(1).join(' '));
+                fill(setContactEmail, session.user.email);
+            }
+
+            // Ultimo checkout de este navegador: lo que el perfil todavia no guarda.
+            const snap = readCheckoutSnapshot(userId);
+            if (snap) {
+                fill(setContactName, snap.firstName);
+                fill(setContactLastName, snap.lastName);
+                fill(setContactPhone, snap.phone);
+                fill(setContactEmail, snap.email);
+                fill(setContactRut, snap.rut);
+                fillAddress(snap);
+            }
+        };
+
+        run().finally(() => setPrefillDone(true));
+    }, [sessionStatus, session]);
+
+    // Si tras la precarga faltan datos obligatorios, abrir el formulario en vez de
+    // mostrar la tarjeta compacta (que los esconderia hasta que el pedido falle).
+    useEffect(() => {
+        if (prefillDone && (!contactName || !contactPhone)) setContactExpanded(true);
+    }, [prefillDone, contactName, contactPhone]);
 
     const handleAddressSelect = (id: string) => {
         setSelectedAddressId(id);
@@ -235,12 +345,31 @@ export default function CheckoutPage() {
             setSubmitError('Ingresa una dirección de entrega.');
             return;
         }
+        if (deliveryMethod === 'delivery' && !contactPhone.trim()) {
+            setContactExpanded(true);
+            setSubmitError('Ingresa un teléfono de contacto para coordinar la entrega.');
+            return;
+        }
         if (paymentMethod === 'transferencia' && !receiptUrl) {
             setSubmitError('Sube el comprobante de transferencia antes de finalizar.');
             return;
         }
 
         setIsSubmitting(true);
+        // Se guarda al confirmar para que el proximo checkout salga precargado incluso
+        // sin cuenta. Para clientes logueados el backend ademas completa su perfil.
+        const persistSnapshot = () => saveCheckoutSnapshot({
+            ownerId: session?.user?.id ?? null,
+            firstName: contactName,
+            lastName: contactLastName,
+            phone: contactPhone,
+            email: contactEmail,
+            rut: contactRut,
+            address: deliveryMethod === 'delivery' ? contactAddress : '',
+            comuna: deliveryMethod === 'delivery' ? contactComuna : '',
+            city: deliveryMethod === 'delivery' ? contactCity : '',
+            addressNotes: deliveryMethod === 'delivery' ? contactNotes : '',
+        });
         try {
             const orderPayload = {
                 customerName: contactName,
@@ -248,7 +377,7 @@ export default function CheckoutPage() {
                 customerEmail: contactEmail,
                 customerPhone: contactPhone,
                 customerRut: contactRut,
-                customerId: session?.user?.role === 'customer' ? (session.user as any).id : null,
+                customerId: session?.user?.role === 'customer' ? session.user.id : null,
                 deliveryType: deliveryMethod === 'store' ? 'pickup' : 'delivery',
                 deliveryDate: deliveryDate?.toISOString().split('T')[0] || null,
                 deliveryTimeSlot: deliveryTime,
@@ -297,6 +426,7 @@ export default function CheckoutPage() {
                     return;
                 }
                 // Redirect to Mercado Pago checkout
+                persistSnapshot();
                 clearCart();
                 const redirectUrl = data.initPoint || data.sandboxInitPoint;
                 if (redirectUrl) {
@@ -320,6 +450,7 @@ export default function CheckoutPage() {
                 return;
             }
 
+            persistSnapshot();
             clearCart();
             router.push(`/pedido-exitoso?order=${encodeURIComponent(data.orderNumber)}`);
         } catch {

@@ -30,6 +30,22 @@ function verifySignature(secret: string, timestamp: string, rawBody: string, sig
     }
 }
 
+/** Ventana de tolerancia para el timestamp firmado (anti-replay). */
+const SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000;
+
+/**
+ * El timestamp entra en el HMAC, así que no se puede alterar sin invalidar la
+ * firma; comprobar que sea reciente evita que una petición firmada capturada
+ * sirva para siempre.
+ */
+function isTimestampFresh(timestamp: string): boolean {
+    const numeric = Number(timestamp);
+    if (!Number.isFinite(numeric)) return false;
+    // Acepta segundos o milisegundos según lo que mande POSKEM.
+    const asMs = numeric > 1e12 ? numeric : numeric * 1000;
+    return Math.abs(Date.now() - asMs) <= SIGNATURE_MAX_AGE_MS;
+}
+
 // --- Helpers ---
 
 /** Normaliza stock: negativos → 0, unidades enteras → floor, kg/lt → 3 decimales */
@@ -267,17 +283,28 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Invalid body" }, { status: 400 });
     }
 
-    // Verify HMAC signature
+    // Verificación HMAC — SIEMPRE obligatoria (fail-closed).
+    // Antes esto era `if (secret) { ...verificar... }`: si la fila
+    // `api_credentials.webhook_secret` quedaba vacía, la comprobación se saltaba
+    // por completo y cualquiera podía reescribir el catálogo (precios a $1,
+    // despublicar todo, crear productos). Sin secreto configurado el endpoint
+    // ahora rechaza todo en lugar de abrirse.
     const secret = await getWebhookSecret();
-    if (secret) {
-        if (!signature || !timestamp) {
-            console.warn("[POSKEM_WEBHOOK] Missing signature or timestamp");
-            return NextResponse.json({ error: "Missing signature" }, { status: 401 });
-        }
-        if (!verifySignature(secret, timestamp, rawBody, signature)) {
-            console.warn("[POSKEM_WEBHOOK] Invalid signature for event:", eventType);
-            return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-        }
+    if (!secret) {
+        console.error("[POSKEM_WEBHOOK] webhook_secret no configurado — se rechaza el evento:", eventType);
+        return NextResponse.json({ error: "Webhook secret not configured" }, { status: 503 });
+    }
+    if (!signature || !timestamp) {
+        console.warn("[POSKEM_WEBHOOK] Missing signature or timestamp");
+        return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+    }
+    if (!isTimestampFresh(timestamp)) {
+        console.warn("[POSKEM_WEBHOOK] Stale timestamp for event:", eventType);
+        return NextResponse.json({ error: "Stale timestamp" }, { status: 401 });
+    }
+    if (!verifySignature(secret, timestamp, rawBody, signature)) {
+        console.warn("[POSKEM_WEBHOOK] Invalid signature for event:", eventType);
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     let payload: Record<string, unknown>;

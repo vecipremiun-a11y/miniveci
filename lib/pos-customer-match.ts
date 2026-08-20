@@ -149,33 +149,67 @@ export async function rutTakenByOtherCustomer(rut: string, excludeId?: string): 
  * Cuando un customer se crea o actualiza su RUT o email, llamamos esto para
  * reasignar guest orders que matcheen.
  *
- * Match por orden de prioridad: RUT → email. El teléfono NO reclama (no es llave
- * de identidad). Una vez reclamado (unclaimed=false), no se vuelve a tocar:
- * la identidad ya quedó resuelta por ID. Operación idempotente.
+ * SEGURIDAD — se exigen DOS identificadores coincidentes:
+ * un solo dato bastaba antes, y en Chile el RUT es información pública (y aquí
+ * no hay verificación de email), así que registrarse con el RUT o el correo de
+ * otra persona transfería automáticamente sus encargos presenciales —con
+ * teléfono, dirección e historial— a la cuenta del atacante.
+ *
+ * Ahora el encargo se reclama solo si coinciden al menos dos de {RUT, email,
+ * teléfono}. El teléfono sigue sin ser llave de identidad por sí solo (se
+ * comparte y se recicla), pero sirve de corroboración. POSVECI manda los tres
+ * datos, así que el caso normal se reclama igual; si un encargo trae un único
+ * identificador queda pendiente para vincularlo a mano desde el panel.
+ *
+ * Una vez reclamado (unclaimed=false) no se vuelve a tocar: la identidad ya
+ * quedó resuelta por ID. Operación idempotente.
  *
  * Devuelve la lista de publicCodes reclamados (para logging).
  */
 export async function claimUnclaimedOrdersForCustomer(customerId: string): Promise<string[]> {
     const customer = await db.query.customers.findFirst({
         where: eq(customers.id, customerId),
-        columns: { id: true, rut: true, email: true },
+        columns: { id: true, rut: true, email: true, phone: true },
     });
     if (!customer) return [];
 
     const rutNorm = normalizeRut(customer.rut);
     const emailNorm = normalizeEmail(customer.email);
+    const phoneNorm = normalizePhone(customer.phone);
 
     if (!rutNorm && !emailNorm) return [];
 
-    // Buscar guest orders que matcheen por RUT o email normalizado.
+    // Preselección en SQL por RUT o email; la regla de los dos identificadores
+    // se aplica después en JS (necesita comparar los tres campos a la vez).
     const matchConds = [];
     if (rutNorm) matchConds.push(eq(bakeryOrders.guestRut, rutNorm));
     if (emailNorm) matchConds.push(eq(bakeryOrders.guestEmail, emailNorm));
 
-    const candidates = await db
-        .select({ id: bakeryOrders.id, publicCode: bakeryOrders.publicCode })
+    const preselected = await db
+        .select({
+            id: bakeryOrders.id,
+            publicCode: bakeryOrders.publicCode,
+            guestRut: bakeryOrders.guestRut,
+            guestEmail: bakeryOrders.guestEmail,
+            guestPhone: bakeryOrders.guestPhone,
+        })
         .from(bakeryOrders)
         .where(and(eq(bakeryOrders.unclaimed, true), or(...matchConds)));
+
+    const candidates = preselected.filter((order) => {
+        let matches = 0;
+        if (rutNorm && order.guestRut && normalizeRut(order.guestRut) === rutNorm) matches++;
+        if (emailNorm && order.guestEmail && normalizeEmail(order.guestEmail) === emailNorm) matches++;
+        if (phoneNorm && order.guestPhone && normalizePhone(order.guestPhone) === phoneNorm) matches++;
+        return matches >= 2;
+    });
+
+    const skipped = preselected.length - candidates.length;
+    if (skipped > 0) {
+        console.warn(
+            `[CLAIM] ${skipped} encargo(s) coincidían con un solo identificador de ${customerId.slice(0, 8)}... — no reclamados, vincular a mano.`,
+        );
+    }
 
     if (candidates.length === 0) return [];
 

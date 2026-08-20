@@ -1,12 +1,18 @@
 "use client";
 
-import { AdminProvider } from "@/components/admin/AdminProvider";
+import { SessionProvider } from "next-auth/react";
+import { Toaster } from "sonner";
+import { AdminProvider, useAdmin } from "@/components/admin/AdminProvider";
 import Sidebar from "@/components/admin/Sidebar";
 import AdminHeader from "@/components/admin/AdminHeader";
-import { useAdmin } from "@/components/admin/AdminProvider";
 import { cn } from "@/lib/utils";
 
-// Separate component to use the context
+/**
+ * Chrome del panel admin (sidebar, header, providers).
+ *
+ * Vive aparte de `app/admin/layout.tsx` porque ese layout pasó a ser un server
+ * component para poder verificar sesión y rol en el servidor.
+ */
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const { sidebarOpen } = useAdmin();
 
@@ -28,14 +34,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     );
 }
 
-import { SessionProvider } from "next-auth/react";
-import { Toaster } from "sonner";
-
-export default function AdminLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+export default function AdminLayoutShell({ children }: { children: React.ReactNode }) {
     return (
         <SessionProvider>
             <AdminProvider>

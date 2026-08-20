@@ -4,11 +4,16 @@ import { subscriptions, customers } from "@/lib/db/schema";
 import { eq, sql, desc, count } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
+// Membresías son datos comerciales: solo dueño y administradores.
+// Antes el chequeo era `role !== "admin"`, así que el rol "owner" —el dueño—
+// recibía 401 en la vista de membresías.
+const ALLOWED_ROLES = ["owner", "admin"];
+
 export async function GET() {
     try {
         const session = await auth();
-        if (!session?.user?.id || session.user.role !== "admin") {
-            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+        if (!session?.user?.id || !ALLOWED_ROLES.includes(session.user.role)) {
+            return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
         // Get all subscriptions with customer data

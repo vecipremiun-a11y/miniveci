@@ -4,6 +4,7 @@ import { chatConversations, chatMessages, customers } from "@/lib/db/schema";
 import { resolveClientIdentity, ownsConversation } from "@/lib/chat-identity";
 import { publishChatEvent } from "@/lib/chat-live-updates";
 import { asc, eq, sql } from "drizzle-orm";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
  * Cliente envía un mensaje a su conversación.
  */
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const limited = enforceRateLimit(req, RATE_LIMITS.chat);
+    if (limited) return limited;
+
     try {
         const { id: conversationId } = await context.params;
         const body = await req.json().catch(() => ({}));

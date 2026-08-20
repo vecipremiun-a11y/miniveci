@@ -12,7 +12,7 @@ export const roleValues = ROLES.map((r) => r.value) as [string, ...string[]];
 
 export const createUserSchema = z.object({
     email: z.string().email("Correo electrónico inválido"),
-    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+    password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
     name: z.string().min(1, "El nombre es requerido"),
     role: z.enum(roleValues, { message: "Rol inválido" }),
     active: z.boolean(),
@@ -20,7 +20,7 @@ export const createUserSchema = z.object({
 
 export const updateUserSchema = z.object({
     email: z.string().email("Correo electrónico inválido").optional(),
-    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional().or(z.literal("")),
+    password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").optional().or(z.literal("")),
     name: z.string().min(1, "El nombre es requerido").optional(),
     role: z.enum(roleValues, { message: "Rol inválido" }).optional(),
     active: z.boolean().optional(),

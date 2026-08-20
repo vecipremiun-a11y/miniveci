@@ -3,8 +3,8 @@ import { NextResponse, NextRequest } from "next/server";
 
 /* ----------------------- CORS ----------------------- */
 
-// Orígenes permitidos en dev. En prod se suma NEXT_PUBLIC_SITE_URL si está
-// definido + cualquier *.vercel.app.
+// Orígenes locales de desarrollo. Solo se aceptan cuando NODE_ENV !== production:
+// en producción no hay razón para que un localhost sea un origen válido.
 const DEV_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5000",  // Flutter web (puerto autorizado en Google OAuth)
@@ -19,14 +19,40 @@ const DEV_ALLOWED_ORIGINS = [
     "http://10.0.2.2:3000",   // Android emulator
 ];
 
+/**
+ * SEGURIDAD: antes se aceptaba cualquier `https://*.vercel.app` para cubrir los
+ * preview deploys, junto con `Access-Control-Allow-Credentials: true`. Como
+ * cualquiera puede publicar gratis en vercel.app, eso le regalaba un origen
+ * autorizado a un atacante. Ahora los previews se declaran explícitamente en
+ * CORS_ALLOWED_ORIGINS (lista separada por comas).
+ */
+function getConfiguredOrigins(): string[] {
+    const origins: string[] = [];
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+    if (siteUrl) origins.push(siteUrl.replace(/\/$/, ""));
+
+    const extra = process.env.CORS_ALLOWED_ORIGINS?.trim();
+    if (extra) {
+        for (const raw of extra.split(",")) {
+            const value = raw.trim().replace(/\/$/, "");
+            if (value) origins.push(value);
+        }
+    }
+
+    // Dominio propio de producción: sirve de red de seguridad si
+    // NEXT_PUBLIC_SITE_URL no estuviera configurada en el entorno.
+    origins.push("https://miniveci.cl", "https://www.miniveci.cl");
+
+    return origins;
+}
+
 function isAllowedOrigin(origin: string | null): boolean {
     if (!origin) return false;
-    if (DEV_ALLOWED_ORIGINS.includes(origin)) return true;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-    if (siteUrl && origin === siteUrl.replace(/\/$/, "")) return true;
-    // Permitir cualquier subdominio *.vercel.app (preview deploys)
-    if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) return true;
-    return false;
+    if (process.env.NODE_ENV !== "production" && DEV_ALLOWED_ORIGINS.includes(origin)) {
+        return true;
+    }
+    return getConfiguredOrigins().includes(origin);
 }
 
 function applyCorsHeaders(res: NextResponse, origin: string | null): NextResponse {
@@ -110,11 +136,14 @@ export default auth((req) => {
         // si trae Bearer, dejamos pasar para que el handler verifique JWT
     }
 
-    // 7. Role check: rutas admin requieren rol admin
+    // 7. Role check: rutas admin requieren rol admin.
+    //    Antes era `if (role && !adminRoles.includes(role))`, así que una sesión
+    //    sin rol se saltaba la comprobación. Ahora la ausencia de rol también
+    //    deniega (fail-closed).
     if ((isAdminPage || isAdminApi) && isLoggedIn) {
         const role = req.auth?.user?.role;
         const adminRoles = ["owner", "admin", "preparacion", "reparto", "contenido"];
-        if (role && !adminRoles.includes(role)) {
+        if (!role || !adminRoles.includes(role)) {
             if (isAdminApi) return respond(NextResponse.json({ message: "Forbidden" }, { status: 403 }));
             return NextResponse.redirect(new URL("/cuenta", nextUrl));
         }

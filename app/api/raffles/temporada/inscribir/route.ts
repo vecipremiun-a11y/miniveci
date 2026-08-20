@@ -5,6 +5,7 @@ import { raffles, raffleEntries } from "@/lib/db/schema";
 import { releaseExpiredReservations } from "@/lib/raffles";
 import { parseEntryFields, RAFFLE_ENTRY_FIELD_META, type RaffleEntryFieldKey } from "@/lib/raffle-entry-fields";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 // Largo mínimo razonable por campo para una validación básica.
 const MIN_LEN: Partial<Record<RaffleEntryFieldKey, number>> = {
@@ -91,6 +92,12 @@ async function registerWithPosveci(
 }
 
 export async function POST(req: NextRequest) {
+    // Endpoint público por diseño (sorteo del local físico). El límite por IP
+    // evita que alguien cope los `totalNumbers` con inscripciones inventadas y
+    // deje sin cupos a los clientes reales.
+    const limited = enforceRateLimit(req, RATE_LIMITS.raffle);
+    if (limited) return limited;
+
     try {
         const body = (await req.json()) as Record<string, unknown>;
 

@@ -9,8 +9,12 @@ import { registerSchema } from "@/lib/validations/mobile-auth";
 import { issueTokens } from "@/lib/mobile-auth";
 import { customerToApiUser } from "@/lib/user-shape";
 import { claimUnclaimedOrdersForCustomer, syncCustomerToPosveci } from "@/lib/pos-customer-match";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
+    const limited = enforceRateLimit(req, RATE_LIMITS.register);
+    if (limited) return limited;
+
     try {
         const body = await req.json().catch(() => ({}));
         const data = registerSchema.parse(body);

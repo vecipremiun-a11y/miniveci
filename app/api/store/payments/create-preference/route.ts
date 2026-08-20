@@ -1,23 +1,27 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { mpPreference } from "@/lib/mercadopago";
 import { db } from "@/lib/db";
 import { orders, orderItems, orderStatusHistory } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
 import { extractRaffleItems, linkRaffleEntriesToOrder } from "@/lib/raffle-checkout";
 import { recalcStorePricing } from "@/lib/store-pricing";
-
-function generateOrderNumber() {
-    const now = new Date();
-    const y = now.getFullYear().toString().slice(-2);
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    const rand = Math.floor(Math.random() * 9000 + 1000);
-    return `MV-${y}${m}${d}-${rand}`;
-}
+import { generateUniqueOrderNumber } from "@/lib/order-number";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { auth } from "@/lib/auth";
+import { persistCheckoutProfile } from "@/lib/checkout-profile";
+import { getSiteUrl } from "@/lib/site-url";
 
 export async function POST(req: NextRequest) {
+    const limited = enforceRateLimit(req, RATE_LIMITS.checkout);
+    if (limited) return limited;
+
     try {
         const body = await req.json();
+
+        // SEGURIDAD: el dueño del pedido sale de la sesión, NUNCA del body
+        // (ver nota equivalente en /api/store/orders).
+        const session = await auth();
+        const customerId = session?.user?.role === "customer" ? session.user.id : null;
 
         const {
             customerName,
@@ -25,7 +29,6 @@ export async function POST(req: NextRequest) {
             customerEmail,
             customerPhone,
             customerRut,
-            customerId,
             deliveryType,
             deliveryDate,
             deliveryTimeSlot,
@@ -54,7 +57,7 @@ export async function POST(req: NextRequest) {
 
         // Create order first with status "pending_payment"
         const orderId = randomUUID();
-        const orderNumber = generateOrderNumber();
+        const orderNumber = await generateUniqueOrderNumber();
         const now = new Date().toISOString();
         const fullName = customerLastName ? `${customerName} ${customerLastName}` : customerName;
 
@@ -148,10 +151,25 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
-            || req.headers.get("origin")
-            || req.headers.get("referer")?.replace(/\/[^/]*$/, "")
-            || "https://miniveci.cl";
+        // Guarda en el perfil los datos que faltaban para precargar el próximo checkout
+        // (mismo criterio que /api/store/orders; la orden ya existe aunque el pago
+        // quede pendiente en Mercado Pago).
+        if (customerId) {
+            after(() => persistCheckoutProfile({
+                customerId,
+                firstName: customerName,
+                lastName: customerLastName,
+                phone: customerPhone,
+                rut: customerRut,
+                deliveryType,
+                address: shippingAddress,
+                comuna: shippingComuna,
+                city: shippingCity,
+                addressNotes: shippingNotes,
+            }));
+        }
+
+        const siteUrl = getSiteUrl();
         const isHttps = siteUrl.startsWith("https");
 
         const backUrls = {

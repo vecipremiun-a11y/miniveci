@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { apiCredentials } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { createHash, timingSafeEqual } from "crypto";
+
+/**
+ * Comparación en tiempo constante. Se hashea primero para que ambos buffers
+ * midan lo mismo (timingSafeEqual lanza si difieren en largo, y el largo por sí
+ * solo ya filtraría información).
+ */
+function secureEquals(a: string, b: string): boolean {
+    const ha = createHash("sha256").update(a).digest();
+    const hb = createHash("sha256").update(b).digest();
+    return timingSafeEqual(ha, hb);
+}
 
 /**
  * Auth y CORS compartidos para todos los endpoints /api/pos/*.
@@ -61,7 +73,11 @@ export async function requirePosCredentials(req: NextRequest): Promise<NextRespo
     if (!credentials) {
         return withPosCors(NextResponse.json({ error: "API credentials not configured" }, { status: 503 }));
     }
-    if (credentials.clientId !== apiKey || credentials.clientSecret !== apiSecret) {
+    // Se evalúan las dos comparaciones sin cortocircuito para no filtrar por
+    // tiempo si el clientId era correcto y el secreto no.
+    const keyOk = secureEquals(credentials.clientId ?? "", apiKey);
+    const secretOk = secureEquals(credentials.clientSecret ?? "", apiSecret);
+    if (!keyOk || !secretOk) {
         return withPosCors(NextResponse.json({ error: "Invalid api_key or api_secret" }, { status: 401 }));
     }
     return null;
