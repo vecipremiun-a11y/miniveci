@@ -10,6 +10,11 @@ import { useChatSSE, type ChatSSEEvent } from '@/hooks/use-chat-sse';
 import { useAttachmentUpload, validateChatFile } from '@/hooks/use-attachment-upload';
 import { ChatAttachment } from '@/components/chat/ChatAttachment';
 import { ChatLightbox } from '@/components/chat/ChatLightbox';
+import { VisitorList } from './VisitorList';
+import { VisitorComposer } from './VisitorComposer';
+import {
+    useVisitorPresence, PRESENCE_POLL_ACTIVE_MS, PRESENCE_POLL_IDLE_MS, type OnlineVisitor,
+} from '@/hooks/use-visitor-presence';
 
 interface ConversationListItem {
     id: string;
@@ -143,6 +148,10 @@ function sortConversations(list: ConversationListItem[]): ConversationListItem[]
 export function SoporteClient() {
     const [conversations, setConversations] = useState<ConversationListItem[]>([]);
     const [statusFilter, setStatusFilter] = useState<'open' | 'closed' | 'all'>('open');
+    /** El panel lateral muestra conversaciones o quién está navegando ahora. */
+    const [sidebarTab, setSidebarTab] = useState<'conversations' | 'online'>('conversations');
+    /** Visitante sin conversación al que se le va a escribir primero. */
+    const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [detail, setDetail] = useState<ConversationDetail | null>(null);
@@ -157,6 +166,30 @@ export function SoporteClient() {
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { upload, progress: uploadProgress, uploading } = useAttachmentUpload();
+    // Se consulta siempre, no solo en la pestaña "En línea": así el contador
+    // sigue vivo mientras el operador responde una conversación.
+    // Rápido mientras se mira la lista; de fondo basta con mantener el contador.
+    const {
+        visitors, counts: presenceCounts, loading: loadingVisitors, refresh: refreshPresence,
+    } = useVisitorPresence(
+        sidebarTab === 'online' ? PRESENCE_POLL_ACTIVE_MS : PRESENCE_POLL_IDLE_MS,
+    );
+
+    /** Abrir una conversación deja de mostrar el cuadro del visitante. */
+    const selectConversation = useCallback((conversationId: string) => {
+        setSelectedGuestId(null);
+        setSelectedId(conversationId);
+    }, []);
+
+    /** Click en un visitante: su chat si ya existe, o el cuadro para escribirle. */
+    const selectVisitor = useCallback((visitor: OnlineVisitor) => {
+        if (visitor.conversationId) {
+            selectConversation(visitor.conversationId);
+            return;
+        }
+        setSelectedId(null);
+        setSelectedGuestId(visitor.guestId);
+    }, [selectConversation]);
 
     // Refs estables para usar dentro del callback SSE sin reconectar
     const selectedIdRef = useRef<string | null>(null);
@@ -354,6 +387,24 @@ export function SoporteClient() {
         });
     }, [conversations, search]);
 
+    const selectedVisitor = useMemo(
+        () => visitors.find(v => v.guestId === selectedGuestId) ?? null,
+        [visitors, selectedGuestId],
+    );
+
+    // El mismo buscador sirve en la pestaña "En línea": nombre, ciudad o página.
+    const filteredVisitors = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return visitors;
+        return visitors.filter(v => {
+            const name = (v.name || 'visitante').toLowerCase();
+            const email = (v.email || '').toLowerCase();
+            const city = (v.city || '').toLowerCase();
+            const path = (v.currentPath || '').toLowerCase();
+            return name.includes(q) || email.includes(q) || city.includes(q) || path.includes(q);
+        });
+    }, [visitors, search]);
+
     const sendReply = async () => {
         const text = input.trim();
         if (!text || !selectedId || sending) return;
@@ -518,17 +569,19 @@ export function SoporteClient() {
             <aside className="w-80 border-r border-slate-200 bg-white flex flex-col">
                 <div className="px-4 py-4 border-b border-slate-100 space-y-3">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-lg font-extrabold text-slate-800">Conversaciones</h2>
+                        <h2 className="text-lg font-extrabold text-slate-800">
+                            {sidebarTab === 'online' ? 'En el sitio' : 'Conversaciones'}
+                        </h2>
                         <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                            {conversations.length}
+                            {sidebarTab === 'online' ? visitors.length : conversations.length}
                         </span>
                     </div>
                     <div className="flex items-center gap-1.5 bg-slate-100 p-0.5 rounded-lg">
                         {(['open', 'closed', 'all'] as const).map(s => (
                             <button
                                 key={s}
-                                onClick={() => setStatusFilter(s)}
-                                className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-all ${statusFilter === s
+                                onClick={() => { setStatusFilter(s); setSidebarTab('conversations'); }}
+                                className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-all ${sidebarTab === 'conversations' && statusFilter === s
                                     ? 'bg-white text-slate-800 shadow-sm'
                                     : 'text-slate-500 hover:text-slate-700'
                                     }`}
@@ -537,6 +590,25 @@ export function SoporteClient() {
                             </button>
                         ))}
                     </div>
+                    <button
+                        onClick={() => setSidebarTab('online')}
+                        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border transition-all ${sidebarTab === 'online'
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                            }`}
+                    >
+                        <span className="flex items-center gap-2 text-xs font-bold">
+                            <span className="relative flex w-2 h-2">
+                                {presenceCounts.online > 0 && (
+                                    <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                                )}
+                                <span className={`relative inline-flex w-2 h-2 rounded-full ${presenceCounts.online > 0 ? 'bg-emerald-500' : 'bg-slate-300'
+                                    }`} />
+                            </span>
+                            En línea ahora
+                        </span>
+                        <span className="text-xs font-extrabold tabular-nums">{presenceCounts.online}</span>
+                    </button>
                     <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                         <input
@@ -550,7 +622,15 @@ export function SoporteClient() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
-                    {loadingList ? (
+                    {sidebarTab === 'online' ? (
+                        <VisitorList
+                            visitors={filteredVisitors}
+                            loading={loadingVisitors}
+                            selectedConversationId={selectedId}
+                            selectedGuestId={selectedGuestId}
+                            onSelect={selectVisitor}
+                        />
+                    ) : loadingList ? (
                         <div className="flex items-center justify-center h-32">
                             <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
                         </div>
@@ -568,7 +648,7 @@ export function SoporteClient() {
                                 return (
                                     <li key={c.id}>
                                         <button
-                                            onClick={() => setSelectedId(c.id)}
+                                            onClick={() => selectConversation(c.id)}
                                             className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex gap-3 ${isSelected ? 'bg-veci-primary/5 border-l-4 border-veci-primary' : ''
                                                 }`}
                                         >
@@ -609,7 +689,17 @@ export function SoporteClient() {
 
             {/* Conversación activa */}
             <section className="flex-1 flex flex-col bg-white">
-                {!selectedId ? (
+                {selectedVisitor ? (
+                    <VisitorComposer
+                        visitor={selectedVisitor}
+                        onSent={conversationId => {
+                            selectConversation(conversationId);
+                            // La lista de presencia todavía lo muestra "sin chat";
+                            // un refresco deja el globo al día sin esperar 10s.
+                            refreshPresence();
+                        }}
+                    />
+                ) : !selectedId ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 px-6">
                         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-veci-primary/20 to-fuchsia-200/40 flex items-center justify-center">
                             <MessageCircle className="w-9 h-9 text-veci-primary" strokeWidth={1.5} />

@@ -38,6 +38,11 @@ export const RATE_LIMITS = {
     raffle: { name: "raffle", limit: 10, windowMs: 60 * 60_000 },
     /** Envío de mensajes de chat. */
     chat: { name: "chat", limit: 40, windowMs: 5 * 60_000 },
+    /**
+     * Heartbeat de presencia. Generoso a propósito: varias personas comparten
+     * IP (oficina, casa, CGNAT del celular) y cada una manda 2 pings por minuto.
+     */
+    presence: { name: "presence", limit: 200, windowMs: 5 * 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 interface Bucket {

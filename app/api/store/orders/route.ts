@@ -18,9 +18,10 @@ import { generateUniqueOrderNumber } from "@/lib/order-number";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { auth } from "@/lib/auth";
 import { persistCheckoutProfile } from "@/lib/checkout-profile";
+import { loadStoreDeliveryConfig, resolveShippingCost } from "@/lib/store-config";
 
-// Costo de envío hardcoded. TODO: mover a una tabla settings/config (igual que bakery_config).
-const STORE_DELIVERY_FEE_CLP = 1990;
+// Las condiciones de envío (costo y monto para envío gratis) viven en la tabla
+// `store_config` y se editan desde el admin. Ver lib/store-config.ts.
 
 export async function POST(req: NextRequest) {
     const limited = enforceRateLimit(req, RATE_LIMITS.checkout);
@@ -230,7 +231,13 @@ async function handleMobileOrder(req: NextRequest, token: string) {
         }
 
         const subtotal = itemsToInsert.reduce((s, it) => s + it.totalPrice, 0);
-        const shippingCost = data.method === "delivery" ? STORE_DELIVERY_FEE_CLP : 0;
+        // Mismas condiciones que el checkout web (store_config).
+        const deliveryConfig = await loadStoreDeliveryConfig();
+        const shippingCost = resolveShippingCost({
+            deliveryType: data.method,
+            payableSubtotal: subtotal,
+            config: deliveryConfig,
+        });
         const total = subtotal + shippingCost;
 
         // 6. Generar orderNumber MV-XXXXX único (con reintentos)

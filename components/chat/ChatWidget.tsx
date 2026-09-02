@@ -8,6 +8,7 @@ import { useChatSSE, type ChatSSEEvent } from '@/hooks/use-chat-sse';
 import { useAttachmentUpload, validateChatFile } from '@/hooks/use-attachment-upload';
 import { ChatAttachment } from './ChatAttachment';
 import { ChatLightbox } from './ChatLightbox';
+import { getGuestId, INCOMING_CHAT_EVENT, type IncomingChatDetail } from '@/lib/chat-guest';
 
 type ChatMsgType = 'text' | 'image' | 'audio' | 'file';
 
@@ -33,17 +34,27 @@ interface ChatMessage {
     uploadProgress?: number;
 }
 
-const GUEST_ID_KEY = 'miniveci_chat_guest_id';
 const OPEN_KEY = 'miniveci_chat_open';
 
-function getGuestId(): string {
-    if (typeof window === 'undefined') return '';
-    let id = localStorage.getItem(GUEST_ID_KEY);
-    if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem(GUEST_ID_KEY, id);
-    }
-    return id;
+/** Mensaje como llega del backend: los opcionales pueden venir ausentes. */
+type RawChatMessage = Partial<ChatMessage> & {
+    id: string;
+    senderType: ChatMessage['senderType'];
+    body: string;
+    createdAt: string;
+};
+
+function normalizeMessage(m: RawChatMessage): ChatMessage {
+    return {
+        ...m,
+        senderName: m.senderName ?? null,
+        messageType: m.messageType || 'text',
+        attachmentUrl: m.attachmentUrl ?? null,
+        attachmentName: m.attachmentName ?? null,
+        attachmentSize: m.attachmentSize ?? null,
+        mimeType: m.mimeType ?? null,
+        pending: false,
+    };
 }
 
 function formatTime(iso: string): string {
@@ -80,6 +91,9 @@ export function ChatWidget() {
     // Refs estables para usar dentro del callback SSE sin reconectar
     const openRef = useRef(open);
     useEffect(() => { openRef.current = open; }, [open]);
+    const conversationIdRef = useRef<string | null>(conversationId);
+    useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+    const attachingRef = useRef(false);
 
     const isAdminRoute = pathname?.startsWith('/admin');
     const isFullScreenRoute = pathname?.startsWith('/sorteos/temporada');
@@ -133,15 +147,7 @@ export function ChatWidget() {
             const data = await res.json();
             setConversationId(data.conversation.id);
             setConversationStatus(data.conversation.status === 'closed' ? 'closed' : 'open');
-            setMessages(data.messages.map((m: any) => ({
-                ...m,
-                messageType: m.messageType || 'text',
-                attachmentUrl: m.attachmentUrl ?? null,
-                attachmentName: m.attachmentName ?? null,
-                attachmentSize: m.attachmentSize ?? null,
-                mimeType: m.mimeType ?? null,
-                pending: false,
-            })));
+            setMessages((data.messages || []).map(normalizeMessage));
             setNeedsName(false);
         } catch {
             initRef.current = false;
@@ -160,6 +166,59 @@ export function ChatWidget() {
         }
         initConversation();
     }, [open, hasMounted, authStatus, conversationId, isAnonymous, guestName, initConversation]);
+
+    // Soporte escribió primero: el latido de presencia trae el aviso y acá se
+    // levanta la conversación aunque el visitante nunca haya abierto el chat.
+    // No se le pide el nombre — ya hay alguien esperándolo del otro lado.
+    const attachIncomingConversation = useCallback(async (detail: IncomingChatDetail) => {
+        if (conversationIdRef.current || attachingRef.current) return;
+        if (!guestIdRef.current) return;
+        attachingRef.current = true;
+        try {
+            const res = await fetch('/api/chat/conversation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-chat-guest-id': guestIdRef.current,
+                },
+                body: JSON.stringify({ guestId: guestIdRef.current }),
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+
+            initRef.current = true;
+            setConversationId(data.conversation.id);
+            setConversationStatus(data.conversation.status === 'closed' ? 'closed' : 'open');
+            setMessages((data.messages || []).map(normalizeMessage));
+            setNeedsName(false);
+
+            // Se abre solo: si quedara cerrado con un puntito, la mayoría no
+            // se entera y el mensaje del operador muere ahí.
+            if (!openRef.current) {
+                setOpen(true);
+                if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                    try {
+                        new Notification('MiniVeci · Soporte te escribió', {
+                            body: detail.unread > 1 ? `${detail.unread} mensajes nuevos` : 'Tienes un mensaje nuevo',
+                        });
+                    } catch { /* noop */ }
+                }
+            }
+        } catch {
+            /* si falla, el siguiente latido vuelve a avisar */
+        } finally {
+            attachingRef.current = false;
+        }
+    }, []);
+
+    useEffect(() => {
+        const onIncoming = (event: Event) => {
+            const detail = (event as CustomEvent<IncomingChatDetail>).detail;
+            if (detail?.conversationId) attachIncomingConversation(detail);
+        };
+        window.addEventListener(INCOMING_CHAT_EVENT, onIncoming);
+        return () => window.removeEventListener(INCOMING_CHAT_EVENT, onIncoming);
+    }, [attachIncomingConversation]);
 
     // Manejo de eventos SSE (mensajes nuevos, cierre, reapertura)
     const handleSSEEvent = useCallback((event: ChatSSEEvent) => {

@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { products, raffles } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 import { isRaffleItemId } from "@/lib/raffle-checkout";
+import { loadStoreDeliveryConfig, resolveShippingCost } from "@/lib/store-config";
 
 // ============================================================
 // Recálculo de precios server-side para el checkout WEB.
@@ -15,8 +16,8 @@ import { isRaffleItemId } from "@/lib/raffle-checkout";
 // MercadoPago y orden web legacy).
 // ============================================================
 
-/** Costo de envío fijo a domicilio (CLP). Debe coincidir con checkout/page.tsx y el flujo móvil. */
-export const STORE_DELIVERY_FEE_CLP = 1990;
+// El costo de envío y el monto para envío gratis viven en `store_config`
+// (tabla, editable desde el admin). Ver lib/store-config.ts.
 
 /** Umbral para el descuento automático por monto. */
 const AUTO_DISCOUNT_THRESHOLD = 50000;
@@ -158,8 +159,6 @@ export async function recalcStorePricing(
 
     const subtotal = items.reduce((s, it) => s + it.totalPrice, 0);
 
-    const shippingCost = opts.deliveryType === "delivery" ? STORE_DELIVERY_FEE_CLP : 0;
-
     // Descuento automático por monto + cupón (validado server-side)
     const baseDiscount = subtotal > AUTO_DISCOUNT_THRESHOLD ? Math.round(subtotal * AUTO_DISCOUNT_RATE) : 0;
     const normalizedCoupon = (opts.couponCode || "").trim().toUpperCase();
@@ -168,7 +167,17 @@ export async function recalcStorePricing(
     const couponDiscount = couponRate > 0 ? Math.round(subtotal * couponRate) : 0;
     const discount = baseDiscount + couponDiscount;
 
-    const total = Math.max(0, subtotal - discount + shippingCost);
+    // El envío se resuelve al final: el envío gratis se mide contra lo que
+    // realmente paga en productos, o sea el subtotal ya con descuentos.
+    const deliveryConfig = await loadStoreDeliveryConfig();
+    const payableSubtotal = Math.max(0, subtotal - discount);
+    const shippingCost = resolveShippingCost({
+        deliveryType: opts.deliveryType,
+        payableSubtotal,
+        config: deliveryConfig,
+    });
+
+    const total = Math.max(0, payableSubtotal + shippingCost);
 
     return { ok: true, items, subtotal, shippingCost, discount, total, appliedCoupon };
 }

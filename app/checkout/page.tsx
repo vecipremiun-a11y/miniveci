@@ -81,6 +81,26 @@ export default function CheckoutPage() {
     const [couponMessage, setCouponMessage] = useState<string | null>(null);
     const [couponError, setCouponError] = useState<string | null>(null);
 
+    // Condiciones de envío (costo y monto para envío gratis). Vienen del
+    // servidor porque se editan desde el admin; acá son solo para mostrar, el
+    // total real lo recalcula el backend al crear el pedido.
+    const [deliveryConfig, setDeliveryConfig] = useState({ fee: 0, freeThreshold: 0 });
+
+    useEffect(() => {
+        let mounted = true;
+        fetch('/api/store/config')
+            .then(res => (res.ok ? res.json() : null))
+            .then(data => {
+                if (!mounted || !data?.delivery) return;
+                setDeliveryConfig({
+                    fee: Number(data.delivery.fee) || 0,
+                    freeThreshold: Number(data.delivery.freeThreshold) || 0,
+                });
+            })
+            .catch(() => { /* si falla, se muestra envío 0 y el server manda igual */ });
+        return () => { mounted = false; };
+    }, []);
+
     // Set initial date after mount to avoid hydration mismatch
     useEffect(() => {
         if (!hasMounted) {
@@ -232,7 +252,6 @@ export default function CheckoutPage() {
         }
     };
 
-    const shipping = deliveryMethod === 'delivery' ? 1990 : 0;
     const baseDiscount = subtotal > 50000 ? Math.round(subtotal * 0.05) : 0;
 
     const normalizedCoupon = (appliedCoupon || '').trim().toUpperCase();
@@ -244,7 +263,17 @@ export default function CheckoutPage() {
                 : 0;
 
     const discount = baseDiscount + couponDiscount;
-    const total = Math.max(0, subtotal - discount + shipping);
+
+    // Mismo criterio que lib/store-config.ts: el envío gratis se mide contra lo
+    // que realmente se paga en productos (subtotal ya con descuentos).
+    const payableSubtotal = Math.max(0, subtotal - discount);
+    const freeDeliveryOn = deliveryConfig.freeThreshold > 0;
+    const reachedFreeDelivery = freeDeliveryOn && payableSubtotal >= deliveryConfig.freeThreshold;
+    const missingForFreeDelivery = freeDeliveryOn
+        ? Math.max(0, deliveryConfig.freeThreshold - payableSubtotal)
+        : 0;
+    const shipping = deliveryMethod === 'delivery' && !reachedFreeDelivery ? deliveryConfig.fee : 0;
+    const total = Math.max(0, payableSubtotal + shipping);
 
     const money = useMemo(
         () =>
@@ -815,6 +844,17 @@ export default function CheckoutPage() {
                         <Row label="Subtotal" value={money.format(subtotal)} />
                         <Row label="Descuento" value={discount > 0 ? `-${money.format(discount)}` : money.format(0)} />
                         <Row label="Envío" value={shipping === 0 ? 'Gratis' : money.format(shipping)} />
+                        {deliveryMethod === 'delivery' && reachedFreeDelivery && (
+                            <p className="text-xs font-bold text-emerald-600">
+                                ¡Tu compra tiene envío gratis!
+                            </p>
+                        )}
+                        {deliveryMethod === 'delivery' && !reachedFreeDelivery && missingForFreeDelivery > 0 && (
+                            <p className="text-xs font-semibold text-slate-500">
+                                Te faltan <span className="text-veci-primary">{money.format(missingForFreeDelivery)}</span> para
+                                tener envío gratis.
+                            </p>
+                        )}
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-slate-200/80 flex items-center justify-between">

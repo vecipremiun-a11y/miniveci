@@ -37,6 +37,16 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  /**
+   * C:\dev tiene varios proyectos con su propio package-lock.json, así que
+   * Turbopack infiere la carpeta padre como raíz del workspace y termina
+   * buscando `tailwindcss` en C:\dev. Fijar la raíz corta ese error, que en
+   * desarrollo se repetía varias veces por segundo hasta dejar sin memoria al
+   * servidor.
+   */
+  turbopack: {
+    root: __dirname,
+  },
   images: {
     remotePatterns: [
       {

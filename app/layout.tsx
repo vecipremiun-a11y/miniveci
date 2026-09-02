@@ -26,6 +26,7 @@ import { Navbar } from "@/components/Navbar";
 import { Providers } from "@/components/Providers";
 import { Toaster } from "sonner";
 import { ChatWidget } from "@/components/chat/ChatWidget";
+import { PresenceTracker } from "@/components/presence/PresenceTracker";
 
 export default function RootLayout({
   children,
@@ -43,6 +44,7 @@ export default function RootLayout({
           </Suspense>
           {children}
           <ChatWidget />
+          <PresenceTracker />
           <Toaster position="top-right" richColors closeButton />
         </Providers>
       </body>

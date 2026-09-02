@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { chatConversations, chatMessages, customers, users } from "@/lib/db/schema";
+import { chatConversations, users } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
-import { publishChatEvent } from "@/lib/chat-live-updates";
-import { eq, sql } from "drizzle-orm";
+import { sendAgentTextMessage, MAX_AGENT_MESSAGE } from "@/lib/chat-agent-message";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
-
-const MAX_BODY = 2000;
 
 /**
  * POST /api/admin/chat/conversations/[id]/messages
@@ -21,8 +19,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         const text = typeof body?.body === "string" ? body.body.trim() : "";
 
         if (!text) return NextResponse.json({ error: "Mensaje vacío" }, { status: 400 });
-        if (text.length > MAX_BODY) {
-            return NextResponse.json({ error: `Máx ${MAX_BODY} caracteres` }, { status: 400 });
+        if (text.length > MAX_AGENT_MESSAGE) {
+            return NextResponse.json({ error: `Máx ${MAX_AGENT_MESSAGE} caracteres` }, { status: 400 });
         }
 
         const conversation = await db.query.chatConversations.findFirst({
@@ -38,113 +36,14 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         });
         const senderName = operator?.name || session.user.name || "Soporte";
 
-        const messageId = crypto.randomUUID();
-        const now = new Date().toISOString();
-
-        await db.insert(chatMessages).values({
-            id: messageId,
-            conversationId,
-            senderType: "agent",
-            senderId: session.user.id as string,
-            senderName,
+        const message = await sendAgentTextMessage({
+            conversation,
+            operatorId: session.user.id as string,
+            operatorName: senderName,
             body: text,
-            messageType: "text",
-            readByCustomer: false,
-            readByAgent: true,
-            createdAt: now,
         });
 
-        // Si nadie estaba asignado, este operador queda asignado
-        const updateData: any = {
-            lastMessageAt: now,
-            lastMessagePreview: text.slice(0, 140),
-            unreadCustomer: sql`${chatConversations.unreadCustomer} + 1`,
-            updatedAt: now,
-        };
-        const newAssigned = conversation.assignedOperatorId || (session.user.id as string);
-        if (!conversation.assignedOperatorId) {
-            updateData.assignedOperatorId = session.user.id;
-        }
-
-        await db.update(chatConversations)
-            .set(updateData)
-            .where(eq(chatConversations.id, conversationId));
-
-        const newUnreadCustomer = (conversation.unreadCustomer ?? 0) + 1;
-
-        let customerInfo = null;
-        if (conversation.customerId) {
-            const c = await db.query.customers.findFirst({
-                where: eq(customers.id, conversation.customerId),
-            });
-            if (c) {
-                customerInfo = {
-                    id: c.id,
-                    firstName: c.firstName,
-                    lastName: c.lastName,
-                    email: c.email,
-                    phone: c.phone,
-                };
-            }
-        }
-
-        // 1. Mensaje nuevo → cliente + admin (eco)
-        publishChatEvent({
-            type: "message_created",
-            conversationId,
-            message: {
-                id: messageId,
-                conversationId,
-                senderType: "agent",
-                senderId: session.user.id as string,
-                senderName,
-                body: text,
-                messageType: "text",
-                attachmentUrl: null,
-                attachmentName: null,
-                attachmentSize: null,
-                mimeType: null,
-                createdAt: now,
-            },
-            occurredAt: now,
-        });
-
-        // 2. Actualización metadatos
-        publishChatEvent({
-            type: "conversation_updated",
-            conversationId,
-            conversation: {
-                id: conversation.id,
-                customerId: conversation.customerId,
-                guestId: conversation.guestId,
-                guestName: conversation.guestName,
-                guestEmail: conversation.guestEmail,
-                assignedOperatorId: newAssigned,
-                status: conversation.status as "open" | "closed",
-                lastMessageAt: now,
-                lastMessagePreview: text.slice(0, 140),
-                unreadCustomer: newUnreadCustomer,
-                unreadAgent: conversation.unreadAgent ?? 0,
-                createdAt: conversation.createdAt ?? now,
-                customer: customerInfo,
-            },
-            occurredAt: now,
-        });
-
-        return NextResponse.json({
-            id: messageId,
-            conversationId,
-            senderType: "agent",
-            senderId: session.user.id as string,
-            senderName,
-            body: text,
-            messageType: "text",
-            attachmentUrl: null,
-            attachmentName: null,
-            attachmentSize: null,
-            mimeType: null,
-            createdAt: now,
-        }, { status: 201 });
+        return NextResponse.json(message, { status: 201 });
     } catch (error) {
         if (error instanceof AuthError) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

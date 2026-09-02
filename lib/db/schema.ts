@@ -334,6 +334,17 @@ export const customerPaymentMethodsRelations = relations(customerPaymentMethods,
     customer: one(customers, { fields: [customerPaymentMethods.customerId], references: [customers.id] }),
 }));
 
+// --- CONFIGURACIÓN DE LA TIENDA ---
+// Clave/valor, igual que `bakery_config`. Hoy guarda las condiciones de envío
+// (costo y monto para envío gratis); antes estaban hardcodeadas en tres
+// archivos distintos y había que tocar código para cambiarlas.
+
+export const storeConfig = sqliteTable("store_config", {
+    key: text("key").primaryKey(),
+    value: text("value").notNull(),
+    updatedAt: text("updated_at"),
+});
+
 // --- CHAT / SOPORTE ---
 
 export const chatConversations = sqliteTable("chat_conversations", {
@@ -391,6 +402,49 @@ export const chatConversationsRelations = relations(chatConversations, ({ one, m
 
 export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
     conversation: one(chatConversations, { fields: [chatMessages.conversationId], references: [chatConversations.id] }),
+}));
+
+// --- PRESENCIA DE VISITANTES (soporte en vivo) ---
+// Una fila por visitante, identificado con el mismo `guest_id` que el widget de
+// chat guarda en localStorage: así "quién está en línea" y "quién escribió" son
+// la misma persona. El sitio manda un heartbeat cada 30s y aquí se pisa solo la
+// última posición conocida — no es un historial de navegación.
+// Estar "en línea" se deriva de `last_seen_at` (no hay flag que apagar: si el
+// navegador se cierra de golpe nadie avisa, pero el heartbeat deja de llegar).
+
+export const chatVisitorSessions = sqliteTable("chat_visitor_sessions", {
+    id: text("id").primaryKey(),
+    guestId: text("guest_id").notNull(),
+    customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    firstSeenAt: text("first_seen_at").notNull(),
+    lastSeenAt: text("last_seen_at").notNull(),
+    pageViews: integer("page_views").notNull().default(1),
+    currentPath: text("current_path"),
+    pageTitle: text("page_title"),
+    /** Primera página de la visita y de dónde llegó. Se fijan al crear la fila. */
+    landingPath: text("landing_path"),
+    referrer: text("referrer"),
+    ip: text("ip"),
+    country: text("country"),             // ISO-2, ej. "CL"
+    countryRegion: text("country_region"),
+    city: text("city"),
+    timezone: text("timezone"),
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    userAgent: text("user_agent"),
+    device: text("device"),               // "mobile" | "tablet" | "desktop" | "bot"
+    browser: text("browser"),
+    os: text("os"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+}, (table) => ({
+    guestIdUnique: uniqueIndex("visitor_sessions_guest_id_idx").on(table.guestId),
+    lastSeenIdx: index("visitor_sessions_last_seen_idx").on(table.lastSeenAt),
+    customerIdx: index("visitor_sessions_customer_idx").on(table.customerId),
+}));
+
+export const chatVisitorSessionsRelations = relations(chatVisitorSessions, ({ one }) => ({
+    customer: one(customers, { fields: [chatVisitorSessions.customerId], references: [customers.id] }),
 }));
 
 // --- RAFFLES / SORTEOS ---
