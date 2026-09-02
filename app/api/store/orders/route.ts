@@ -18,6 +18,7 @@ import { generateUniqueOrderNumber } from "@/lib/order-number";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { auth } from "@/lib/auth";
 import { persistCheckoutProfile } from "@/lib/checkout-profile";
+import { createOrderPreference } from "@/lib/mp-checkout";
 import { loadStoreDeliveryConfig, resolveShippingCost } from "@/lib/store-config";
 
 // Las condiciones de envío (costo y monto para envío gratis) viven en la tabla
@@ -327,10 +328,49 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             source: "mobile",
         };
 
-        // 12. Publicar SSE para admin
+        // 12. Mercado Pago: crear la preferencia y devolver el initPoint.
+        //     Sin esto el pedido quedaba creado en "pending" y la app nunca
+        //     abría el checkout, así que el pago simplemente no ocurría.
+        let payment: {
+            preferenceId?: string;
+            initPoint?: string;
+            sandboxInitPoint?: string;
+            paymentError?: string;
+        } = {};
+
+        if (data.paymentMethod === "mercado_pago") {
+            try {
+                const pref = await createOrderPreference({
+                    orderId,
+                    orderNumber,
+                    customerName,
+                    customerEmail,
+                    customerPhone: data.phone.trim(),
+                    items: itemsToInsert.map((it) => ({
+                        title: it.productName,
+                        quantity: it.quantity,
+                        unitPrice: it.unitPrice,
+                    })),
+                    shippingCost,
+                    origin: "app",
+                });
+                payment = {
+                    preferenceId: pref.preferenceId,
+                    initPoint: pref.initPoint,
+                    sandboxInitPoint: pref.sandboxInitPoint,
+                };
+            } catch (err) {
+                // El pedido ya existe: no lo perdemos por un fallo de MP. La app
+                // avisa y el cliente puede reintentar desde "Mis pedidos".
+                console.error(`[MP] No se pudo crear la preferencia para ${orderNumber}:`, (err as Error).message);
+                payment = { paymentError: "No pudimos abrir Mercado Pago. Puedes pagar el pedido desde Mis pedidos." };
+            }
+        }
+
+        // 13. Publicar SSE para admin
         publishStoreOrderEvent({ type: "order.created", order: serialized, occurredAt: now });
 
-        // 13. Trabajo en background DESPUÉS de responder (Vercel `after()` mantiene
+        // 14. Trabajo en background DESPUÉS de responder (Vercel `after()` mantiene
         // viva la lambda — mismo patrón que los encargos de amasandería).
         after(async () => {
             // Completa el perfil con los datos del pedido (la app pide teléfono y
@@ -369,7 +409,7 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             }
         });
 
-        return NextResponse.json(serialized, { status: 201 });
+        return NextResponse.json({ ...serialized, ...payment }, { status: 201 });
     } catch (error: any) {
         if (error instanceof ZodError) {
             const issue = error.issues[0];

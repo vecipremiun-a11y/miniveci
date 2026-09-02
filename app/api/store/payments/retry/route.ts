@@ -1,15 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mpPreference } from "@/lib/mercadopago";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { getSiteUrl } from "@/lib/site-url";
+import { extractBearer, verifyAccessToken, AuthHttpError } from "@/lib/mobile-auth";
+import { createOrderPreference, type MpCheckoutOrigin } from "@/lib/mp-checkout";
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id) {
+        // Acepta sesión web (NextAuth) o Bearer JWT de la app móvil, para que
+        // "Mis pedidos" en Flutter pueda reintentar el pago de un pedido
+        // pendiente igual que la web.
+        const bearer = extractBearer(req);
+        let userId: string | null = null;
+        let origin: MpCheckoutOrigin = "web";
+
+        if (bearer) {
+            try {
+                const payload = await verifyAccessToken(bearer);
+                userId = payload.sub;
+                origin = "app";
+            } catch (err) {
+                if (err instanceof AuthHttpError) {
+                    return NextResponse.json({ message: err.message, code: err.code }, { status: err.status });
+                }
+                return NextResponse.json({ message: "Token inválido", code: "invalid_token" }, { status: 401 });
+            }
+        } else {
+            const session = await auth();
+            userId = session?.user?.id ?? null;
+        }
+
+        if (!userId) {
             return NextResponse.json({ error: "No autenticado" }, { status: 401 });
         }
 
@@ -25,7 +47,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Verify ownership
-        if (order.customerId !== session.user.id) {
+        if (order.customerId !== userId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
@@ -37,76 +59,37 @@ export async function POST(req: NextRequest) {
         // Fetch order items
         const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
 
-        // Build MP preference items
-        const mpItems = items.map((item) => ({
-            id: orderId,
-            title: item.productName.substring(0, 256),
-            quantity: Math.max(1, Math.round(item.quantity)),
-            unit_price: item.unitPrice,
-            currency_id: "CLP" as const,
-        }));
-
-        if ((order.shippingCost || 0) > 0) {
-            mpItems.push({
-                id: orderId,
-                title: "Envío a domicilio",
-                quantity: 1,
-                unit_price: order.shippingCost!,
-                currency_id: "CLP" as const,
-            });
-        }
-
-        if ((order.discount || 0) > 0) {
-            mpItems.push({
-                id: orderId,
-                title: "Descuento aplicado",
-                quantity: 1,
-                unit_price: -order.discount!,
-                currency_id: "CLP" as const,
-            });
-        }
-
-        const siteUrl = getSiteUrl();
-        const isHttps = siteUrl.startsWith("https");
-
-        const backUrls = {
-            success: `${siteUrl}/pedido-exitoso?order=${encodeURIComponent(order.orderNumber)}&source=mp`,
-            failure: `${siteUrl}/cuenta/pedidos?id=${orderId}&error=payment_failed`,
-            pending: `${siteUrl}/pedido-exitoso?order=${encodeURIComponent(order.orderNumber)}&source=mp&status=pending`,
-        };
-
-        const nameParts = (order.customerName || "").split(" ");
-        const firstName = nameParts[0] || "";
-        const lastName = nameParts.slice(1).join(" ") || "";
-
-        const preference = await mpPreference.create({
-            body: {
-                items: mpItems,
-                payer: {
-                    name: firstName,
-                    surname: lastName,
-                    email: order.customerEmail || "",
-                    phone: order.customerPhone ? { number: order.customerPhone } : undefined,
-                },
-                back_urls: backUrls,
-                ...(isHttps ? { auto_return: "approved" as const } : {}),
-                external_reference: order.orderNumber,
-                notification_url: isHttps ? `${siteUrl}/api/webhooks/mercadopago` : undefined,
-                statement_descriptor: "MINIVECI",
-            },
+        const preference = await createOrderPreference({
+            orderId,
+            orderNumber: order.orderNumber,
+            customerName: order.customerName,
+            customerEmail: order.customerEmail,
+            customerPhone: order.customerPhone,
+            items: items.map((item) => ({
+                title: item.productName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+            })),
+            shippingCost: order.shippingCost,
+            discount: order.discount,
+            origin,
         });
 
-        // Update payment method to mercadopago
+        // Update payment method to mercadopago.
+        // Desde la app el pedido se guardó como "mercado_pago" (contrato móvil);
+        // no lo pisamos para que la app siga reconociéndolo.
         await db.update(orders).set({
-            paymentMethod: "mercadopago",
+            paymentMethod: origin === "app" ? "mercado_pago" : "mercadopago",
             updatedAt: new Date().toISOString(),
         }).where(eq(orders.id, orderId));
 
         return NextResponse.json({
             success: true,
-            preferenceId: preference.id,
-            initPoint: preference.init_point,
-            sandboxInitPoint: preference.sandbox_init_point,
+            orderId,
+            orderNumber: order.orderNumber,
+            preferenceId: preference.preferenceId,
+            initPoint: preference.initPoint,
+            sandboxInitPoint: preference.sandboxInitPoint,
         });
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : String(error);

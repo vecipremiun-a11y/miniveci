@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { mpPreference } from "@/lib/mercadopago";
 import { db } from "@/lib/db";
 import { orders, orderItems, orderStatusHistory } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
@@ -9,7 +8,8 @@ import { generateUniqueOrderNumber } from "@/lib/order-number";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { auth } from "@/lib/auth";
 import { persistCheckoutProfile } from "@/lib/checkout-profile";
-import { getSiteUrl } from "@/lib/site-url";
+import { extractBearer, verifyAccessToken } from "@/lib/mobile-auth";
+import { createOrderPreference, type MpCheckoutOrigin } from "@/lib/mp-checkout";
 
 export async function POST(req: NextRequest) {
     const limited = enforceRateLimit(req, RATE_LIMITS.checkout);
@@ -18,10 +18,30 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
 
-        // SEGURIDAD: el dueño del pedido sale de la sesión, NUNCA del body
-        // (ver nota equivalente en /api/store/orders).
-        const session = await auth();
-        const customerId = session?.user?.role === "customer" ? session.user.id : null;
+        // SEGURIDAD: el dueño del pedido sale de la sesión o del Bearer JWT,
+        // NUNCA del body (ver nota equivalente en /api/store/orders).
+        //
+        // El Bearer es lo que usa la app Flutter (compra de números de sorteo).
+        // Sin esta rama customerId quedaba null: el pedido se creaba huérfano y
+        // las entries del sorteo nunca se vinculaban ni se confirmaban al pagar.
+        const bearer = extractBearer(req);
+        let customerId: string | null = null;
+        let origin: MpCheckoutOrigin = "web";
+
+        if (bearer) {
+            try {
+                const payload = await verifyAccessToken(bearer);
+                if ((payload.userType ?? "customer") === "customer") {
+                    customerId = payload.sub;
+                }
+                origin = "app";
+            } catch {
+                return NextResponse.json({ error: "Token inválido", code: "invalid_token" }, { status: 401 });
+            }
+        } else {
+            const session = await auth();
+            customerId = session?.user?.role === "customer" ? session.user.id : null;
+        }
 
         const {
             customerName,
@@ -120,37 +140,6 @@ export async function POST(req: NextRequest) {
             createdAt: now,
         });
 
-        // Build MP preference items (precios ya verificados server-side)
-        const mpItems = pricedItems.map((item) => ({
-            id: orderId,
-            title: item.name.substring(0, 256),
-            quantity: item.quantity,
-            unit_price: item.unitPrice,
-            currency_id: "CLP" as const,
-        }));
-
-        // Add shipping as an item if applicable
-        if (shippingCost > 0) {
-            mpItems.push({
-                id: orderId,
-                title: "Envío a domicilio",
-                quantity: 1,
-                unit_price: shippingCost,
-                currency_id: "CLP" as const,
-            });
-        }
-
-        // Add discount as negative item if applicable
-        if (discount > 0) {
-            mpItems.push({
-                id: orderId,
-                title: "Descuento aplicado",
-                quantity: 1,
-                unit_price: -discount,
-                currency_id: "CLP" as const,
-            });
-        }
-
         // Guarda en el perfil los datos que faltaban para precargar el próximo checkout
         // (mismo criterio que /api/store/orders; la orden ya existe aunque el pago
         // quede pendiente en Mercado Pago).
@@ -169,40 +158,31 @@ export async function POST(req: NextRequest) {
             }));
         }
 
-        const siteUrl = getSiteUrl();
-        const isHttps = siteUrl.startsWith("https");
-
-        const backUrls = {
-            success: `${siteUrl}/pedido-exitoso?order=${encodeURIComponent(orderNumber)}&source=mp`,
-            failure: `${siteUrl}/checkout?error=payment_failed&order=${encodeURIComponent(orderNumber)}`,
-            pending: `${siteUrl}/pedido-exitoso?order=${encodeURIComponent(orderNumber)}&source=mp&status=pending`,
-        };
-
-        // Create preference
-        const preference = await mpPreference.create({
-            body: {
-                items: mpItems,
-                payer: {
-                    name: customerName,
-                    surname: customerLastName || "",
-                    email: customerEmail,
-                    phone: customerPhone ? { number: customerPhone } : undefined,
-                },
-                back_urls: backUrls,
-                ...(isHttps ? { auto_return: "approved" as const } : {}),
-                external_reference: orderNumber,
-                notification_url: isHttps ? `${siteUrl}/api/webhooks/mercadopago` : undefined,
-                statement_descriptor: "MINIVECI",
-            },
+        // Create preference (precios ya verificados server-side)
+        const preference = await createOrderPreference({
+            orderId,
+            orderNumber,
+            customerName,
+            customerLastName,
+            customerEmail,
+            customerPhone,
+            items: pricedItems.map((item) => ({
+                title: item.name,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+            })),
+            shippingCost,
+            discount,
+            origin,
         });
 
         return NextResponse.json({
             success: true,
             orderId,
             orderNumber,
-            preferenceId: preference.id,
-            initPoint: preference.init_point,
-            sandboxInitPoint: preference.sandbox_init_point,
+            preferenceId: preference.preferenceId,
+            initPoint: preference.initPoint,
+            sandboxInitPoint: preference.sandboxInitPoint,
         });
     } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : String(error);
