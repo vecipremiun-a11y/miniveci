@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { put, del } from "@vercel/blob";
 import { emitProductChange } from "@/lib/product-live-updates";
+import { slugify } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -17,6 +18,10 @@ const syncProductRawSchema = z.object({
   posProductId: z.union([z.string(), z.number()]).optional().nullable(),
   name: z.string().trim().min(1).optional(),
   category: z.string().trim().min(1).optional(),
+  // ID de la categoría en POSVECI. Manda sobre el nombre: sobrevive a renombres
+  // y es lo que ata el producto al árbol de /api/pos/categories/sync.
+  pos_category_id: z.union([z.string(), z.number()]).optional().nullable(),
+  posCategoryId: z.union([z.string(), z.number()]).optional().nullable(),
   stock: z.number().optional(),
   // snake_case
   sale_price: z.number().min(0).optional(),
@@ -65,6 +70,11 @@ const syncProductRawSchema = z.object({
   })(),
   name: d.name,
   category: d.category,
+  pos_category_id: ((): string | undefined => {
+    const v = d.pos_category_id ?? d.posCategoryId;
+    if (v === null || v === undefined) return undefined;
+    return String(v).trim() || undefined;
+  })(),
   stock: d.stock,
   sale_price: d.sale_price ?? d.price,
   offer_price: d.offer_price ?? d.offerPrice,
@@ -122,15 +132,25 @@ function extractCredentials(req: NextRequest) {
   return { apiKey, apiSecret };
 }
 
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
-}
+/**
+ * El id de categoría de POSVECI manda sobre el nombre: sobrevive a renombres y
+ * es el que ata el producto al árbol que llega por /api/pos/categories/sync.
+ * El nombre queda de respaldo para los productos que aún llegan sin id.
+ */
+async function resolveCategory(
+  categoryName: string | undefined,
+  posCategoryId: string | undefined
+): Promise<string | null> {
+  if (posCategoryId) {
+    const byPosId = await db.query.categories.findFirst({
+      where: eq(categories.posCategoryId, posCategoryId),
+      columns: { id: true },
+    });
+    if (byPosId) return byPosId.id;
+  }
 
-async function resolveCategory(categoryName: string): Promise<string | null> {
-  const slug = generateSlug(categoryName);
+  if (!categoryName) return null;
+  const slug = slugify(categoryName);
   if (!slug) return null;
 
   const existing = await db.query.categories.findFirst({
@@ -145,6 +165,7 @@ async function resolveCategory(categoryName: string): Promise<string | null> {
     id,
     name: categoryName,
     slug,
+    posCategoryId: posCategoryId ?? null,
   });
   return id;
 }
@@ -313,8 +334,8 @@ async function handleProductSync(req: NextRequest) {
 
     // Resolve category if provided
     let categoryId: string | null = null;
-    if (data.category) {
-      categoryId = await resolveCategory(data.category);
+    if (data.category || data.pos_category_id) {
+      categoryId = await resolveCategory(data.category, data.pos_category_id);
     }
 
     // CLP no tiene decimales — guardar tal cual
@@ -409,7 +430,7 @@ async function handleProductSync(req: NextRequest) {
     } else {
       // --- CREATE ---
       const productName = data.name || `Producto ${data.sku}`;
-      let slug = generateSlug(productName);
+      let slug = slugify(productName);
 
       // Ensure slug uniqueness
       const slugExists = await db.query.products.findFirst({

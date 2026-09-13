@@ -15,6 +15,10 @@ interface Category {
     name: string;
     slug: string;
     productCount: number;
+    /** Lo que trae al elegirla: lo suyo más lo de sus hijas */
+    branchProductCount?: number;
+    /** 0 = categoría, 1 = subcategoría, 2 = hija de la subcategoría… */
+    level?: number;
 }
 
 interface ProductSidebarProps {
@@ -186,10 +190,14 @@ export function ProductSidebar({ selectedCategory, onCategoryChange, inOffer = f
                         {categories.map((cat) => {
                             const Icon = getIcon(cat.slug);
                             const active = selectedCategory === cat.slug;
+                            // Las subcategorías van sangradas bajo su categoría, con "└"
+                            // en vez de ícono para que se lea de quién cuelgan.
+                            const level = Math.min(cat.level ?? 0, 3);
                             return (
                                 <button
                                     key={cat.id}
                                     onClick={() => onCategoryChange?.(cat.slug)}
+                                    style={level > 0 ? { paddingLeft: 8 + level * 12 } : undefined}
                                     className={cn(
                                         "flex items-center gap-2.5 w-full px-2 py-1.5 rounded-lg text-left text-sm transition-colors",
                                         active
@@ -197,10 +205,14 @@ export function ProductSidebar({ selectedCategory, onCategoryChange, inOffer = f
                                             : "text-tinta hover:bg-papel-hondo hover:text-hoja"
                                     )}
                                 >
-                                    <Icon className="w-[17px] h-[17px] text-tallo shrink-0" strokeWidth={1.7} />
+                                    {level > 0 ? (
+                                        <span className="w-[17px] shrink-0 text-center text-tinta-clara leading-none" aria-hidden="true">└</span>
+                                    ) : (
+                                        <Icon className="w-[17px] h-[17px] text-tallo shrink-0" strokeWidth={1.7} />
+                                    )}
                                     <span className="flex-1 truncate">{cat.name}</span>
                                     <span className="text-[11px] font-bold text-tinta-clara tabular-nums">
-                                        {cat.productCount ?? 0}
+                                        {cat.branchProductCount ?? cat.productCount ?? 0}
                                     </span>
                                 </button>
                             );

@@ -88,6 +88,9 @@ export const categories = sqliteTable("categories", {
     description: text("description"),
     imageUrl: text("image_url"),
     parentId: text("parent_id"), // self-reference logic handled in app
+    // ID de la categoría en POSVECI. Llave maestra del sync del árbol: el nombre
+    // cambia (y las tildes lo rompen), este no. Ver drizzle/0022_categorias_jerarquia.sql
+    posCategoryId: text("pos_category_id"),
     sortOrder: integer("sort_order").default(0),
     isActive: integer("is_active", { mode: "boolean" }).default(true),
     syncPriceSource: text("sync_price_source").default("global"), // "global", "pos", "manual"

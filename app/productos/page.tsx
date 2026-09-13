@@ -7,6 +7,7 @@ import { ProductSidebar } from "@/components/products/ProductSidebar";
 import { ProductCard } from "@/components/products/ProductCard";
 import { useDebounce } from '@/hooks/use-debounce';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
+import { matchesSearchTokens, tokenizeSearch } from '@/lib/search-text';
 import { ChevronDown, LayoutGrid, List, Loader2, PackageOpen, SlidersHorizontal, X } from "lucide-react";
 
 interface ApiResponse {
@@ -32,13 +33,8 @@ function matchesProductFilters(product: StoreProduct, selectedCategory: string |
         return false;
     }
 
-    const normalizedSearch = search.trim().toLowerCase();
-    if (!normalizedSearch) {
-        return true;
-    }
-
-    return [product.name, product.description || '', product.category?.name || '']
-        .some((value) => value.toLowerCase().includes(normalizedSearch));
+    // Mismo criterio que /api/store/products: palabras en cualquier orden, sin tildes
+    return matchesSearchTokens(tokenizeSearch(search), [product.name, product.description, product.category?.name]);
 }
 
 function ProductsPageContent() {

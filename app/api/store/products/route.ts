@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { products, categories, productImages } from "@/lib/db/schema";
-import { eq, and, or, like, desc, asc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, sql } from "drizzle-orm";
+import { tokenizeSearch } from "@/lib/search-text";
+import { searchTokensCondition } from "@/lib/search-sql";
+import { branchIds } from "@/lib/category-tree";
 
 export const dynamic = "force-dynamic";
 
@@ -19,15 +22,20 @@ export async function GET(req: NextRequest) {
         const limit = Math.min(parseInt(searchParams.get("limit") || "20") || 20, 100);
         const offset = (page - 1) * limit;
 
-        // Resolve Category Filter
-        let categoryIdFilter: string | null = null;
+        // Resolve Category Filter — elegir una categoría trae TODA su rama
+        // (subcategorías y sus hijas), igual que el inventario de POSVECI:
+        // "Amasandería" tiene que traer también Panes y Empanadas.
+        let branchCategoryIds: string[] | null = null;
         if (categorySlug) {
-            const cats = await db.select().from(categories).where(and(eq(categories.slug, categorySlug), eq(categories.isActive, true))).limit(1);
-            if (cats[0]) {
-                categoryIdFilter = cats[0].id;
-            } else {
+            const activeCats = await db
+                .select({ id: categories.id, name: categories.name, parentId: categories.parentId, slug: categories.slug })
+                .from(categories)
+                .where(eq(categories.isActive, true));
+            const target = activeCats.find((c) => c.slug === categorySlug);
+            if (!target) {
                 return NextResponse.json({ data: [], meta: { total: 0, page, limit, totalPages: 0 } });
             }
+            branchCategoryIds = branchIds(activeCats, target.id);
         }
 
         // Build WHERE conditions — all filtering at SQL level
@@ -35,8 +43,8 @@ export async function GET(req: NextRequest) {
 
         // Products with stock 0 are shown but with "Sin stock" label
 
-        if (categoryIdFilter) {
-            conditions.push(eq(products.categoryId, categoryIdFilter));
+        if (branchCategoryIds) {
+            conditions.push(inArray(products.categoryId, branchCategoryIds));
         }
 
         if (isFeatured) {
@@ -47,14 +55,13 @@ export async function GET(req: NextRequest) {
             conditions.push(eq(products.isOffer, true));
         }
 
-        if (search) {
-            conditions.push(
-                or(
-                    like(products.name, `%${search}%`),
-                    like(products.description, `%${search}%`),
-                    like(categories.name, `%${search}%`)
-                )
-            );
+        // Cada palabra debe aparecer en nombre, descripción o categoría, en cualquier orden
+        // y sin importar tildes. Los que tienen todas las palabras en el nombre salen primero.
+        const searchTokens = search ? tokenizeSearch(search) : [];
+        const searchCondition = searchTokensCondition(searchTokens, [products.name, products.description, categories.name]);
+        const nameMatchCondition = searchTokensCondition(searchTokens, [products.name]);
+        if (searchCondition) {
+            conditions.push(searchCondition);
         }
 
         // maxPrice filter at SQL level
@@ -89,6 +96,7 @@ export async function GET(req: NextRequest) {
             .orderBy(
                 // Out-of-stock products always go last
                 asc(sql`CASE WHEN COALESCE(${products.webStock}, 0) <= 0 THEN 1 ELSE 0 END`),
+                ...(nameMatchCondition ? [asc(sql`CASE WHEN ${nameMatchCondition} THEN 0 ELSE 1 END`)] : []),
                 ...(sortParam === 'price_asc' ? [asc(products.webPrice)] :
                     sortParam === 'price_desc' ? [desc(products.webPrice)] :
                     sortParam === 'featured' ? [desc(products.isFeatured), desc(products.createdAt)] :

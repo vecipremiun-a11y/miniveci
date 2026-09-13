@@ -4,7 +4,9 @@ import { products, categories, productImages } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
 import { emitProductChange } from "@/lib/product-live-updates";
 import { productSchema } from "@/lib/validations/product";
-import { desc, asc, eq, and, or, sql, inArray } from "drizzle-orm";
+import { tokenizeSearch } from "@/lib/search-text";
+import { searchTokensCondition } from "@/lib/search-sql";
+import { desc, asc, eq, and, sql, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
 
 export async function GET(req: NextRequest) {
@@ -26,15 +28,10 @@ export async function GET(req: NextRequest) {
 
         const conditions = [];
 
-        // Search (case-insensitive using LOWER for proper Unicode support)
-        if (search) {
-            const term = search.trim().toLowerCase();
-            conditions.push(
-                or(
-                    sql`LOWER(${products.name}) LIKE ${'%' + term + '%'}`,
-                    sql`LOWER(${products.sku}) LIKE ${'%' + term + '%'}`
-                )
-            );
+        // Búsqueda por palabras en nombre o SKU: cualquier orden, sin importar tildes ni mayúsculas
+        const searchCondition = searchTokensCondition(tokenizeSearch(search ?? ""), [products.name, products.sku]);
+        if (searchCondition) {
+            conditions.push(searchCondition);
         }
 
         // Category
