@@ -3,6 +3,11 @@ import { products, raffles } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 import { isRaffleItemId } from "@/lib/raffle-checkout";
 import { loadStoreDeliveryConfig, resolveShippingCost } from "@/lib/store-config";
+import { resolveUnitPrice } from "@/lib/product-price";
+
+// La regla de precio vive en lib/product-price.ts (sin dependencias de base,
+// para poder testearla sola). Se re-exporta acá para no romper los imports.
+export { resolveUnitPrice, type PriceableProduct } from "@/lib/product-price";
 
 // ============================================================
 // Recálculo de precios server-side para el checkout WEB.
@@ -74,11 +79,13 @@ function fail(error: string): StorePricing {
 /**
  * Recalcula precios, subtotal, envío, descuento y total server-side.
  * @param cartItems items tal cual los manda el cliente (solo se usan id/quantity/name; el precio se ignora)
- * @param opts deliveryType y couponCode opcionales para envío/cupón
+ * @param opts deliveryType y couponCode opcionales para envío/cupón; `isSubscriber`
+ *   habilita el precio de suscriptor. Ojo: ese flag lo resuelve el handler contra
+ *   la base (`hasActiveSubscription`), NUNCA sale del body del request.
  */
 export async function recalcStorePricing(
     cartItems: RawCartItem[],
-    opts: { deliveryType?: string | null; couponCode?: string | null } = {},
+    opts: { deliveryType?: string | null; couponCode?: string | null; isSubscriber?: boolean } = {},
 ): Promise<StorePricing> {
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
         return fail("El carrito está vacío");
@@ -139,12 +146,7 @@ export async function recalcStorePricing(
         if (!p) return fail("Producto no disponible");
         if (!p.isPublished) return fail(`Producto no disponible: ${p.name}`);
 
-        // Precio efectivo: tiers > offer > base (idéntico al flujo móvil)
-        const basePrice = p.webPrice ?? 0;
-        const tiers = (p.priceTiers as Array<{ minQty: number; maxQty: number | null; price: number }> | null) ?? [];
-        const matchedTier = tiers.find((t) => quantity >= t.minQty && (t.maxQty === null || quantity <= t.maxQty));
-        const offerPrice = p.isOffer && p.offerPrice ? p.offerPrice : null;
-        const unitPrice = matchedTier ? matchedTier.price : (offerPrice ?? basePrice);
+        const unitPrice = resolveUnitPrice(p, quantity, opts.isSubscriber ?? false);
 
         items.push({
             id: p.id,

@@ -36,6 +36,8 @@ export interface StoreProductPayload {
     badges: string[] | null;
     tags: string[] | null;
     priceTiers: PriceTier[];
+    /** Precio de socio. La API solo lo manda si quien mira es suscriptor. */
+    subscriptionPrice?: number | null;
 }
 
 export type StoreProductField = keyof StoreProductPayload;

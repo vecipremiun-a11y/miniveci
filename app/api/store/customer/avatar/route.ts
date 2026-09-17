@@ -3,15 +3,15 @@ import { put } from "@vercel/blob";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { getSessionCustomerId } from "@/lib/session-customer";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_SIZE = 3 * 1024 * 1024; // 3MB
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
         }
 
         const ext = file.name.split(".").pop() || "jpg";
-        const filename = `avatars/${session.user.id}-${Date.now()}.${ext}`;
+        const filename = `avatars/${customerId}-${Date.now()}.${ext}`;
 
         const blob = await put(filename, file, {
             access: "public",
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
         await db.update(customers).set({
             avatarUrl: blob.url,
             updatedAt: new Date().toISOString(),
-        }).where(eq(customers.id, session.user.id));
+        }).where(eq(customers.id, customerId));
 
         return NextResponse.json({ url: blob.url });
     } catch (error) {

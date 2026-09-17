@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { getSessionCustomerId } from "@/lib/session-customer";
 import { db } from "@/lib/db";
 import { orders, orderItems, orderStatusHistory, products, customers } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
@@ -7,7 +8,8 @@ import { ZodError } from "zod";
 import {
     extractRaffleItems, linkRaffleEntriesToOrder,
 } from "@/lib/raffle-checkout";
-import { recalcStorePricing } from "@/lib/store-pricing";
+import { recalcStorePricing, resolveUnitPrice } from "@/lib/store-pricing";
+import { hasActiveSubscription } from "@/lib/subscriptions";
 import { extractBearer, verifyAccessToken, AuthHttpError } from "@/lib/mobile-auth";
 import { generatePublicCode } from "@/lib/bakery";
 import { storeMobileOrderSchema } from "@/lib/validations/store-mobile";
@@ -16,7 +18,6 @@ import { notifyOrderStatusChanged } from "@/lib/fcm";
 import { sendStoreOrderToPosveci } from "@/lib/posveci-store";
 import { generateUniqueOrderNumber } from "@/lib/order-number";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
-import { auth } from "@/lib/auth";
 import { persistCheckoutProfile } from "@/lib/checkout-profile";
 import { createOrderPreference } from "@/lib/mp-checkout";
 import { loadStoreDeliveryConfig, resolveShippingCost } from "@/lib/store-config";
@@ -183,7 +184,10 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             .where(inArray(products.id, productIds));
         const productMap = new Map(productRows.map((p) => [p.id, p]));
 
-        // 5. Calcular subtotales server-side aplicando offer / priceTiers
+        // 5. Calcular subtotales server-side aplicando offer / priceTiers / precio
+        //    de suscriptor. La membresía se consulta contra la base, no contra el
+        //    token: un admin en la app no es suscriptor por ser admin.
+        const isSubscriber = userType === "customer" && await hasActiveSubscription(userId);
         const itemsToInsert: Array<{
             id: string;
             orderId: string;
@@ -206,12 +210,7 @@ async function handleMobileOrder(req: NextRequest, token: string) {
                 return NextResponse.json({ message: `Producto no disponible: ${p.name}` }, { status: 400 });
             }
 
-            // Precio efectivo: tiers > offer > base
-            const basePrice = p.webPrice ?? 0;
-            const tiers = (p.priceTiers as Array<{ minQty: number; maxQty: number | null; price: number }> | null) ?? [];
-            const matchedTier = tiers.find((t) => item.quantity >= t.minQty && (t.maxQty === null || item.quantity <= t.maxQty));
-            const offerPrice = p.isOffer && p.offerPrice ? p.offerPrice : null;
-            const unitPrice = matchedTier ? matchedTier.price : (offerPrice ?? basePrice);
+            const unitPrice = resolveUnitPrice(p, item.quantity, isSubscriber);
             const totalPrice = unitPrice * item.quantity;
 
             if (item.notes && item.notes.trim().length > 0) {
@@ -438,8 +437,10 @@ async function handleLegacyWebOrder(req: NextRequest) {
         // Antes se confiaba en `body.customerId`, así que cualquiera podía crear
         // pedidos a nombre de otra cuenta (envenenar su historial, asignarle
         // números de sorteo y dispararle notificaciones push).
-        const session = await auth();
-        const customerId = session?.user?.role === "customer" ? session.user.id : null;
+        // El customerId es la cuenta de TIENDA de la sesión: para un cliente es
+        // su propio id, para un admin/owner su cuenta de cliente. Nunca el id de
+        // `users`, que no existe en `customers`.
+        const customerId = await getSessionCustomerId();
 
         const {
             customerName,
@@ -468,7 +469,9 @@ async function handleLegacyWebOrder(req: NextRequest) {
         }
 
         // SEGURIDAD: recalcular montos server-side. No confiar en price/total del cliente.
-        const pricing = await recalcStorePricing(cartItems, { deliveryType, couponCode });
+        // El precio de suscriptor se decide contra la base, nunca contra el body.
+        const isSubscriber = await hasActiveSubscription(customerId);
+        const pricing = await recalcStorePricing(cartItems, { deliveryType, couponCode, isSubscriber });
         if (!pricing.ok) {
             return NextResponse.json({ error: pricing.error || "Carrito inválido" }, { status: 400 });
         }

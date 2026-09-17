@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
+import { getSessionCustomerId } from "@/lib/session-customer";
 import { chatConversations, customers } from "@/lib/db/schema";
-import { getServerSession } from "@/lib/auth-utils";
 import { publishChatEvent } from "@/lib/chat-live-updates";
 import { extractBearer, verifyAccessToken } from "@/lib/mobile-auth";
 import { and, eq, isNull } from "drizzle-orm";
@@ -27,10 +27,10 @@ export async function resolveClientIdentity(
     req: Request,
     guestIdFromBody?: string | null,
 ): Promise<ClientIdentity | null> {
-    const session = await getServerSession();
-    if (session?.user?.id && session.user.role === "customer") {
+    const sessionCustomerId = await getSessionCustomerId();
+    if (sessionCustomerId) {
         const customer = await db.query.customers.findFirst({
-            where: eq(customers.id, session.user.id),
+            where: eq(customers.id, sessionCustomerId),
         });
         if (customer) {
             return {

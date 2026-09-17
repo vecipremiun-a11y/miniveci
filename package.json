@@ -20,6 +20,7 @@
     "db:migrate:bakery-lead-time": "node scripts/add-bakery-lead-time.mjs",
     "db:migrate:presence": "node scripts/create-visitor-sessions.mjs",
     "db:migrate:store-config": "node scripts/create-store-config.mjs",
+    "db:migrate:user-customer-link": "node scripts/add-user-customer-link.mjs",
     "pos:test:patch": "tsx --env-file=.env.local scripts/test-pos-status-patch.ts",
     "test": "vitest run"
   },

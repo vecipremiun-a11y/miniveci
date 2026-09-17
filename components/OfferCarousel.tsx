@@ -17,6 +17,8 @@ interface Product {
   equivWeight: number | null;
   images: { url: string; isPrimary: boolean }[];
   priceTiers?: { minQty: number; maxQty: number | null; price: number }[];
+  /** Precio de socio: la API solo lo manda a suscriptores. */
+  subscriptionPrice?: number | null;
 }
 
 export function OfferCarousel() {
@@ -135,6 +137,7 @@ export function OfferCarousel() {
                     equivWeight={p.equivWeight}
                     image={primaryImage(p)}
                     priceTiers={p.priceTiers}
+                    subscriptionPrice={p.subscriptionPrice}
                   />
                 </div>
               </div>

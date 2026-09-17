@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Footer } from '@/components/Footer';
-import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getEffectivePrice } from '@/components/cart/CartProvider';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
 import { ChevronRight, Loader2, Minus, Plus, Scale, ShoppingCart, Star, Tag, Zap, Check } from 'lucide-react';
@@ -160,7 +160,8 @@ export default function ProductDetailPage() {
 
     const hasOffer = Boolean(product?.isOffer && product?.offerPrice && product.offerPrice < product.price);
     const rawPrice = hasOffer ? product!.offerPrice! : product?.price ?? 0;
-    const tieredPrice = getTieredPrice(rawPrice, (product as any)?.priceTiers, quantity);
+    const subscriptionPrice = product?.subscriptionPrice;
+    const tieredPrice = getEffectivePrice(rawPrice, (product as any)?.priceTiers, quantity, subscriptionPrice);
     const displayPrice = equiv ? Math.round(tieredPrice * equivW) : tieredPrice;
     const discountPercent = hasOffer ? Math.round(((product!.price - product!.offerPrice!) / product!.price) * 100) : 0;
 
@@ -497,9 +498,9 @@ export default function ProductDetailPage() {
                         <button
                             onClick={() => {
                                 if (kgMode) {
-                                    addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, priceTiers: (product as any).priceTiers }, quantity);
+                                    addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, priceTiers: (product as any).priceTiers, subscriptionPrice }, quantity);
                                 } else {
-                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight, priceTiers: (product as any).priceTiers }, quantity);
+                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight, priceTiers: (product as any).priceTiers, subscriptionPrice }, quantity);
                                 }
                             }}
                             disabled={maxQty <= 0}

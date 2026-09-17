@@ -2,20 +2,20 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { subscriptions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { getSessionCustomerId } from "@/lib/session-customer";
 import { mpPreApproval } from "@/lib/mercadopago";
 
 export async function POST() {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
         // Find the active subscription
         const result = await db.select().from(subscriptions)
             .where(and(
-                eq(subscriptions.customerId, session.user.id),
+                eq(subscriptions.customerId, customerId),
                 eq(subscriptions.status, "active")
             ))
             .limit(1);

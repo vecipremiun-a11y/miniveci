@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
-import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getEffectivePrice } from '@/components/cart/CartProvider';
 import { ArrowLeft, CalendarDays, Clock3, CreditCard, MapPin, Store, Loader2, ChevronDown, Clock, Phone as PhoneIcon, Navigation, Upload, Copy, Check, X, ImageIcon, Pencil, User, Mail, Phone, FileText } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useRouter } from 'next/navigation';
@@ -810,7 +810,7 @@ export default function CheckoutPage() {
                                                     : `Cant: ${isWeightUnit(item.unit) ? `${item.quantity.toFixed(1)} ${(item.unit ?? 'kg').toLowerCase()}` : item.quantity}`}
                                             </p>
                                             <p className="text-sm sm:text-base font-extrabold text-slate-700 mt-1">
-                                                {money.format(hasEquiv(item) ? Math.round(getTieredPrice(item.price, item.priceTiers, item.quantity) * item.equivWeight! * item.quantity) : getTieredPrice(item.price, item.priceTiers, item.quantity) * item.quantity)}
+                                                {money.format(hasEquiv(item) ? Math.round(getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice) * item.equivWeight! * item.quantity) : getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice) * item.quantity)}
                                             </p>
                                         </div>
                                     </div>

@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { subscriptions } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { eq, desc } from "drizzle-orm";
+import { getSessionCustomerId } from "@/lib/session-customer";
 
 export async function GET() {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
         const result = await db.select().from(subscriptions)
-            .where(eq(subscriptions.customerId, session.user.id))
+            .where(eq(subscriptions.customerId, customerId))
             .orderBy(desc(subscriptions.createdAt))
             .limit(1);
 

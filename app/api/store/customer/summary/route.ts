@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { orders } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { getSessionCustomerId } from "@/lib/session-customer";
 
 export async function GET() {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -16,7 +16,7 @@ export async function GET() {
             totalSpent: sql<number>`coalesce(sum(${orders.total}), 0)`,
         })
             .from(orders)
-            .where(eq(orders.customerId, session.user.id));
+            .where(eq(orders.customerId, customerId));
 
         return NextResponse.json({
             totalOrders: result[0]?.totalOrders || 0,

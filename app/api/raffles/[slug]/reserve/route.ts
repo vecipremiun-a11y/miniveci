@@ -12,10 +12,10 @@ export async function POST(
 ) {
     try {
         const user = await getBakeryUser(req);
-        if (!user || user.role !== "customer") {
+        const customerId = user?.customerId ?? null;
+        if (!customerId) {
             return NextResponse.json({ error: "Debes iniciar sesión para participar" }, { status: 401 });
         }
-        const customerId = user.id;
 
         const { slug } = await params;
         const body = await req.json();
@@ -121,10 +121,10 @@ export async function DELETE(
 ) {
     try {
         const user = await getBakeryUser(req);
-        if (!user || user.role !== "customer") {
+        const customerId = user?.customerId ?? null;
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
-        const customerId = user.id;
         const { slug } = await params;
         const { searchParams } = new URL(req.url);
         const number = Number(searchParams.get("number"));

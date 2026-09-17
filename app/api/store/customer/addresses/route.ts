@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { customerAddresses } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { getSessionCustomerId } from "@/lib/session-customer";
 import { syncCustomerToPosveci } from "@/lib/pos-customer-match";
 
 /**
@@ -19,15 +19,15 @@ function syncAddressBook(customerId: string): void {
 
 export async function GET() {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
         const addresses = await db
             .select()
             .from(customerAddresses)
-            .where(eq(customerAddresses.customerId, session.user.id))
+            .where(eq(customerAddresses.customerId, customerId))
             .orderBy(customerAddresses.createdAt);
 
         return NextResponse.json(addresses);
@@ -39,8 +39,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -56,19 +56,19 @@ export async function POST(req: NextRequest) {
         if (isDefault) {
             await db.update(customerAddresses)
                 .set({ isDefault: false })
-                .where(eq(customerAddresses.customerId, session.user.id));
+                .where(eq(customerAddresses.customerId, customerId));
         }
 
         // If first address, always set as default
         const existing = await db.select({ id: customerAddresses.id })
             .from(customerAddresses)
-            .where(eq(customerAddresses.customerId, session.user.id))
+            .where(eq(customerAddresses.customerId, customerId))
             .limit(1);
         const shouldBeDefault = isDefault || existing.length === 0;
 
         await db.insert(customerAddresses).values({
             id,
-            customerId: session.user.id,
+            customerId: customerId,
             label: body.label?.trim() || "Casa",
             address: body.address.trim(),
             comuna: body.comuna.trim(),
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
             isDefault: shouldBeDefault,
         });
 
-        syncAddressBook(session.user.id);
+        syncAddressBook(customerId);
 
         return NextResponse.json({ id, message: "Dirección agregada" }, { status: 201 });
     } catch (error) {
@@ -88,8 +88,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -101,7 +101,7 @@ export async function PUT(req: NextRequest) {
         // Verify ownership
         const addr = await db.select({ id: customerAddresses.id })
             .from(customerAddresses)
-            .where(and(eq(customerAddresses.id, body.id), eq(customerAddresses.customerId, session.user.id)))
+            .where(and(eq(customerAddresses.id, body.id), eq(customerAddresses.customerId, customerId)))
             .limit(1);
 
         if (addr.length === 0) {
@@ -111,7 +111,7 @@ export async function PUT(req: NextRequest) {
         if (body.isDefault) {
             await db.update(customerAddresses)
                 .set({ isDefault: false })
-                .where(eq(customerAddresses.customerId, session.user.id));
+                .where(eq(customerAddresses.customerId, customerId));
         }
 
         await db.update(customerAddresses).set({
@@ -124,7 +124,7 @@ export async function PUT(req: NextRequest) {
             updatedAt: new Date().toISOString(),
         }).where(eq(customerAddresses.id, body.id));
 
-        syncAddressBook(session.user.id);
+        syncAddressBook(customerId);
 
         return NextResponse.json({ message: "Dirección actualizada" });
     } catch (error) {
@@ -135,8 +135,8 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -149,7 +149,7 @@ export async function DELETE(req: NextRequest) {
         // Verify ownership
         const addr = await db.select({ id: customerAddresses.id, isDefault: customerAddresses.isDefault })
             .from(customerAddresses)
-            .where(and(eq(customerAddresses.id, id), eq(customerAddresses.customerId, session.user.id)))
+            .where(and(eq(customerAddresses.id, id), eq(customerAddresses.customerId, customerId)))
             .limit(1);
 
         if (addr.length === 0) {
@@ -162,7 +162,7 @@ export async function DELETE(req: NextRequest) {
         if (addr[0].isDefault) {
             const remaining = await db.select({ id: customerAddresses.id })
                 .from(customerAddresses)
-                .where(eq(customerAddresses.customerId, session.user.id))
+                .where(eq(customerAddresses.customerId, customerId))
                 .limit(1);
             if (remaining.length > 0) {
                 await db.update(customerAddresses)
@@ -171,7 +171,7 @@ export async function DELETE(req: NextRequest) {
             }
         }
 
-        syncAddressBook(session.user.id);
+        syncAddressBook(customerId);
 
         return NextResponse.json({ message: "Dirección eliminada" });
     } catch (error) {

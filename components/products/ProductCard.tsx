@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { Plus, Minus, TrendingDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getTieredPrice } from '@/components/cart/CartProvider';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import { useRouter } from 'next/navigation';
 
@@ -26,9 +26,11 @@ interface ProductCardProps {
     isPopular?: boolean;
     slug?: string;
     priceTiers?: PriceTier[];
+    /** Precio de socio. Solo llega si quien mira tiene la membresía activa. */
+    subscriptionPrice?: number | null;
 }
 
-export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers }: ProductCardProps) {
+export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers, subscriptionPrice }: ProductCardProps) {
     const { addItem } = useCart();
     const router = useRouter();
     const equiv = hasEquiv({ equivLabel, equivWeight });
@@ -42,7 +44,10 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
     const hasOffer = Boolean(isOffer && offerPrice && offerPrice < price);
     const rawPrice = hasOffer ? offerPrice! : price;
-    const tieredPrice = getTieredPrice(rawPrice, priceTiers, quantity);
+    const tieredPrice = getEffectivePrice(rawPrice, priceTiers, quantity, subscriptionPrice);
+    // Lo que pagaría sin la membresía, para mostrar el ahorro tachado.
+    const regularPrice = getTieredPrice(rawPrice, priceTiers, quantity);
+    const isSubscriberPrice = tieredPrice < regularPrice;
     const displayPrice = equiv ? Math.round(tieredPrice * equivWeight!) : tieredPrice;
     const discountPercent = hasOffer ? Math.round(((price - offerPrice!) / price) * 100) : 0;
 
@@ -59,6 +64,11 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
     const formattedPrice = useMemo(() => fmtCLP(displayPrice), [displayPrice]);
     const formattedOriginal = useMemo(() => hasOffer ? fmtCLP(price) : '', [hasOffer, price]);
+    // Precio de lista tachado cuando manda el precio de socio (en equiv, por unidad).
+    const formattedRegular = useMemo(
+        () => isSubscriberPrice ? fmtCLP(equiv ? Math.round(regularPrice * equivWeight!) : regularPrice) : '',
+        [isSubscriberPrice, equiv, regularPrice, equivWeight],
+    );
     const formattedKgPrice = useMemo(() => fmtCLP(tieredPrice), [tieredPrice]);
 
     const subtotalValue = useMemo(() => (
@@ -81,9 +91,9 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
     const handleAdd = () => {
         if (kgMode) {
-            addItem({ id: `${id}__kg`, name, price: rawPrice, image: imageSrc, slug, unit, priceTiers }, quantity);
+            addItem({ id: `${id}__kg`, name, price: rawPrice, image: imageSrc, slug, unit, priceTiers, subscriptionPrice }, quantity);
         } else {
-            addItem({ id, name, price: rawPrice, image: imageSrc, slug, unit, equivLabel, equivWeight, priceTiers }, quantity);
+            addItem({ id, name, price: rawPrice, image: imageSrc, slug, unit, equivLabel, equivWeight, priceTiers, subscriptionPrice }, quantity);
         }
         setQuantity(minQty);
     };
@@ -154,6 +164,14 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                             {hasOffer && (
                                 <p className="text-[11px] sm:text-xs text-tinta-clara line-through tabular-nums">{formattedOriginal}</p>
                             )}
+                            {isSubscriberPrice && (
+                                <p className="text-[11px] sm:text-xs text-tinta-clara line-through tabular-nums">{formattedRegular}</p>
+                            )}
+                            {isSubscriberPrice && (
+                                <span className="text-[9px] font-extrabold uppercase tracking-[0.08em] text-white bg-hoja rounded-full px-1.5 py-0.5 leading-none">
+                                    Socio
+                                </span>
+                            )}
                         </>
                     ) : (
                         <>
@@ -163,7 +181,15 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                             {hasOffer && (
                                 <p className="text-[11px] sm:text-xs text-tinta-clara line-through tabular-nums">{formattedOriginal}</p>
                             )}
+                            {isSubscriberPrice && (
+                                <p className="text-[11px] sm:text-xs text-tinta-clara line-through tabular-nums">{formattedRegular}</p>
+                            )}
                             <span className="text-[11px] font-semibold text-tinta-clara">c/u</span>
+                            {isSubscriberPrice && (
+                                <span className="text-[9px] font-extrabold uppercase tracking-[0.08em] text-white bg-hoja rounded-full px-1.5 py-0.5 leading-none">
+                                    Socio
+                                </span>
+                            )}
                         </>
                     )}
                 </div>

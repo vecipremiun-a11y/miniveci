@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from 'lucide-react';
-import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from './CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getEffectivePrice } from './CartProvider';
 
 interface CartDrawerProps {
     open: boolean;
@@ -63,7 +63,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
             const baseLine = equiv
                 ? Math.round(item.price * item.equivWeight! * item.quantity)
                 : item.price * item.quantity;
-            const effective = getTieredPrice(item.price, item.priceTiers, item.quantity);
+            const effective = getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice);
             const effLine = equiv
                 ? Math.round(effective * item.equivWeight! * item.quantity)
                 : effective * item.quantity;
@@ -141,7 +141,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                                 const isKgDirect = !equiv && item.id.endsWith('__kg');
                                 const stepVal = equiv ? 1 : (isWeight || isKgDirect ? 0.5 : 1);
                                 const minQty = equiv ? 1 : (isWeight || isKgDirect ? 0.5 : 1);
-                                const effective = getTieredPrice(item.price, item.priceTiers, item.quantity);
+                                const effective = getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice);
                                 const lineTotal = equiv
                                     ? Math.round(effective * item.equivWeight! * item.quantity)
                                     : effective * item.quantity;

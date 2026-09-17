@@ -10,6 +10,12 @@ export const users = sqliteTable("users", {
     name: text("name").notNull(),
     role: text("role").notNull().default("admin"), // "owner", "admin", "preparacion", "reparto", "contenido"
     avatarUrl: text("avatar_url"),
+
+    // Cuenta de cliente de esta persona, para que pueda comprar en la tienda con
+    // el mismo login del panel. El rol dice qué puede administrar; esto dice a
+    // qué cuenta de tienda se le cuelgan pedidos, direcciones y membresía. Se
+    // resuelve/crea sola la primera vez (ver lib/admin-customer-account.ts).
+    customerId: text("customer_id"),
     active: integer("active", { mode: "boolean" }).default(true),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),

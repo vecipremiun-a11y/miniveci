@@ -7,10 +7,10 @@ import { and, eq, inArray, desc } from "drizzle-orm";
 export async function GET(req: NextRequest) {
     try {
         const user = await getBakeryUser(req);
-        if (!user || user.role !== "customer") {
+        const customerId = user?.customerId ?? null;
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
-        const customerId = user.id;
 
         const entries = await db
             .select({ entry: raffleEntries, raffle: raffles })

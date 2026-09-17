@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { orders, orderItems, productImages } from "@/lib/db/schema";
 import { eq, desc, and, inArray } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { getSessionCustomerId } from "@/lib/session-customer";
 
 export async function GET(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
         const customerOrders = await db.select()
             .from(orders)
-            .where(eq(orders.customerId, session.user.id))
+            .where(eq(orders.customerId, customerId))
             .orderBy(desc(orders.createdAt))
             .limit(limit)
             .offset(offset);
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
         // Get total count for pagination
         const allCustomerOrders = await db.select({ id: orders.id })
             .from(orders)
-            .where(eq(orders.customerId, session.user.id));
+            .where(eq(orders.customerId, customerId));
 
         return NextResponse.json({
             orders: ordersWithItems,

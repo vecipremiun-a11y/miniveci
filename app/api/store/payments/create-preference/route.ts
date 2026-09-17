@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { getSessionCustomerId } from "@/lib/session-customer";
 import { db } from "@/lib/db";
 import { orders, orderItems, orderStatusHistory } from "@/lib/db/schema";
 import { randomUUID } from "crypto";
 import { extractRaffleItems, linkRaffleEntriesToOrder } from "@/lib/raffle-checkout";
 import { recalcStorePricing } from "@/lib/store-pricing";
+import { hasActiveSubscription } from "@/lib/subscriptions";
 import { generateUniqueOrderNumber } from "@/lib/order-number";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
-import { auth } from "@/lib/auth";
 import { persistCheckoutProfile } from "@/lib/checkout-profile";
 import { extractBearer, verifyAccessToken } from "@/lib/mobile-auth";
 import { createOrderPreference, type MpCheckoutOrigin } from "@/lib/mp-checkout";
@@ -39,8 +40,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: "Token inválido", code: "invalid_token" }, { status: 401 });
             }
         } else {
-            const session = await auth();
-            customerId = session?.user?.role === "customer" ? session.user.id : null;
+            customerId = await getSessionCustomerId();
         }
 
         const {
@@ -69,7 +69,9 @@ export async function POST(req: NextRequest) {
 
         // SEGURIDAD: recalcular precios/subtotal/envío/descuento/total server-side.
         // Nunca confiar en los montos que envía el navegador (price tampering).
-        const pricing = await recalcStorePricing(cartItems, { deliveryType, couponCode });
+        // El precio de suscriptor también se resuelve acá, contra la base.
+        const isSubscriber = await hasActiveSubscription(customerId);
+        const pricing = await recalcStorePricing(cartItems, { deliveryType, couponCode, isSubscriber });
         if (!pricing.ok) {
             return NextResponse.json({ error: pricing.error || "Carrito inválido" }, { status: 400 });
         }

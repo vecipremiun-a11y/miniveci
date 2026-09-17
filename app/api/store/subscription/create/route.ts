@@ -2,20 +2,20 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { subscriptions, customers } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { getSessionCustomerId } from "@/lib/session-customer";
 import { mpPreApproval } from "@/lib/mercadopago";
 
 export async function POST() {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
         // Check if user already has an active subscription
         const existing = await db.select().from(subscriptions)
             .where(and(
-                eq(subscriptions.customerId, session.user.id),
+                eq(subscriptions.customerId, customerId),
                 eq(subscriptions.status, "active")
             ))
             .limit(1);
@@ -26,7 +26,7 @@ export async function POST() {
 
         // Get customer email
         const customer = await db.select().from(customers)
-            .where(eq(customers.id, session.user.id))
+            .where(eq(customers.id, customerId))
             .limit(1);
 
         if (!customer[0]) {
@@ -34,7 +34,7 @@ export async function POST() {
         }
 
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://www.miniveci.cl";
-        const externalReference = `SUB-${session.user.id}-${Date.now()}`;
+        const externalReference = `SUB-${customerId}-${Date.now()}`;
 
         // Create Mercado Pago PreApproval (subscription)
         const preApproval = await mpPreApproval.create({

@@ -416,6 +416,7 @@ function ProductsPageContent() {
                                         isPopular={product.badges?.includes('popular') || product.tags?.includes('popular') || false}
                                         slug={product.slug}
                                         priceTiers={product.priceTiers}
+                                        subscriptionPrice={product.subscriptionPrice}
                                     />
                                 ))}
                             </div>

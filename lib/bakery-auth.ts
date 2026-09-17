@@ -13,6 +13,13 @@ export interface BakeryAuthUser {
     role: string;
     email?: string | null;
     name?: string | null;
+    /**
+     * Cuenta de tienda de esta persona (customers.id), o null si no tiene.
+     * Para un cliente coincide con `id`; para un admin/owner es su cuenta de
+     * cliente aparte. Usar SIEMPRE esto y no `id` para colgar pedidos, sorteos
+     * o direcciones. Ver lib/session-customer.ts.
+     */
+    customerId?: string | null;
 }
 
 /**
@@ -30,6 +37,9 @@ export async function getBakeryUser(req?: Request): Promise<BakeryAuthUser | nul
                     role: payload.role,
                     email: payload.email ?? null,
                     name: null,
+                    // El JWT móvil solo identifica clientes; un admin en la app
+                    // no compra con esta vía.
+                    customerId: payload.role === "customer" ? payload.sub : null,
                 };
             } catch {
                 // token inválido → cae al siguiente método
@@ -46,6 +56,8 @@ export async function getBakeryUser(req?: Request): Promise<BakeryAuthUser | nul
                 role: session.user.role || "customer",
                 email: session.user.email ?? null,
                 name: session.user.name ?? null,
+                customerId: session.user.customerId
+                    ?? (session.user.role === "customer" ? session.user.id : null),
             };
         }
     } catch { /* ignorar */ }

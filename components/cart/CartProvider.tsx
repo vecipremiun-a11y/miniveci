@@ -30,6 +30,8 @@ export interface CartItem {
     equivWeight?: number | null;
     quantity: number;
     priceTiers?: PriceTier[];
+    /** Precio de socio, solo presente si quien compra tiene la membresía activa. */
+    subscriptionPrice?: number | null;
     /** Item de sorteo: `raffle:<raffleId>:<number>`. Cantidad siempre 1 y reserva activa con expiresAt. */
     raffle?: {
         raffleId: string;
@@ -51,6 +53,29 @@ export function getTieredPrice(basePrice: number, priceTiers: PriceTier[] | unde
         quantity >= t.minQty && (t.maxQty === null || quantity <= t.maxQty)
     );
     return tier ? tier.price : basePrice;
+}
+
+/**
+ * Precio unitario final, ya con tramos por cantidad y precio de suscriptor.
+ *
+ * Espejo exacto de `resolveUnitPrice` en lib/store-pricing.ts, que es lo que el
+ * servidor cobra de verdad. Si las dos reglas se separan, el carrito muestra un
+ * total y el checkout cobra otro — por eso el suscriptor paga acá también el
+ * MENOR entre su precio de socio y el que le tocaría igual.
+ *
+ * Las APIs de producto solo mandan `subscriptionPrice` a quien tiene la
+ * membresía activa, así que su sola presencia significa "este que mira es
+ * suscriptor". No hace falta pasear el estado de la membresía por el front.
+ */
+export function getEffectivePrice(
+    basePrice: number,
+    priceTiers: PriceTier[] | undefined,
+    quantity: number,
+    subscriptionPrice?: number | null,
+): number {
+    const tiered = getTieredPrice(basePrice, priceTiers, quantity);
+    if (!subscriptionPrice || subscriptionPrice <= 0) return tiered;
+    return Math.min(tiered, subscriptionPrice);
 }
 
 /** True when the product is sold in kg but displayed as equivalent units */
@@ -148,7 +173,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const value = useMemo<CartContextValue>(() => {
         const totalItems = items.length;
         const subtotal = items.reduce((sum, item) => {
-            const effectivePrice = getTieredPrice(item.price, item.priceTiers, item.quantity);
+            const effectivePrice = getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice);
             if (hasEquiv(item)) {
                 // precio por kg × peso unitario × cantidad de unidades
                 return sum + Math.round(effectivePrice * item.equivWeight! * item.quantity);

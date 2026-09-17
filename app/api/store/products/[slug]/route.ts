@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { products, productImages } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { resolveProduct, ProductInput, CategoryInput } from "@/lib/services/product-resolver";
+import { getSessionCustomerId } from "@/lib/session-customer";
+import { hasActiveSubscription } from "@/lib/subscriptions";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,9 @@ export async function GET(req: NextRequest, context: any) {
             rawProduct.category as CategoryInput | null
         );
 
+        // Solo se manda a quien ES suscriptor (ver la lista de productos).
+        const isSubscriber = await hasActiveSubscription(await getSessionCustomerId());
+
         const publicProduct = {
             id: rawProduct.id,
             name: rawProduct.name,
@@ -44,6 +49,7 @@ export async function GET(req: NextRequest, context: any) {
             price: resolved.resolved_price,
             offerPrice: rawProduct.isOffer && rawProduct.offerPrice ? rawProduct.offerPrice : null,
             isOffer: Boolean(rawProduct.isOffer),
+            subscriptionPrice: isSubscriber && rawProduct.subscriptionPrice ? rawProduct.subscriptionPrice : null,
             stock: resolved.resolved_stock,
             unit: rawProduct.unit || "Und",
             equivLabel: rawProduct.equivLabel || null,

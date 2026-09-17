@@ -7,21 +7,34 @@ import { users, customers } from "./db/schema";
 import { eq, and } from "drizzle-orm";
 import { verifyPassword } from "./auth-utils";
 import { upsertCustomerFromGoogle } from "./customer-google-upsert";
+import { resolveAdminCustomerId } from "./admin-customer-account";
 
 // --- NextAuth Type Augmentation ---
 declare module "next-auth" {
     interface User {
         role: string;
+        /** Cuenta de tienda de esta persona. Ver el comentario en Session. */
+        customerId?: string | null;
     }
     interface Session {
         user: {
             id: string;
             role: string;
+            /**
+             * A qué cuenta de `customers` compra esta sesión, o null si ninguna.
+             *
+             * Separado de `id` a propósito: para un cliente son el mismo valor,
+             * pero para un admin/owner `id` es su fila en `users` (lo que manda
+             * en el panel) y `customerId` es su cuenta de tienda. Los endpoints
+             * de `/api/store/customer/*` usan SIEMPRE este campo, nunca `id`.
+             */
+            customerId: string | null;
         } & DefaultSession["user"];
     }
     interface JWT {
         role: string;
         id: string;
+        customerId?: string | null;
         /** Epoch ms de la última revalidación del rol contra la base. */
         checkedAt?: number;
     }
@@ -67,6 +80,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             email: user.email,
                             name: user.name,
                             role: user.role,
+                            // Un admin también compra como cliente, con este mismo login.
+                            customerId: await resolveAdminCustomerId(user.id, user.email, user.name),
                         };
                     }
 
@@ -86,6 +101,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             email: customer.email,
                             name: `${customer.firstName} ${customer.lastName}`,
                             role: "customer",
+                            customerId: customer.id, // para un cliente, id y customerId coinciden
                         };
                     }
 
@@ -127,6 +143,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     if (user) {
                         user.id = c.id;
                         user.role = "customer";
+                        user.customerId = c.id;
                         user.name = c.name;
                         user.email = c.email;
                     }
@@ -141,6 +158,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             if (user) {
                 token.role = user.role;
                 token.id = user.id!;
+                token.customerId = user.customerId ?? null;
                 token.checkedAt = Date.now();
                 return token;
             }
@@ -158,12 +176,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             try {
                 const admin = await db.query.users.findFirst({
                     where: eq(users.id, userId),
-                    columns: { role: true, active: true },
+                    columns: { role: true, active: true, customerId: true, email: true, name: true },
                 });
                 if (admin) {
                     // Cuenta desactivada → invalidar la sesión.
                     if (!admin.active) return null;
                     token.role = admin.role;
+                    // Se resuelve también acá y no solo al entrar: así una sesión
+                    // abierta desde antes de esta función igual consigue su cuenta
+                    // de tienda sin tener que cerrar sesión y volver a entrar.
+                    token.customerId = admin.customerId
+                        ?? await resolveAdminCustomerId(userId, admin.email, admin.name);
                     token.checkedAt = Date.now();
                     return token;
                 }
@@ -175,6 +198,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 if (!customer || !customer.active) return null;
 
                 token.role = "customer";
+                token.customerId = userId;
                 token.checkedAt = Date.now();
                 return token;
             } catch (err) {
@@ -188,6 +212,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             if (token) {
                 session.user.role = token.role as string;
                 session.user.id = token.id as string;
+                session.user.customerId = (token.customerId as string | null | undefined) ?? null;
             }
             return session;
         }

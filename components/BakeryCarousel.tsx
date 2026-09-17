@@ -243,6 +243,7 @@ export function BakeryCarousel() {
                                         equivWeight={p.equivWeight}
                                         image={p.images.find((i) => i.isPrimary)?.url || p.images[0]?.url || null}
                                         priceTiers={p.priceTiers}
+                                        subscriptionPrice={p.subscriptionPrice}
                                     />
                                 </div>
                             ))}

@@ -2,13 +2,13 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { getSessionCustomerId } from "@/lib/session-customer";
 import { claimUnclaimedOrdersForCustomer, rutTakenByOtherCustomer, syncCustomerToPosveci } from "@/lib/pos-customer-match";
 
 export async function GET() {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -27,7 +27,7 @@ export async function GET() {
                 addressNotes: customers.addressNotes,
             })
             .from(customers)
-            .where(eq(customers.id, session.user.id))
+            .where(eq(customers.id, customerId))
             .limit(1);
 
         if (result.length === 0) {
@@ -43,8 +43,8 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -67,16 +67,15 @@ export async function PUT(req: NextRequest) {
 
         // RUT único por tienda: si llega un RUT nuevo que ya está en otra cuenta, bloquear.
         const newRut = typeof updateData.rut === "string" ? updateData.rut : null;
-        if (newRut && await rutTakenByOtherCustomer(newRut, session.user.id)) {
+        if (newRut && await rutTakenByOtherCustomer(newRut, customerId)) {
             return NextResponse.json(
                 { error: "Ya existe una cuenta con este RUT" },
                 { status: 409 }
             );
         }
 
-        await db.update(customers).set(updateData).where(eq(customers.id, session.user.id));
+        await db.update(customers).set(updateData).where(eq(customers.id, customerId));
 
-        const customerId = session.user.id;
         // Cualquier edición de perfil → sincronizar a POSVECI por ID maestro.
         // Si cambió el RUT → además reclamar encargos presenciales pendientes (no por teléfono).
         const rutChanged = 'rut' in body;

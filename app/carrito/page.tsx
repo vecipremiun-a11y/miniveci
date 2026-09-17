@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
-import { useCart, isWeightUnit, hasEquiv, getTieredPrice } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getEffectivePrice } from '@/components/cart/CartProvider';
 
 export default function CarritoPage() {
     const { items, subtotal, updateQuantity, removeItem, clearCart } = useCart();
@@ -51,8 +51,8 @@ export default function CarritoPage() {
                                 const stepVal = equiv ? 1 : ((isWeight || isKgDirect) ? 0.5 : 1);
                                 const minQty = equiv ? 1 : ((isWeight || isKgDirect) ? 0.5 : 1);
                                 const lineTotal = equiv
-                                    ? Math.round(getTieredPrice(item.price, item.priceTiers, item.quantity) * item.equivWeight! * item.quantity)
-                                    : getTieredPrice(item.price, item.priceTiers, item.quantity) * item.quantity;
+                                    ? Math.round(getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice) * item.equivWeight! * item.quantity)
+                                    : getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice) * item.quantity;
                                 const formattedLineTotal = new Intl.NumberFormat('es-CL', {
                                     style: 'currency',
                                     currency: 'CLP',
@@ -74,8 +74,8 @@ export default function CarritoPage() {
                                             <p className="font-bold text-slate-800 text-sm sm:text-base truncate">{item.name}</p>
                                             <p className="text-[11px] sm:text-sm text-slate-500 truncate">
                                                 {equiv
-                                                    ? <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Math.round(getTieredPrice(item.price, item.priceTiers, item.quantity) * item.equivWeight!))} x {qtyLabel} {item.equivLabel}</>
-                                                    : <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(getTieredPrice(item.price, item.priceTiers, item.quantity))} x {qtyLabel}{isWeight ? ` ${(item.unit ?? 'kg').toLowerCase()}` : ''}</>}
+                                                    ? <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Math.round(getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice) * item.equivWeight!))} x {qtyLabel} {item.equivLabel}</>
+                                                    : <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice))} x {qtyLabel}{isWeight ? ` ${(item.unit ?? 'kg').toLowerCase()}` : ''}</>}
                                             </p>
                                             <p className="font-extrabold text-veci-dark text-sm sm:hidden mt-0.5">{formattedLineTotal}</p>
                                             <div className="flex items-center gap-2 mt-1.5 sm:hidden">

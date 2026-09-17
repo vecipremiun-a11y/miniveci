@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { customerPaymentMethods } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { getSessionCustomerId } from "@/lib/session-customer";
 import { randomUUID } from "crypto";
 
 // List saved payment methods
 export async function GET() {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -25,7 +25,7 @@ export async function GET() {
                 createdAt: customerPaymentMethods.createdAt,
             })
             .from(customerPaymentMethods)
-            .where(eq(customerPaymentMethods.customerId, session.user.id))
+            .where(eq(customerPaymentMethods.customerId, customerId))
             .orderBy(customerPaymentMethods.createdAt);
 
         return NextResponse.json(methods);
@@ -38,8 +38,8 @@ export async function GET() {
 // Save a new payment method from MP card data
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
             .from(customerPaymentMethods)
             .where(
                 and(
-                    eq(customerPaymentMethods.customerId, session.user.id),
+                    eq(customerPaymentMethods.customerId, customerId),
                     eq(customerPaymentMethods.lastFourDigits, lastFourDigits)
                 )
             );
@@ -69,14 +69,14 @@ export async function POST(req: NextRequest) {
         const allCards = await db
             .select()
             .from(customerPaymentMethods)
-            .where(eq(customerPaymentMethods.customerId, session.user.id));
+            .where(eq(customerPaymentMethods.customerId, customerId));
 
         const isDefault = allCards.length === 0;
 
         const id = randomUUID();
         await db.insert(customerPaymentMethods).values({
             id,
-            customerId: session.user.id,
+            customerId: customerId,
             mpCustomerId: mpCustomerId || null,
             mpCardId: mpCardId || null,
             brand: brand.toLowerCase(),
@@ -97,8 +97,8 @@ export async function POST(req: NextRequest) {
 // Delete a payment method
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -116,7 +116,7 @@ export async function DELETE(req: NextRequest) {
             .where(
                 and(
                     eq(customerPaymentMethods.id, methodId),
-                    eq(customerPaymentMethods.customerId, session.user.id)
+                    eq(customerPaymentMethods.customerId, customerId)
                 )
             );
 
@@ -131,7 +131,7 @@ export async function DELETE(req: NextRequest) {
             const remaining = await db
                 .select()
                 .from(customerPaymentMethods)
-                .where(eq(customerPaymentMethods.customerId, session.user.id))
+                .where(eq(customerPaymentMethods.customerId, customerId))
                 .limit(1);
 
             if (remaining.length > 0) {
@@ -151,8 +151,8 @@ export async function DELETE(req: NextRequest) {
 // Set default payment method
 export async function PUT(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id || session.user.role !== "customer") {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
@@ -170,7 +170,7 @@ export async function PUT(req: NextRequest) {
             .where(
                 and(
                     eq(customerPaymentMethods.id, methodId),
-                    eq(customerPaymentMethods.customerId, session.user.id)
+                    eq(customerPaymentMethods.customerId, customerId)
                 )
             );
 
@@ -181,7 +181,7 @@ export async function PUT(req: NextRequest) {
         // Reset all to non-default
         await db.update(customerPaymentMethods)
             .set({ isDefault: false })
-            .where(eq(customerPaymentMethods.customerId, session.user.id));
+            .where(eq(customerPaymentMethods.customerId, customerId));
 
         // Set selected as default
         await db.update(customerPaymentMethods)

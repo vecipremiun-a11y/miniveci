@@ -5,6 +5,8 @@ import { eq, and, desc, asc, inArray, sql } from "drizzle-orm";
 import { tokenizeSearch } from "@/lib/search-text";
 import { searchTokensCondition } from "@/lib/search-sql";
 import { branchIds } from "@/lib/category-tree";
+import { getSessionCustomerId } from "@/lib/session-customer";
+import { hasActiveSubscription } from "@/lib/subscriptions";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +114,11 @@ export async function GET(req: NextRequest) {
             allImages = await db.select().from(productImages).where(inArray(productImages.productId, productIds));
         }
 
+        // El precio de suscriptor solo viaja si quien mira ES suscriptor: así
+        // la presencia del campo ya es la señal para el front, sin tener que
+        // mandarle aparte si tiene membresía. Ver resolveUnitPrice.
+        const isSubscriber = await hasActiveSubscription(await getSessionCustomerId());
+
         // Map results (resolve price/stock inline — no loop over all products)
         const publicProducts = rawProducts.map(row => {
             const raw = row.product;
@@ -154,6 +161,7 @@ export async function GET(req: NextRequest) {
                 badges: raw.badges,
                 tags: raw.tags,
                 priceTiers: (raw.priceTiers as any[]) ?? [],
+                subscriptionPrice: isSubscriber && raw.subscriptionPrice ? raw.subscriptionPrice : null,
             };
         });
 
