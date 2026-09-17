@@ -21,8 +21,8 @@
  */
 import { and, eq, or } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { customers, bakeryOrders, BAKERY_GUEST_USER_ID } from "@/lib/db/schema";
-import { publishClientUpsert } from "@/lib/posveci-publisher";
+import { customers, customerAddresses, bakeryOrders, BAKERY_GUEST_USER_ID } from "@/lib/db/schema";
+import { buildClientAddresses, publishClientUpsert } from "@/lib/posveci-publisher";
 
 // --- Normalizadores ---
 
@@ -234,20 +234,41 @@ export async function claimUnclaimedOrdersForCustomer(customerId: string): Promi
 }
 
 /**
- * Carga el customer y lo sincroniza a POSVECI (upsert por ID maestro).
- * Best-effort: nunca lanza — loguea y sigue. Llamar al registrar y al editar perfil.
+ * Carga el customer con su libreta de direcciones y lo sincroniza a POSVECI
+ * (upsert por ID maestro). La libreta viaja COMPLETA en cada llamada: POSVECI
+ * reemplaza la suya con esa lista, así que mandar solo lo que cambió dejaría
+ * direcciones fantasma de su lado.
+ *
+ * Best-effort: nunca lanza — loguea y sigue. Llamar al registrar, al editar
+ * perfil y en cada cambio de la libreta (alta/edición/borrado y cuando el
+ * checkout deja una dirección nueva como predeterminada).
  */
 export async function syncCustomerToPosveci(customerId: string): Promise<void> {
     try {
         const c = await db.query.customers.findFirst({ where: eq(customers.id, customerId) });
         if (!c) return;
+
+        const book = await db
+            .select()
+            .from(customerAddresses)
+            .where(eq(customerAddresses.customerId, customerId))
+            .orderBy(customerAddresses.createdAt);
+
+        const { address, addresses } = buildClientAddresses(c.id, book, {
+            address: c.address ?? null,
+            comuna: c.comuna ?? null,
+            city: c.city ?? null,
+            addressNotes: c.addressNotes ?? null,
+        });
+
         await publishClientUpsert({
             externalId: c.id,
             name: `${c.firstName} ${c.lastName ?? ""}`.trim() || c.email,
             rut: c.rut ?? null,
             phone: c.phone || null,
             email: c.email,
-            address: c.address ?? null,
+            address,
+            addresses,
         });
     } catch (err) {
         console.error(`[POSVECI] syncCustomerToPosveci threw para ${customerId}:`, (err as Error).message);

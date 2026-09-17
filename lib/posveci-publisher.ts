@@ -99,6 +99,24 @@ export interface StoreOrderCreatedPayload {
     occurred_at: string;
 }
 
+/**
+ * Una dirección de la libreta del cliente, tal como la espera POSVECI.
+ *
+ * `external_address_id` es la llave de emparejamiento: POSVECI upsertea por ese
+ * id dentro del cliente, así que cambiar el texto de una dirección la actualiza
+ * en vez de duplicarla. Nombres en español (`comuna`, `ciudad`, `notes`) porque
+ * así los definió POSVECI para su endpoint de clientes.
+ */
+export interface ClientAddressPayload {
+    external_address_id: string;
+    label: string;
+    address: string;
+    comuna: string | null;
+    ciudad: string | null;
+    notes: string | null;
+    is_default: boolean;
+}
+
 interface ClientUpsertPayload {
     external_id: string; // ID de la cuenta en miniveci — llave maestra permanente
     name: string;
@@ -106,6 +124,99 @@ interface ClientUpsertPayload {
     phone: string | null;
     email: string | null;
     address: string | null;
+    /**
+     * Libreta COMPLETA del cliente. POSVECI reemplaza la suya con esta lista:
+     * las que no vengan, las borra. Por eso el campo se omite (no se manda lista
+     * vacía) cuando no hay nada que mandar — ausente significa "no toques la
+     * libreta", y una lista vacía significaría "este cliente no tiene ninguna".
+     */
+    addresses?: ClientAddressPayload[];
+}
+
+/** Fila de `customer_addresses` (solo lo que viaja a POSVECI). */
+export interface AddressBookRow {
+    id: string;
+    label: string | null;
+    address: string;
+    comuna: string | null;
+    city: string | null;
+    addressNotes: string | null;
+    isDefault: boolean | null;
+}
+
+/** Dirección legacy del perfil (`customers.address` y sus columnas hermanas). */
+export interface LegacyProfileAddress {
+    address: string | null;
+    comuna: string | null;
+    city: string | null;
+    addressNotes: string | null;
+}
+
+/** Trim + null si queda vacío. */
+function clean(value: string | null | undefined): string | null {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
+
+/** "Videla 1430, La Cisterna" — el formato de una línea que ya usan los pedidos. */
+function oneLine(address: string, comuna: string | null): string {
+    return [address, comuna].filter(Boolean).join(", ");
+}
+
+/**
+ * Arma `address` (la principal, en una línea) y `addresses` (la libreta completa)
+ * para el upsert de cliente.
+ *
+ * Reglas:
+ *  - Con libreta: viaja entera. La principal es la marcada `isDefault`; si
+ *    ninguna lo está, la primera (orden de creación). Exactamente una queda con
+ *    `is_default: true`, porque POSVECI la usa para despacho e impresión.
+ *  - Sin libreta pero con `customers.address`: viaja esa sola como principal,
+ *    con un id sintético estable (`legacy:<customerId>`) para que POSVECI la
+ *    empareje igual. Cuando el cliente cree su primera dirección real, la legacy
+ *    deja de venir en la lista y POSVECI la borra — que es lo correcto.
+ *  - Sin libreta y sin dirección legacy: `addresses` se omite.
+ */
+export function buildClientAddresses(
+    customerId: string,
+    book: AddressBookRow[],
+    legacy: LegacyProfileAddress,
+): { address: string | null; addresses?: ClientAddressPayload[] } {
+    if (book.length > 0) {
+        const defaultIdx = book.findIndex((row) => row.isDefault === true);
+        const principalIdx = defaultIdx >= 0 ? defaultIdx : 0;
+
+        const addresses: ClientAddressPayload[] = book.map((row, i) => ({
+            external_address_id: row.id,
+            label: clean(row.label) ?? "Casa",
+            address: row.address.trim(),
+            comuna: clean(row.comuna),
+            ciudad: clean(row.city),
+            notes: clean(row.addressNotes),
+            is_default: i === principalIdx,
+        }));
+
+        const principal = addresses[principalIdx];
+        return { address: oneLine(principal.address, principal.comuna), addresses };
+    }
+
+    const legacyAddress = clean(legacy.address);
+    if (!legacyAddress) return { address: null };
+
+    const legacyComuna = clean(legacy.comuna);
+    return {
+        address: oneLine(legacyAddress, legacyComuna),
+        addresses: [{
+            external_address_id: `legacy:${customerId}`,
+            label: "Casa",
+            address: legacyAddress,
+            comuna: legacyComuna,
+            ciudad: clean(legacy.city),
+            notes: clean(legacy.addressNotes),
+            is_default: true,
+        }],
+    };
 }
 
 function getConfig(): { url: string; token: string } | null {
@@ -314,9 +425,12 @@ export async function publishStoreOrderCreated(payload: StoreOrderCreatedPayload
  * Crea/actualiza un cliente en POSVECI por `external_id` (= ID de cuenta miniveci).
  *
  * El ID de miniveci es la llave maestra permanente: POSVECI hace UPSERT por
- * external_id. Llamar al registrar la cuenta y en cada edición de perfil
- * (rut/email/teléfono/nombre/dirección). Best-effort: si POSVECI no está
- * configurado o falla, no bloquea — log y seguir.
+ * external_id. Llamar al registrar la cuenta, en cada edición de perfil
+ * (rut/email/teléfono/nombre/dirección) y cada vez que cambia la libreta de
+ * direcciones. Best-effort: si POSVECI no está configurado o falla, no bloquea
+ * — log y seguir.
+ *
+ * La sincronización es en un solo sentido: miniveci manda, POSVECI copia.
  */
 export async function publishClientUpsert(client: {
     externalId: string;
@@ -325,6 +439,7 @@ export async function publishClientUpsert(client: {
     phone: string | null;
     email: string | null;
     address: string | null;
+    addresses?: ClientAddressPayload[];
 }): Promise<void> {
     const cfg = getClientsConfig();
     if (!cfg) {
@@ -339,6 +454,8 @@ export async function publishClientUpsert(client: {
         phone: client.phone,
         email: client.email,
         address: client.address,
+        // Ausente ≠ lista vacía: solo mandamos la llave si hay libreta que copiar.
+        ...(client.addresses ? { addresses: client.addresses } : {}),
     };
 
     const res = await sendWithTimeout(cfg.url, {
@@ -359,5 +476,6 @@ export async function publishClientUpsert(client: {
         console.error(`[POSVECI] client upsert falló ${res.status} para ${client.externalId}:`, text.slice(0, 300));
         return;
     }
-    console.log(`[POSVECI] cliente ${client.externalId} sincronizado OK`);
+    const libreta = client.addresses ? `, ${client.addresses.length} dirección(es)` : "";
+    console.log(`[POSVECI] cliente ${client.externalId} sincronizado OK${libreta}`);
 }

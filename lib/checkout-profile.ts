@@ -10,6 +10,8 @@
  *    como predeterminada, así el checkout siguiente propone la última usada.
  *    Si no vino comuna (dirección escrita a mano) solo se guarda en los campos
  *    legacy del perfil, que sí aceptan comuna nula.
+ *  - Si el perfil o la libreta quedaron distintos, se reenvía el cliente completo
+ *    (con su libreta) a POSVECI.
  *
  * Best-effort: cualquier error se loguea y se traga — nunca debe romper un pedido
  * ya creado. Pensado para llamarse dentro de `after()`.
@@ -96,55 +98,84 @@ export async function persistCheckoutProfile(input: CheckoutProfileInput): Promi
             if (addressNotes) update.addressNotes = addressNotes;
         }
 
+        let profileChanged = false;
         if (Object.keys(update).length > 0) {
             update.updatedAt = new Date().toISOString();
             await db.update(customers).set(update).where(eq(customers.id, input.customerId));
+            profileChanged = true;
+        }
+
+        // Libreta de direcciones: la última usada queda como predeterminada.
+        const addressBookChanged = address && comuna
+            ? await setDefaultAddress(input.customerId, address, comuna, city, addressNotes)
+            : false;
+
+        // Un solo upsert a POSVECI al final: manda el perfil y la libreta completa,
+        // así que cubre los dos cambios de una.
+        if (profileChanged || addressBookChanged) {
             try {
                 await syncCustomerToPosveci(input.customerId);
             } catch (err) {
                 console.error(`[CHECKOUT_PROFILE] sync POSVECI falló para ${input.customerId}:`, (err as Error).message);
             }
         }
-
-        // Libreta de direcciones: la última usada queda como predeterminada.
-        if (!address || !comuna) return;
-
-        const saved = await db
-            .select()
-            .from(customerAddresses)
-            .where(eq(customerAddresses.customerId, input.customerId));
-
-        const match = saved.find((a) => sameAddress(a.address, address) && sameAddress(a.comuna, comuna));
-
-        await db
-            .update(customerAddresses)
-            .set({ isDefault: false })
-            .where(eq(customerAddresses.customerId, input.customerId));
-
-        if (match) {
-            await db
-                .update(customerAddresses)
-                .set({
-                    isDefault: true,
-                    city: city || match.city,
-                    addressNotes: addressNotes ?? match.addressNotes,
-                    updatedAt: new Date().toISOString(),
-                })
-                .where(eq(customerAddresses.id, match.id));
-            return;
-        }
-
-        await db.insert(customerAddresses).values({
-            id: crypto.randomUUID(),
-            customerId: input.customerId,
-            label: saved.length === 0 ? "Casa" : `Dirección ${saved.length + 1}`,
-            address,
-            comuna,
-            city: city || "Santiago",
-            addressNotes,
-            isDefault: true,
-        });
     } catch (err) {
         console.error(`[CHECKOUT_PROFILE] falló para ${input.customerId}:`, (err as Error).message);
     }
+}
+
+/**
+ * Guarda en la libreta la dirección que el cliente usó en el checkout y la deja
+ * como predeterminada.
+ *
+ * Devuelve `true` si la libreta quedó distinta (alta nueva, cambio de
+ * predeterminada, o ciudad/notas actualizadas). Ese booleano es lo que decide si
+ * hay que reenviarla a POSVECI: repetir la misma dirección predeterminada pedido
+ * tras pedido no cambia nada, y no vale un round-trip.
+ */
+async function setDefaultAddress(
+    customerId: string,
+    address: string,
+    comuna: string,
+    city: string | null,
+    addressNotes: string | null,
+): Promise<boolean> {
+    const saved = await db
+        .select()
+        .from(customerAddresses)
+        .where(eq(customerAddresses.customerId, customerId));
+
+    const match = saved.find((a) => sameAddress(a.address, address) && sameAddress(a.comuna, comuna));
+
+    await db
+        .update(customerAddresses)
+        .set({ isDefault: false })
+        .where(eq(customerAddresses.customerId, customerId));
+
+    if (match) {
+        const nextCity = city || match.city;
+        const nextNotes = addressNotes ?? match.addressNotes;
+        await db
+            .update(customerAddresses)
+            .set({
+                isDefault: true,
+                city: nextCity,
+                addressNotes: nextNotes,
+                updatedAt: new Date().toISOString(),
+            })
+            .where(eq(customerAddresses.id, match.id));
+        return !match.isDefault || nextCity !== match.city || nextNotes !== match.addressNotes;
+    }
+
+    await db.insert(customerAddresses).values({
+        id: crypto.randomUUID(),
+        customerId,
+        label: saved.length === 0 ? "Casa" : `Dirección ${saved.length + 1}`,
+        address,
+        comuna,
+        city: city || "Santiago",
+        addressNotes,
+        isDefault: true,
+    });
+    return true;
 }

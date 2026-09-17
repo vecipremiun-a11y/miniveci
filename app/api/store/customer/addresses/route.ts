@@ -1,8 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { customerAddresses } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { syncCustomerToPosveci } from "@/lib/pos-customer-match";
+
+/**
+ * Empuja la libreta completa del cliente a POSVECI después de responder.
+ *
+ * La sincronización es en un solo sentido (la tienda manda, POSVECI copia) y es
+ * best-effort: si POSVECI falla, `syncCustomerToPosveci` lo loguea y la
+ * operación del cliente sigue igual. Va en `after()` para no sumarle el
+ * round-trip de red a la respuesta.
+ */
+function syncAddressBook(customerId: string): void {
+    after(() => syncCustomerToPosveci(customerId));
+}
 
 export async function GET() {
     try {
@@ -64,6 +77,8 @@ export async function POST(req: NextRequest) {
             isDefault: shouldBeDefault,
         });
 
+        syncAddressBook(session.user.id);
+
         return NextResponse.json({ id, message: "Dirección agregada" }, { status: 201 });
     } catch (error) {
         console.error("[ADDRESSES_POST]", error);
@@ -109,6 +124,8 @@ export async function PUT(req: NextRequest) {
             updatedAt: new Date().toISOString(),
         }).where(eq(customerAddresses.id, body.id));
 
+        syncAddressBook(session.user.id);
+
         return NextResponse.json({ message: "Dirección actualizada" });
     } catch (error) {
         console.error("[ADDRESSES_PUT]", error);
@@ -153,6 +170,8 @@ export async function DELETE(req: NextRequest) {
                     .where(eq(customerAddresses.id, remaining[0].id));
             }
         }
+
+        syncAddressBook(session.user.id);
 
         return NextResponse.json({ message: "Dirección eliminada" });
     } catch (error) {
