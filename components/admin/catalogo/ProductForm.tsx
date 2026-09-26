@@ -25,6 +25,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { COMERCIAL_VECI_BADGE } from "@/lib/store-product-types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, X, UploadCloud, Info, Trash2, TrendingDown, Infinity, ArrowRight, Zap, Tag, DollarSign, TrendingUp, Eye, EyeOff } from "lucide-react";
@@ -343,6 +344,37 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                             </FormControl>
                                         </FormItem>
                                     )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="badges"
+                                    render={({ field }) => {
+                                        const current = field.value || [];
+                                        const checked = current.includes(COMERCIAL_VECI_BADGE);
+                                        return (
+                                            <FormItem className="flex flex-row items-center justify-between gap-3 rounded-lg border p-3 shadow-sm">
+                                                <div className="flex items-center gap-3">
+                                                    <img src="/sello-comercial-veci.png" alt="" className="w-14 h-auto shrink-0" />
+                                                    <div className="space-y-0.5">
+                                                        <FormLabel>Sello Comercial Veci</FormLabel>
+                                                        <FormDescription>
+                                                            Muestra el logo sobre la foto
+                                                        </FormDescription>
+                                                    </div>
+                                                </div>
+                                                <FormControl>
+                                                    <Switch
+                                                        checked={checked}
+                                                        onCheckedChange={(on) => field.onChange(
+                                                            on
+                                                                ? [...current.filter((b) => b !== COMERCIAL_VECI_BADGE), COMERCIAL_VECI_BADGE]
+                                                                : current.filter((b) => b !== COMERCIAL_VECI_BADGE)
+                                                        )}
+                                                    />
+                                                </FormControl>
+                                            </FormItem>
+                                        );
+                                    }}
                                 />
 
                                 <FormField

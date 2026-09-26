@@ -783,7 +783,7 @@ export default function CheckoutPage() {
                     </div>
                 </section>
 
-                <aside className="bg-white/70 backdrop-blur-md border border-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:sticky lg:top-28">
+                <aside className="bg-white/70 backdrop-blur-md border border-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:sticky lg:top-[calc(7rem+var(--promo-h,0px))]">
                     <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-4 sm:mb-5">Orden</h2>
 
                     <div className="space-y-3 sm:space-y-4 max-h-[420px] overflow-auto pr-1">

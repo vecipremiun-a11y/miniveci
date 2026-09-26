@@ -95,11 +95,71 @@
   }
 }
 
+/* Anuncio de delivery gratis (Navbar): "GRATIS" late y brilla, el monto
+   cambia de colores y un destello cruza la franja. */
+.promo-bar {
+  position: relative;
+  overflow: hidden;
+}
+
+.promo-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+  transform: translateX(-120%);
+  animation: promo-sweep 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.promo-gratis {
+  display: inline-block;
+  color: #ffe600;
+  transform-origin: center;
+  animation: promo-beat 0.9s ease-in-out infinite;
+}
+
+.promo-precio {
+  display: inline-block;
+  background: linear-gradient(90deg, #ffe14d, #ff8a3d, #ff5fa2, #4de1ff, #a9dc4c, #ffe14d);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: promo-colors 3s linear infinite;
+}
+
+@keyframes promo-beat {
+  0%, 100% { transform: scale(0.9); color: #ffd400; text-shadow: 0 0 4px rgba(255, 214, 0, 0.35); }
+  50% { transform: scale(1.35); color: #fff35c; text-shadow: 0 0 10px rgba(255, 230, 0, 1), 0 0 24px rgba(255, 200, 0, 0.8); }
+}
+
+@keyframes promo-colors {
+  from { background-position: 0% 50%; }
+  to { background-position: 300% 50%; }
+}
+
+@keyframes promo-sweep {
+  0% { transform: translateX(-120%); }
+  60%, 100% { transform: translateX(320%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .promo-bar::after,
+  .promo-gratis,
+  .promo-precio {
+    animation: none;
+  }
+}
+
 body {
   background: #ffffff;
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   min-height: 100vh;
+  /* Alto del anuncio de delivery gratis (lo publica el Navbar). */
+  padding-top: var(--promo-h, 0px);
 }
 
 /* Glassmorphism Utilities as standard classes */

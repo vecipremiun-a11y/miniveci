@@ -5,10 +5,10 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Footer } from "@/components/Footer";
 import { ProductSidebar } from "@/components/products/ProductSidebar";
 import { ProductCard } from "@/components/products/ProductCard";
-import { useDebounce } from '@/hooks/use-debounce';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
+import { COMERCIAL_VECI_BADGE } from '@/lib/store-product-types';
 import { matchesSearchTokens, tokenizeSearch } from '@/lib/search-text';
-import { ChevronDown, LayoutGrid, List, Loader2, PackageOpen, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, Loader2, PackageOpen, SlidersHorizontal, X } from "lucide-react";
 
 interface ApiResponse {
     data: StoreProductPayload[];
@@ -28,10 +28,18 @@ function mergeProductChanges(currentProduct: StoreProduct, change: ProductChange
     };
 }
 
-function matchesProductFilters(product: StoreProduct, selectedCategory: string | null, search: string) {
+function matchesProductFilters(
+    product: StoreProduct,
+    selectedCategory: string | null,
+    search: string,
+    inOffer: boolean,
+    onlyVeci: boolean,
+) {
     if (selectedCategory && product.category?.slug !== selectedCategory) {
         return false;
     }
+    if (inOffer && !product.isOffer) return false;
+    if (onlyVeci && !product.badges?.includes(COMERCIAL_VECI_BADGE)) return false;
 
     // Mismo criterio que /api/store/products: palabras en cualquier orden, sin tildes
     return matchesSearchTokens(tokenizeSearch(search), [product.name, product.description, product.category?.name]);
@@ -45,10 +53,7 @@ function ProductsPageContent() {
     const [loading, setLoading] = useState(true);
     const [meta, setMeta] = useState({ total: 0, page: 1, limit: 20, totalPages: 1 });
     const [sortBy, setSortBy] = useState<'featured' | 'price_asc' | 'price_desc' | 'newest'>('newest');
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-    const [maxPrice, setMaxPrice] = useState(Number(searchParams.get('maxPrice') || '50000') || 50000);
     const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-    const debouncedMaxPrice = useDebounce(maxPrice, 400);
     const productsRef = useRef<StoreProduct[]>([]);
     const metaRef = useRef(meta);
 
@@ -57,6 +62,7 @@ function ProductsPageContent() {
     const selectedCategory = searchParams.get('category') || null;
     const page = Math.max(1, Number(searchParams.get('page') || '1') || 1);
     const inOffer = searchParams.get('offer') === 'true';
+    const onlyVeci = searchParams.get('veci') === 'true';
 
     // Helper to update URL params without cycles
     const updateURL = useCallback((updates: Record<string, string | null>) => {
@@ -80,16 +86,6 @@ function ProductsPageContent() {
         metaRef.current = meta;
     }, [meta]);
 
-    // Sync maxPrice to URL when debounced value changes
-    useEffect(() => {
-        const currentMax = Number(searchParams.get('maxPrice') || '50000') || 50000;
-        if (debouncedMaxPrice < 50000 && debouncedMaxPrice !== currentMax) {
-            updateURL({ maxPrice: String(debouncedMaxPrice), page: null });
-        } else if (debouncedMaxPrice >= 50000 && searchParams.has('maxPrice')) {
-            updateURL({ maxPrice: null, page: null });
-        }
-    }, [debouncedMaxPrice, searchParams, updateURL]);
-
     const abortRef = useRef<AbortController | null>(null);
 
     const fetchProducts = useCallback(async () => {
@@ -105,7 +101,7 @@ function ProductsPageContent() {
             if (selectedCategory) params.set('category', selectedCategory);
             if (search) params.set('search', search);
             if (inOffer) params.set('offer', 'true');
-            if (debouncedMaxPrice < 50000) params.set('maxPrice', String(debouncedMaxPrice));
+            if (onlyVeci) params.set('veci', 'true');
             if (sortBy !== 'newest') params.set('sort', sortBy);
 
             const res = await fetch(`/api/store/products?${params.toString()}`, {
@@ -122,7 +118,7 @@ function ProductsPageContent() {
         } finally {
             if (!controller.signal.aborted) setLoading(false);
         }
-    }, [page, selectedCategory, search, sortBy, inOffer, debouncedMaxPrice]);
+    }, [page, selectedCategory, search, sortBy, inOffer, onlyVeci]);
 
     useEffect(() => {
         fetchProducts();
@@ -134,7 +130,7 @@ function ProductsPageContent() {
         const currentMeta = metaRef.current;
         const currentIndex = currentProducts.findIndex((product) => product.id === change.productId || product.slug === change.slug);
         const nextProduct = change.product;
-        const isVisible = nextProduct ? matchesProductFilters(nextProduct, selectedCategory, search) : false;
+        const isVisible = nextProduct ? matchesProductFilters(nextProduct, selectedCategory, search, inOffer, onlyVeci) : false;
 
         let nextProducts = currentProducts;
         let totalDelta = 0;
@@ -167,7 +163,7 @@ function ProductsPageContent() {
             metaRef.current = nextMeta;
             setMeta(nextMeta);
         }
-    }, [page, search, selectedCategory]);
+    }, [page, search, selectedCategory, inOffer, onlyVeci]);
 
     useEffect(() => {
         const eventSource = new EventSource('/api/store/products/events');
@@ -223,15 +219,15 @@ function ProductsPageContent() {
     };
 
     const handleOfferChange = (value: boolean) => {
-        updateURL({ offer: value ? 'true' : null, page: null });
+        // Los filtros rápidos son excluyentes: prender uno apaga el otro.
+        updateURL({ offer: value ? 'true' : null, veci: null, page: null });
     };
 
-    const handleMaxPriceChange = (value: number) => {
-        setMaxPrice(value);
+    const handleVeciChange = (value: boolean) => {
+        updateURL({ veci: value ? 'true' : null, offer: null, page: null });
     };
 
     const clearFilters = () => {
-        setMaxPrice(50000);
         router.replace(pathname, { scroll: false });
     };
 
@@ -275,8 +271,8 @@ function ProductsPageContent() {
                         onCategoryChange={handleCategoryChange}
                         inOffer={inOffer}
                         onOfferChange={handleOfferChange}
-                        maxPrice={maxPrice}
-                        onMaxPriceChange={handleMaxPriceChange}
+                        onlyVeci={onlyVeci}
+                        onVeciChange={handleVeciChange}
                     />
                 </div>
 
@@ -296,8 +292,8 @@ function ProductsPageContent() {
                                 onCategoryChange={(s) => { handleCategoryChange(s); setMobileFiltersOpen(false); }}
                                 inOffer={inOffer}
                                 onOfferChange={handleOfferChange}
-                                maxPrice={maxPrice}
-                                onMaxPriceChange={handleMaxPriceChange}
+                                onlyVeci={onlyVeci}
+                                onVeciChange={handleVeciChange}
                             />
                         </div>
                     </div>
@@ -315,11 +311,24 @@ function ProductsPageContent() {
                             <SlidersHorizontal className="w-3.5 h-3.5" />
                             Filtros
                         </button>
-                        <span className="text-tinta text-[11px] sm:text-[13px] font-medium whitespace-nowrap truncate tabular-nums">
-                            {meta.total > 0
-                                ? <><span className="hidden sm:inline">Mostrando </span><b className="font-bold text-hoja">{startIdx}-{endIdx}</b> de <b className="font-bold text-hoja">{meta.total.toLocaleString('es-CL')}</b><span className="hidden sm:inline"> productos</span></>
-                                : 'Sin productos'}
-                        </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-tinta text-[11px] sm:text-[13px] font-medium whitespace-nowrap truncate tabular-nums">
+                                {meta.total > 0
+                                    ? <><span className="hidden sm:inline">Mostrando </span><b className="font-bold text-hoja">{startIdx}-{endIdx}</b> de <b className="font-bold text-hoja">{meta.total.toLocaleString('es-CL')}</b><span className="hidden sm:inline"> productos</span></>
+                                    : 'Sin productos'}
+                            </span>
+                            {/* La búsqueda del navbar también filtra: se muestra para poder quitarla */}
+                            {search && (
+                                <button
+                                    onClick={() => updateURL({ search: null, page: null })}
+                                    title="Quitar búsqueda"
+                                    className="flex items-center gap-1 min-w-0 px-2.5 py-1 rounded-full bg-brote border border-lechuga-viva text-[11px] sm:text-xs font-semibold text-hoja hover:bg-lechuga/40 transition-colors"
+                                >
+                                    <span className="truncate">“{search}”</span>
+                                    <X className="w-3.5 h-3.5 shrink-0" />
+                                </button>
+                            )}
+                        </div>
 
                         <div className="flex items-center gap-2 sm:gap-4 self-end xl:self-auto">
                             {/* Sort */}
@@ -351,25 +360,6 @@ function ProductsPageContent() {
                                     ))}
                                 </div>
                             </div>
-
-                            <div className="hidden sm:flex items-center gap-0.5 bg-papel border border-cerco p-0.5 rounded-full">
-                                <button
-                                    onClick={() => setViewMode('grid')}
-                                    aria-label="Vista de grilla"
-                                    aria-pressed={viewMode === 'grid'}
-                                    className={`p-1.5 rounded-full transition-colors ${viewMode === 'grid' ? 'bg-lechuga text-hoja' : 'text-tinta-clara hover:text-hoja'}`}
-                                >
-                                    <LayoutGrid className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('list')}
-                                    aria-label="Vista de lista"
-                                    aria-pressed={viewMode === 'list'}
-                                    className={`p-1.5 rounded-full transition-colors ${viewMode === 'list' ? 'bg-lechuga text-hoja' : 'text-tinta-clara hover:text-hoja'}`}
-                                >
-                                    <List className="w-4 h-4" />
-                                </button>
-                            </div>
                         </div>
                     </div>
 
@@ -385,9 +375,9 @@ function ProductsPageContent() {
                             <PackageOpen className="w-14 h-14 text-cerco" strokeWidth={1.5} />
                             <h3 className="text-lg font-bold text-hoja">No hay productos disponibles</h3>
                             <p className="text-tinta text-sm text-center px-4">
-                                {selectedCategory || search ? 'No se encontraron productos con los filtros actuales.' : 'Pronto habrá productos disponibles.'}
+                                {selectedCategory || search || inOffer || onlyVeci ? 'No se encontraron productos con los filtros actuales.' : 'Pronto habrá productos disponibles.'}
                             </p>
-                            {(selectedCategory || search) && (
+                            {(selectedCategory || search || inOffer || onlyVeci) && (
                                 <button
                                     onClick={clearFilters}
                                     className="mt-1 px-4 py-2 bg-lechuga text-hoja rounded-full text-sm font-bold hover:bg-lechuga-viva transition-colors"
@@ -417,6 +407,7 @@ function ProductsPageContent() {
                                         slug={product.slug}
                                         priceTiers={product.priceTiers}
                                         subscriptionPrice={product.subscriptionPrice}
+                                        badges={product.badges}
                                     />
                                 ))}
                             </div>

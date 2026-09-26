@@ -7,6 +7,7 @@ import { Footer } from '@/components/Footer';
 import { useCart, isWeightUnit, hasEquiv, getEffectivePrice } from '@/components/cart/CartProvider';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
+import { COMERCIAL_VECI_BADGE } from '@/lib/store-product-types';
 import { ChevronRight, Loader2, Minus, Plus, Scale, ShoppingCart, Star, Tag, Zap, Check } from 'lucide-react';
 
 type ProductDetail = StoreProductPayload;
@@ -254,7 +255,14 @@ export default function ProductDetailPage() {
 
                 <section className="grid lg:grid-cols-2 gap-8">
                     <div className="space-y-4">
-                        <div className="bg-white/60 border border-white rounded-3xl p-8 min-h-[420px] flex items-center justify-center">
+                        <div className="relative bg-white/60 border border-white rounded-3xl p-8 min-h-[420px] flex items-center justify-center">
+                            {product.badges?.includes(COMERCIAL_VECI_BADGE) && (
+                                <img
+                                    src="/sello-comercial-veci.png"
+                                    alt="Comercial Veci"
+                                    className="absolute top-4 left-4 w-28 sm:w-32 h-auto drop-shadow-sm pointer-events-none"
+                                />
+                            )}
                             <img
                                 src={currentImage}
                                 alt={product.name}
@@ -296,7 +304,7 @@ export default function ProductDetailPage() {
                                     {product.category.name}
                                 </span>
                             )}
-                            {(product.badges || []).slice(0, 3).map((badge) => (
+                            {(product.badges || []).filter((badge) => badge !== COMERCIAL_VECI_BADGE).slice(0, 3).map((badge) => (
                                 <span key={badge} className="px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-600 border border-purple-100">
                                     {badge}
                                 </span>

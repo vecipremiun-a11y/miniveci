@@ -20,6 +20,7 @@ interface Product {
     priceTiers?: { minQty: number; maxQty: number | null; price: number }[];
     /** Precio de socio: la API solo lo manda a suscriptores. */
     subscriptionPrice?: number | null;
+    badges?: string[] | null;
 }
 
 interface Category {
@@ -249,6 +250,7 @@ export function FreshCarousel() {
                                         image={primaryImage(p)}
                                         priceTiers={p.priceTiers}
                                         subscriptionPrice={p.subscriptionPrice}
+                                        badges={p.badges}
                                     />
                                 </div>
                             ))}

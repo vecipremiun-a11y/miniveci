@@ -19,6 +19,7 @@ interface Product {
   priceTiers?: { minQty: number; maxQty: number | null; price: number }[];
   /** Precio de socio: la API solo lo manda a suscriptores. */
   subscriptionPrice?: number | null;
+  badges?: string[] | null;
 }
 
 export function OfferCarousel() {
@@ -138,6 +139,7 @@ export function OfferCarousel() {
                     image={primaryImage(p)}
                     priceTiers={p.priceTiers}
                     subscriptionPrice={p.subscriptionPrice}
+                    badges={p.badges}
                   />
                 </div>
               </div>

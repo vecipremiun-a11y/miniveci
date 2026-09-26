@@ -5,6 +5,7 @@ import { Plus, Minus, TrendingDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getTieredPrice } from '@/components/cart/CartProvider';
 import type { PriceTier } from '@/components/cart/CartProvider';
+import { COMERCIAL_VECI_BADGE } from '@/lib/store-product-types';
 import { useRouter } from 'next/navigation';
 
 const PLACEHOLDER_IMAGE = '/placeholder-product-feria.svg';
@@ -28,9 +29,11 @@ interface ProductCardProps {
     priceTiers?: PriceTier[];
     /** Precio de socio. Solo llega si quien mira tiene la membresía activa. */
     subscriptionPrice?: number | null;
+    badges?: string[] | null;
 }
 
-export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers, subscriptionPrice }: ProductCardProps) {
+export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers, subscriptionPrice, badges }: ProductCardProps) {
+    const hasVeciSeal = badges?.includes(COMERCIAL_VECI_BADGE) ?? false;
     const { addItem } = useCart();
     const router = useRouter();
     const equiv = hasEquiv({ equivLabel, equivWeight });
@@ -121,7 +124,14 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                 />
 
                 <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-1.5 pointer-events-none">
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col items-start gap-1">
+                        {hasVeciSeal && (
+                            <img
+                                src="/sello-comercial-veci.png"
+                                alt="Comercial Veci"
+                                className="w-16 sm:w-20 h-auto drop-shadow-sm"
+                            />
+                        )}
                         {hasOffer && (
                             <span className="bg-tomate text-white text-[10px] leading-tight font-extrabold uppercase tracking-wide px-2 py-[3px] rounded-full">
                                 −{discountPercent}%

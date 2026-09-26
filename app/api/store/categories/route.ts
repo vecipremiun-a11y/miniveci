@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { categories, products } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { orderAsTree, branchCounts } from "@/lib/category-tree";
+import { quickFilterConditions } from "@/lib/store-filters";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
     try {
+        // Con un filtro rápido activo (?offer=true / ?veci=true) los conteos
+        // cuentan solo los productos que pasan ese filtro.
+        const { searchParams } = new URL(req.url);
+        const countFilter = and(
+            sql`${products.isPublished} = 1`,
+            ...quickFilterConditions({
+                onlyOffer: searchParams.get("offer") === "true",
+                onlyVeciSeal: searchParams.get("veci") === "true",
+            }),
+        );
+
         // Single query with LEFT JOIN instead of N+1
         const result = await db.select({
             id: categories.id,
@@ -17,7 +29,7 @@ export async function GET(req: NextRequest) {
             imageUrl: categories.imageUrl,
             parentId: categories.parentId,
             sortOrder: categories.sortOrder,
-            productCount: sql<number>`count(CASE WHEN ${products.isPublished} = 1 THEN 1 END)`.mapWith(Number),
+            productCount: sql<number>`count(CASE WHEN ${countFilter} THEN 1 END)`.mapWith(Number),
         })
             .from(categories)
             .leftJoin(products, eq(products.categoryId, categories.id))

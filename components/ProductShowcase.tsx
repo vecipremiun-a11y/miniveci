@@ -28,6 +28,7 @@ interface Product {
   priceTiers?: { minQty: number; maxQty: number | null; price: number }[];
   /** Precio de socio: la API solo lo manda a suscriptores. */
   subscriptionPrice?: number | null;
+  badges?: string[] | null;
 }
 
 type FilterKey = "new" | "featured" | "best";
@@ -262,6 +263,7 @@ export function ProductShowcase() {
                     image={primaryImage(p)}
                     priceTiers={p.priceTiers}
                     subscriptionPrice={p.subscriptionPrice}
+                    badges={p.badges}
                   />
                 </div>
               ))}

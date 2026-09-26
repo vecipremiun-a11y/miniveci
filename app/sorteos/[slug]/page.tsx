@@ -247,7 +247,7 @@ export default function RaffleDetailPage() {
                     </section>
 
                     {/* Sidebar info + grid */}
-                    <aside className="space-y-4 lg:sticky lg:top-32">
+                    <aside className="space-y-4 lg:sticky lg:top-[calc(8rem+var(--promo-h,0px))]">
                         <div className="rounded-2xl bg-white/80 backdrop-blur p-4 sm:p-6 border border-white space-y-3">
                             <div className="flex items-start justify-between gap-2">
                                 {raffle.type === "free" ? (

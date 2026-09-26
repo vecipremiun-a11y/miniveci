@@ -435,7 +435,7 @@ export default function EncargarPage() {
                     </div>
 
                     {/* RIGHT COLUMN: summary sticky */}
-                    <aside className="lg:sticky lg:top-32 self-start">
+                    <aside className="lg:sticky lg:top-[calc(8rem+var(--promo-h,0px))] self-start">
                         <div className="bg-white/70 backdrop-blur-md border border-white rounded-3xl shadow-md p-5 space-y-4">
 
                             <h2 className="font-bold text-slate-800">Resumen</h2>

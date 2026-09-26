@@ -244,6 +244,7 @@ export function BakeryCarousel() {
                                         image={p.images.find((i) => i.isPrimary)?.url || p.images[0]?.url || null}
                                         priceTiers={p.priceTiers}
                                         subscriptionPrice={p.subscriptionPrice}
+                                        badges={p.badges}
                                     />
                                 </div>
                             ))}

@@ -48,23 +48,41 @@ export function Navbar() {
   const userTypingRef = useRef(false);
   const closeCart = useCallback(() => setCartOpen(false), []);
   const navRef = useRef<HTMLElement>(null);
+  const promoRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
 
   useEffect(() => { setHasMounted(true); }, []);
 
+  // Admin y pantallas completas (sorteo de temporada con QR) van sin navbar.
+  const hideNav = !!(pathname?.startsWith('/admin') || pathname?.startsWith('/sorteos/temporada'));
+
   // Publica la altura real del navbar como --nav-h para que el contenido
   // que va debajo (banner del home) se apegue sin franja ni solape,
   // sea cual sea el breakpoint o el estado de sesión.
+  // El anuncio de delivery gratis va aparte en --promo-h: el body se corre
+  // esa altura (globals.css), así las páginas que ya compensan el navbar con
+  // su propio padding no quedan tapadas.
   useEffect(() => {
+    const root = document.documentElement.style;
     const el = navRef.current;
-    if (!el) return;
-    const setH = () => document.documentElement.style.setProperty('--nav-h', `${el.offsetHeight}px`);
+    if (!el) {
+      root.removeProperty('--promo-h');
+      return;
+    }
+    const setH = () => {
+      const promo = promoRef.current?.offsetHeight ?? 0;
+      root.setProperty('--promo-h', `${promo}px`);
+      root.setProperty('--nav-h', `${el.offsetHeight - promo}px`);
+    };
     setH();
     const ro = new ResizeObserver(setH);
     ro.observe(el);
-    return () => ro.disconnect();
-  }, [hasMounted]);
+    return () => {
+      ro.disconnect();
+      root.removeProperty('--promo-h');
+    };
+  }, [hasMounted, hideNav]);
 
   // Cerrar dropdown de sorteos al hacer click afuera
   useEffect(() => {
@@ -96,6 +114,16 @@ export function Navbar() {
     currency: 'CLP',
     maximumFractionDigits: 0,
   }).format(subtotal);
+
+  // Monto del delivery gratis para el anuncio de arriba. Sale de la misma
+  // config que usa el checkout, así el anuncio nunca promete algo distinto.
+  const [freeDeliveryThreshold, setFreeDeliveryThreshold] = useState(0);
+  useEffect(() => {
+    fetch('/api/store/config')
+      .then(r => r.json())
+      .then(d => setFreeDeliveryThreshold(Number(d?.delivery?.freeThreshold) || 0))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (session?.user?.id && session.user.role === 'customer') {
@@ -231,7 +259,7 @@ export function Navbar() {
     new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
 
   // Don't render Navbar on admin routes or full-screen pages (e.g. /sorteos/temporada con QR)
-  if (pathname?.startsWith('/admin') || pathname?.startsWith('/sorteos/temporada')) {
+  if (hideNav) {
     return null;
   }
 
@@ -312,6 +340,21 @@ export function Navbar() {
     <>
     <nav ref={navRef} className="fixed top-0 left-0 right-0 z-50">
 
+      {/* Anuncio: delivery gratis (se oculta si el umbral está desactivado) */}
+      {freeDeliveryThreshold > 0 && (
+        <div ref={promoRef} className="promo-bar bg-hoja text-white px-3 py-3 sm:py-3.5">
+          <p className="flex items-center justify-center gap-2 text-[15px] sm:text-xl font-extrabold tracking-tight text-center">
+            <Truck className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 text-lechuga" />
+            <span>
+              Delivery <span className="promo-gratis mx-2">¡GRATIS!</span> en compras desde{' '}
+              <span className="promo-precio text-lg sm:text-2xl font-black">
+                {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(freeDeliveryThreshold)}
+              </span>
+            </span>
+          </p>
+        </div>
+      )}
+
       {/* Franja de servicio */}
       <div className="hidden md:block bg-tallo-claro text-white">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between py-1.5 text-[12px]">
@@ -348,8 +391,7 @@ export function Navbar() {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
-            <img src="/logo%20veci.png" alt="MiniVeci" className="w-10 h-10 sm:w-14 sm:h-14 object-contain" />
-            <span className="text-xl font-bold text-veci-dark tracking-tight hidden sm:block">MiniVeci</span>
+            <img src="/logo-comercial-veci.png" alt="Comercial Veci" className="h-10 sm:h-14 w-auto object-contain" />
           </Link>
 
           {/* Centered Search Bar - Desktop */}

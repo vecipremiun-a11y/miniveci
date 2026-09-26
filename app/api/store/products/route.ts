@@ -7,6 +7,7 @@ import { searchTokensCondition } from "@/lib/search-sql";
 import { branchIds } from "@/lib/category-tree";
 import { getSessionCustomerId } from "@/lib/session-customer";
 import { hasActiveSubscription } from "@/lib/subscriptions";
+import { quickFilterConditions } from "@/lib/store-filters";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
         const search = searchParams.get("search")?.trim();
         const isFeatured = searchParams.get("featured") === "true";
         const onlyOffer = searchParams.get("offer") === "true";
+        const onlyVeciSeal = searchParams.get("veci") === "true";
         const maxPriceParam = searchParams.get("maxPrice");
         const maxPrice = maxPriceParam ? parseInt(maxPriceParam) || null : null;
         const sortParam = searchParams.get("sort") || "newest";
@@ -53,9 +55,7 @@ export async function GET(req: NextRequest) {
             conditions.push(eq(products.isFeatured, true));
         }
 
-        if (onlyOffer) {
-            conditions.push(eq(products.isOffer, true));
-        }
+        conditions.push(...quickFilterConditions({ onlyOffer, onlyVeciSeal }));
 
         // Cada palabra debe aparecer en nombre, descripción o categoría, en cualquier orden
         // y sin importar tildes. Los que tienen todas las palabras en el nombre salen primero.

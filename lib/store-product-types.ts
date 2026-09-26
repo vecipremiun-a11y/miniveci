@@ -1,3 +1,10 @@
+/**
+ * Badge que prende el sello "Comercial Veci" (logo arriba a la izquierda de la
+ * foto del producto). Se guarda en `products.badges` y se activa desde la ficha
+ * del producto en el admin.
+ */
+export const COMERCIAL_VECI_BADGE = "comercial-veci";
+
 export interface StoreProductCategory {
     id: string;
     name: string;
