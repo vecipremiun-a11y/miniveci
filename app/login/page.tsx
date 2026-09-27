@@ -167,6 +167,12 @@ export default function LoginPage() {
                         Regístrate aquí
                     </Link>
                 </div>
+
+                <p className="mt-4 text-center text-xs text-slate-400">
+                    <Link href="/politica-privacidad" className="underline underline-offset-2 hover:text-veci-primary">
+                        Política de Privacidad
+                    </Link>
+                </p>
             </div>
         </div>
     );

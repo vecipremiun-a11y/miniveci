@@ -133,8 +133,11 @@ export function Footer() {
                 </div>
 
                 <div className="border-t border-hoja/15">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-12 py-4 text-xs text-hoja font-semibold text-center sm:text-left">
-                        MiniVeci © 2026 · Todos los derechos reservados.
+                    <div className="max-w-7xl mx-auto px-4 sm:px-12 py-4 text-xs text-hoja font-semibold flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
+                        <span>MiniVeci © 2026 · Todos los derechos reservados.</span>
+                        <Link href="/politica-privacidad" className="underline underline-offset-2 hover:no-underline">
+                            Política de Privacidad
+                        </Link>
                     </div>
                 </div>
             </div>

@@ -365,6 +365,13 @@ export default function RegisterPage() {
                         Inicia sesión
                     </Link>
                 </div>
+
+                <p className="mt-4 text-center text-xs text-slate-400 leading-relaxed">
+                    Al crear tu cuenta aceptas que tratemos tus datos según nuestra{' '}
+                    <Link href="/politica-privacidad" className="font-semibold text-slate-500 underline underline-offset-2 hover:text-veci-primary">
+                        Política de Privacidad
+                    </Link>.
+                </p>
             </div>
         </div>
     );
