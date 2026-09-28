@@ -4,6 +4,7 @@ import { customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getSessionCustomerId } from "@/lib/session-customer";
 import { claimUnclaimedOrdersForCustomer, rutTakenByOtherCustomer, syncCustomerToPosveci } from "@/lib/pos-customer-match";
+import { AccountDeletionBlockedError, deleteCustomerAccount } from "@/lib/delete-customer-account";
 
 export async function GET() {
     try {
@@ -93,6 +94,35 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json({ message: "Perfil actualizado" });
     } catch (error) {
         console.error("[CUSTOMER_PROFILE_PUT]", error);
+        return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    }
+}
+
+/**
+ * DELETE /api/store/customer — el cliente elimina su propia cuenta desde la web.
+ * Body: { confirm: "ELIMINAR" } para que no se dispare por error.
+ * La lógica (qué se borra, qué se anonimiza, bloqueos) vive en
+ * lib/delete-customer-account.ts, compartida con la app.
+ */
+export async function DELETE(req: NextRequest) {
+    try {
+        const customerId = await getSessionCustomerId();
+        if (!customerId) {
+            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+        }
+
+        const body = await req.json().catch(() => ({}));
+        if (body?.confirm !== "ELIMINAR") {
+            return NextResponse.json({ error: "Confirmación requerida" }, { status: 400 });
+        }
+
+        await deleteCustomerAccount(customerId);
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        if (error instanceof AccountDeletionBlockedError) {
+            return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+        }
+        console.error("[CUSTOMER_DELETE]", error);
         return NextResponse.json({ error: "Error interno" }, { status: 500 });
     }
 }

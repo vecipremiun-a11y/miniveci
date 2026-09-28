@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Save, Loader2, User, Phone, FileText, Camera } from 'lucide-react';
 import { toast } from 'sonner';
+import { DeleteAccountSection } from '@/components/account/DeleteAccountSection';
 
 interface ProfileForm {
     firstName: string;
@@ -274,6 +275,8 @@ export default function AjustesPage() {
                             </div>
                         </div>
                     )}
+
+                    {!loading && <DeleteAccountSection />}
                 </div>
     );
 }

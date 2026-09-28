@@ -16,7 +16,7 @@ import { Footer } from '@/components/Footer';
  * Es una página pública y estática: no depende de sesión.
  */
 
-const LAST_UPDATED = '27 de septiembre de 2026';
+const LAST_UPDATED = '28 de septiembre de 2026';
 const CONTACT_EMAIL = 'cliente@miniveci.cl';
 const WHATSAPP_DISPLAY = '+56 9 5189 2258';
 const WHATSAPP_URL = 'https://wa.me/56951892258';
@@ -293,6 +293,10 @@ export default function PrivacyPolicyPage() {
                                 direcciones. Si hiciste pedidos como invitado con el mismo correo verificado de tu cuenta de Google, los
                                 vinculamos a tu cuenta para que aparezcan en tu historial.
                             </p>
+                            <p>
+                                Puedes eliminar tu cuenta cuando quieras, tú mismo, desde el sitio web o desde la app (ver{' '}
+                                <a href="#eliminar-cuenta" className="text-tallo font-semibold underline underline-offset-2">sección 15</a>).
+                            </p>
                         </Section>
 
                         <Section id="comunicaciones" n={8} title="Comunicaciones y notificaciones">
@@ -353,7 +357,7 @@ export default function PrivacyPolicyPage() {
                             <p>
                                 Lo usamos para ver cuántas personas están usando el sitio, atenderlas mejor por el chat y detectar
                                 problemas o abusos. Esta ubicación aproximada no es tu ubicación exacta ni proviene del GPS de tu
-                                dispositivo.
+                                dispositivo. Este registro se borra automáticamente 7 días después de tu última visita.
                             </p>
                             <p>
                                 La app no registra estas estadísticas de visitas. Nuestro proveedor de hosting y los servicios de
@@ -428,7 +432,7 @@ export default function PrivacyPolicyPage() {
                                 <li>
                                     <strong className="text-hoja">Pedidos, pagos y comprobantes:</strong> durante el tiempo que exijan las
                                     obligaciones tributarias y contables aplicables en Chile, y el necesario para atender reclamos o
-                                    garantías.
+                                    garantías. Si eliminas tu cuenta, se conservan sin tus datos personales.
                                 </li>
                                 <li>
                                     <strong className="text-hoja">Mensajes del chat:</strong> mientras sean necesarios para atender tus
@@ -439,47 +443,64 @@ export default function PrivacyPolicyPage() {
                                     sesión iniciada; se elimina al eliminar tu cuenta.
                                 </li>
                                 <li>
-                                    <strong className="text-hoja">Datos técnicos de visitas:</strong> mientras sean útiles para los fines
-                                    descritos en la sección 10.
+                                    <strong className="text-hoja">Datos técnicos de visitas:</strong> se borran automáticamente 7 días
+                                    después de tu última visita.
                                 </li>
                             </ul>
                         </Section>
 
                         <Section id="eliminar-cuenta" n={15} title="Eliminar tu cuenta y tus datos">
                             <div className="rounded-2xl bg-brote border border-lechuga-viva p-5 sm:p-6 text-hoja">
-                                <p className="font-bold text-base">Cómo pedir la eliminación de tu cuenta de MiniVeci</p>
+                                <p className="font-bold text-base">Cómo eliminar tu cuenta de MiniVeci</p>
                                 <p className="mt-2 text-sm">
-                                    Esto aplica tanto a la cuenta de la tienda web como a la de la app MiniVeci para Android (es la
-                                    misma cuenta).
+                                    Es la misma cuenta en la tienda web y en la app MiniVeci para Android. Puedes eliminarla tú mismo,
+                                    en cualquier momento:
                                 </p>
-                                <ol className="mt-3 space-y-2 text-sm list-decimal pl-5">
+                                <ul className="mt-3 space-y-2 text-sm list-disc pl-5">
                                     <li>
-                                        Escríbenos a{' '}
-                                        <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Eliminar mi cuenta MiniVeci')}`} className="font-bold underline underline-offset-2">{CONTACT_EMAIL}</a>{' '}
-                                        con el asunto “Eliminar mi cuenta MiniVeci”, desde el correo con el que te registraste, o por
-                                        WhatsApp al <a href={WHATSAPP_URL} className="font-bold underline underline-offset-2">{WHATSAPP_DISPLAY}</a>.
+                                        <strong>En la app:</strong> Mi cuenta → <strong>Eliminar mi cuenta</strong>, escribe ELIMINAR
+                                        para confirmar.
                                     </li>
-                                    <li>Indica el correo de tu cuenta. Si nos escribes desde otro medio, podemos pedirte confirmar que eres el titular.</li>
-                                    <li>Te confirmaremos cuando la eliminación esté hecha, dentro de un plazo máximo de 30 días.</li>
-                                </ol>
+                                    <li>
+                                        <strong>En el sitio web:</strong> inicia sesión y entra a{' '}
+                                        <Link href="/cuenta/ajustes" className="font-bold underline underline-offset-2">Mi cuenta → Ajustes</Link>{' '}
+                                        → <strong>Eliminar mi cuenta</strong>.
+                                    </li>
+                                    <li>
+                                        <strong>Si no puedes entrar a tu cuenta:</strong> escríbenos a{' '}
+                                        <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Eliminar mi cuenta MiniVeci')}`} className="font-bold underline underline-offset-2">{CONTACT_EMAIL}</a>{' '}
+                                        con el asunto “Eliminar mi cuenta MiniVeci”, desde el correo de tu cuenta, o por WhatsApp al{' '}
+                                        <a href={WHATSAPP_URL} className="font-bold underline underline-offset-2">{WHATSAPP_DISPLAY}</a>.
+                                        Podemos pedirte confirmar que eres el titular, y la eliminaremos dentro de un plazo máximo de 30 días.
+                                    </li>
+                                </ul>
+                                <p className="mt-3 text-sm">
+                                    Si tienes un pedido o encargo en curso, podrás eliminar la cuenta cuando se entregue o se cancele.
+                                    Si tienes una membresía activa, primero debes cancelarla para que Mercado Pago no te siga cobrando.
+                                </p>
                             </div>
-                            <H3>Qué se elimina</H3>
+                            <H3>Qué se elimina de inmediato</H3>
                             <ul>
                                 <li>Tu cuenta y tu perfil (nombre, correo, teléfono, RUT y foto).</li>
                                 <li>Tus direcciones guardadas.</li>
-                                <li>Los tokens de notificaciones de tus dispositivos.</li>
+                                <li>Los tokens de notificaciones y las sesiones abiertas en la app.</li>
                                 <li>Tus conversaciones del chat de atención y sus archivos adjuntos.</li>
-                                <li>Tus datos en el sistema de caja del local (POSVECI) que no debamos conservar por ley.</li>
+                                <li>Tus registros de visitas al sitio.</li>
+                                <li>
+                                    En el sistema de caja del local (POSVECI): tu nombre y tus direcciones. Tu correo, teléfono y RUT
+                                    se borran de ese sistema dentro de un plazo máximo de 30 días.
+                                </li>
                             </ul>
-                            <H3>Qué conservamos</H3>
+                            <H3>Qué se conserva, sin tus datos personales</H3>
                             <p>
-                                Los registros de pedidos y pagos que debamos mantener por obligaciones legales, tributarias o contables,
-                                solo durante el plazo que exija la ley y sin usarlos para otros fines. Los pagos procesados por Mercado
-                                Pago quedan además registrados en Mercado Pago según su propia política.
+                                Los registros de tus pedidos, encargos y pagos (productos, montos y fechas) se conservan por
+                                obligaciones tributarias y contables, pero se les quita tu nombre, correo, teléfono, RUT y dirección.
+                                Lo mismo ocurre con tus números en sorteos ya realizados. Los pagos procesados por Mercado Pago quedan
+                                además registrados en Mercado Pago según su propia política.
                             </p>
                             <p>
-                                También puedes pedir que eliminemos solo algunos datos (por ejemplo, una dirección o tu foto) sin
-                                eliminar tu cuenta; varios de ellos los puedes borrar tú mismo desde “Mi cuenta”.
+                                También puedes borrar solo algunos datos (por ejemplo, una dirección o tu foto) sin eliminar tu
+                                cuenta, desde “Mi cuenta”, o pedírnoslo por correo.
                             </p>
                         </Section>
 
