@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { categories } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
+import { loadTierGroups } from "@/lib/tier-groups";
 
 async function getCategories() {
     return db.select().from(categories).orderBy(desc(categories.createdAt));
@@ -10,7 +11,7 @@ async function getCategories() {
 
 export default async function NewProductPage() {
     await requireAuth();
-    const categoriesList = await getCategories();
+    const [categoriesList, tierGroups] = await Promise.all([getCategories(), loadTierGroups()]);
 
     return (
         <div className="space-y-4 sm:space-y-6">
@@ -21,7 +22,7 @@ export default async function NewProductPage() {
                 </p>
             </div>
 
-            <ProductForm categories={categoriesList} />
+            <ProductForm categories={categoriesList} tierGroups={tierGroups} />
         </div>
     );
 }

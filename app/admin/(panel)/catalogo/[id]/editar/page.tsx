@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { products, categories, productImages } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { loadTierGroups } from "@/lib/tier-groups";
 
 async function getCategories() {
     return db.select().from(categories).orderBy(desc(categories.createdAt));
@@ -26,7 +27,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
     const { id } = await params;
 
     const product = await getProduct(id);
-    const categoriesList = await getCategories();
+    const [categoriesList, tierGroups] = await Promise.all([getCategories(), loadTierGroups()]);
 
     if (!product) {
         notFound();
@@ -48,7 +49,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
                 </p>
             </div>
 
-            <ProductForm initialData={product as any} categories={categoriesList} />
+            <ProductForm initialData={product as any} categories={categoriesList} tierGroups={tierGroups} />
         </div>
     );
 }

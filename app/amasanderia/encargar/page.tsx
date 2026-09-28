@@ -67,7 +67,8 @@ export default function EncargarPage() {
     // tiene, la del perfil) para no reescribirla en cada encargo. Solo rellena si
     // el campo sigue vacío: nunca pisa lo que el cliente escribió.
     useEffect(() => {
-        if (status !== "authenticated" || session?.user?.role !== "customer") return;
+        // Cliente, o admin que compra con su cuenta de tienda vinculada.
+        if (status !== "authenticated" || !(session?.user?.customerId || session?.user?.role === "customer")) return;
         let cancelled = false;
 
         (async () => {

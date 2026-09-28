@@ -30,11 +30,13 @@ interface ProductCardProps {
     /** Precio de socio. Solo llega si quien mira tiene la membresía activa. */
     subscriptionPrice?: number | null;
     badges?: string[] | null;
+    /** Grupo de escala: suma cantidad con los otros productos del grupo. */
+    tierGroup?: string | null;
 }
 
-export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers, subscriptionPrice, badges }: ProductCardProps) {
+export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers, subscriptionPrice, badges, tierGroup }: ProductCardProps) {
     const hasVeciSeal = badges?.includes(COMERCIAL_VECI_BADGE) ?? false;
-    const { addItem } = useCart();
+    const { addItem, getGroupQuantity } = useCart();
     const router = useRouter();
     const equiv = hasEquiv({ equivLabel, equivWeight });
     const [buyMode, setBuyMode] = useState<'unit' | 'kg'>('unit');
@@ -45,11 +47,17 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
     const [quantity, setQuantity] = useState(minQty);
     const imageSrc = image || PLACEHOLDER_IMAGE;
 
+    // Grupo de escala: lo que ya hay en el carrito del mismo grupo suma para el
+    // tramo, así el precio que se ve es el que va a quedar al agregar.
+    const groupable = Boolean(tierGroup) && !equiv && !isWeight;
+    const groupInCart = groupable ? getGroupQuantity(tierGroup) : 0;
+    const tierQty = quantity + groupInCart;
+
     const hasOffer = Boolean(isOffer && offerPrice && offerPrice < price);
     const rawPrice = hasOffer ? offerPrice! : price;
-    const tieredPrice = getEffectivePrice(rawPrice, priceTiers, quantity, subscriptionPrice);
+    const tieredPrice = getEffectivePrice(rawPrice, priceTiers, tierQty, subscriptionPrice);
     // Lo que pagaría sin la membresía, para mostrar el ahorro tachado.
-    const regularPrice = getTieredPrice(rawPrice, priceTiers, quantity);
+    const regularPrice = getTieredPrice(rawPrice, priceTiers, tierQty);
     const isSubscriberPrice = tieredPrice < regularPrice;
     const displayPrice = equiv ? Math.round(tieredPrice * equivWeight!) : tieredPrice;
     const discountPercent = hasOffer ? Math.round(((price - offerPrice!) / price) * 100) : 0;
@@ -96,7 +104,7 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
         if (kgMode) {
             addItem({ id: `${id}__kg`, name, price: rawPrice, image: imageSrc, slug, unit, priceTiers, subscriptionPrice }, quantity);
         } else {
-            addItem({ id, name, price: rawPrice, image: imageSrc, slug, unit, equivLabel, equivWeight, priceTiers, subscriptionPrice }, quantity);
+            addItem({ id, name, price: rawPrice, image: imageSrc, slug, unit, equivLabel, equivWeight, priceTiers, subscriptionPrice, tierGroup }, quantity);
         }
         setQuantity(minQty);
     };
@@ -215,7 +223,7 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                         </div>
 
                         {priceTiers.map((tier, idx) => {
-                            const isActive = quantity >= tier.minQty && (tier.maxQty === null || quantity <= tier.maxQty);
+                            const isActive = tierQty >= tier.minQty && (tier.maxQty === null || tierQty <= tier.maxQty);
                             const isLastTier = tier.maxQty === null;
                             return (
                                 <div
@@ -233,6 +241,12 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                                 </div>
                             );
                         })}
+
+                        {groupable && (
+                            <p className="text-[10px] font-semibold text-tallo leading-tight px-0.5 pt-0.5">
+                                Suma con otros “{tierGroup}”{groupInCart > 0 ? ` · llevas ${groupInCart}` : ''}
+                            </p>
+                        )}
 
                         {tierSavings > 0 && (
                             <p className="text-[10px] font-bold text-tallo text-center leading-tight pt-0.5">

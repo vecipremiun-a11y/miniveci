@@ -14,10 +14,12 @@ export async function GET(req: Request) {
         // 1. Obtener todos los clientes registrados
         const registeredCustomers = await db.select().from(customers);
 
-        // 2. Obtener datos de pedidos agrupados por email
+        // 2. Obtener datos de pedidos agrupados por email, sin distinguir
+        //    mayúsculas: "Ana@x.cl" y "ana@x.cl" son la misma persona.
+        const emailKey = sql<string>`lower(trim(${orders.customerEmail}))`;
         const orderStats = await db
             .select({
-                email: orders.customerEmail,
+                email: emailKey,
                 name: sql<string>`MAX(${orders.customerName})`,
                 phone: sql<string>`MAX(${orders.customerPhone})`,
                 rut: sql<string>`MAX(${orders.customerRut})`,
@@ -26,7 +28,7 @@ export async function GET(req: Request) {
                 lastOrderDate: sql<string>`MAX(${orders.createdAt})`,
             })
             .from(orders)
-            .groupBy(orders.customerEmail);
+            .groupBy(emailKey);
 
         // Indexar stats de pedidos por email
         const ordersByEmail = new Map(orderStats.map(o => [o.email, o]));
@@ -46,13 +48,16 @@ export async function GET(req: Request) {
 
         // Agregar clientes registrados
         for (const c of registeredCustomers) {
-            const stats = ordersByEmail.get(c.email);
-            clientMap.set(c.email, {
+            const key = c.email.trim().toLowerCase();
+            const stats = ordersByEmail.get(key);
+            clientMap.set(key, {
                 id: c.id,
                 email: c.email,
-                name: `${c.firstName} ${c.lastName}`,
-                phone: c.phone,
-                rut: c.rut,
+                name: `${c.firstName} ${c.lastName}`.trim(),
+                // Cuenta creada con Google no trae teléfono ni RUT: se completan
+                // con lo que dejó en sus pedidos.
+                phone: c.phone || stats?.phone || null,
+                rut: c.rut || stats?.rut || null,
                 totalOrders: stats?.totalOrders || 0,
                 totalSpent: stats?.totalSpent || 0,
                 lastOrderDate: stats?.lastOrderDate || null,

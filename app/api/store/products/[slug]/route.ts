@@ -68,6 +68,7 @@ export async function GET(req: NextRequest, context: any) {
             badges: rawProduct.badges,
             tags: rawProduct.tags,
             priceTiers: (rawProduct.priceTiers as any[]) ?? [],
+            tierGroup: rawProduct.tierGroup ?? null,
         };
 
         return NextResponse.json(publicProduct);

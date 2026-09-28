@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
-import { useCart, isWeightUnit, hasEquiv, getEffectivePrice } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv } from '@/components/cart/CartProvider';
 import { ArrowLeft, CalendarDays, Clock3, CreditCard, MapPin, Store, Loader2, ChevronDown, Clock, Phone as PhoneIcon, Navigation, Upload, Copy, Check, X, ImageIcon, Pencil, User, Mail, Phone, FileText } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useRouter } from 'next/navigation';
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { es } from 'date-fns/locale';
 import { useSession } from 'next-auth/react';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
+import { AddressModal, type SavedAddress } from '@/components/checkout/AddressModal';
 
 /**
  * Ultimo checkout completado en este navegador. Precarga a los invitados y tambien
@@ -65,7 +66,7 @@ const TIME_SLOTS = [
 ];
 
 export default function CheckoutPage() {
-    const { items, subtotal, clearCart } = useCart();
+    const { items, subtotal, clearCart, getItemUnitPrice } = useCart();
     const { data: session, status: sessionStatus } = useSession();
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -131,9 +132,12 @@ export default function CheckoutPage() {
     const [copiedField, setCopiedField] = useState('');
 
     // Saved addresses
-    interface SavedAddress { id: string; label: string; address: string; comuna: string; city: string; addressNotes: string | null; isDefault: boolean; }
     const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
     const [selectedAddressId, setSelectedAddressId] = useState<string | 'custom'>('custom');
+    const [addressModalOpen, setAddressModalOpen] = useState(false);
+    // Quien tiene cuenta de tienda (cliente, o admin con cuenta vinculada) elige de
+    // su libreta y agrega direcciones en el modal; el invitado escribe la dirección.
+    const hasStoreAccount = Boolean(session?.user?.customerId || session?.user?.role === 'customer');
 
     interface CustomerProfile {
         firstName: string | null; lastName: string | null; phone: string | null;
@@ -177,7 +181,10 @@ export default function CheckoutPage() {
         const run = async () => {
             const userId = session?.user?.id ?? null;
 
-            if (session?.user?.role === 'customer') {
+            // Quien tiene cuenta de tienda: un cliente, o un admin/owner que compra
+            // con su cuenta de cliente vinculada (session.user.customerId). Antes
+            // se miraba solo el rol y al admin nunca le cargaba su libreta.
+            if (session?.user?.customerId || session?.user?.role === 'customer') {
                 const profile: CustomerProfile | null = await fetch('/api/store/customer')
                     .then(r => (r.ok ? r.json() : null))
                     .catch(() => null);
@@ -233,6 +240,20 @@ export default function CheckoutPage() {
     useEffect(() => {
         if (prefillDone && (!contactName || !contactPhone)) setContactExpanded(true);
     }, [prefillDone, contactName, contactPhone]);
+
+    // Dirección recién guardada desde el modal: se suma a la libreta y queda elegida.
+    const handleAddressSaved = (addr: SavedAddress) => {
+        setSavedAddresses(prev => [
+            ...(addr.isDefault ? prev.map(a => ({ ...a, isDefault: false })) : prev),
+            addr,
+        ]);
+        setSelectedAddressId(addr.id);
+        setContactAddress(addr.address);
+        setContactComuna(addr.comuna);
+        setContactCity(addr.city);
+        setContactNotes(addr.addressNotes || '');
+        setAddressModalOpen(false);
+    };
 
     const handleAddressSelect = (id: string) => {
         setSelectedAddressId(id);
@@ -620,31 +641,67 @@ export default function CheckoutPage() {
                                     onChange={setDeliveryTime}
                                 />
 
-                                {savedAddresses.length > 0 && (
+                                {hasStoreAccount ? (
                                     <div className="sm:col-span-2">
                                         <span className="text-[11px] uppercase tracking-wide text-slate-400 font-bold">Dirección de envío</span>
-                                        <div className="mt-1.5 space-y-2">
-                                            {savedAddresses.map(addr => (
-                                                <button key={addr.id} type="button" onClick={() => handleAddressSelect(addr.id)}
-                                                    className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-start gap-3 ${selectedAddressId === addr.id ? 'border-veci-primary bg-veci-primary/5' : 'border-slate-200 bg-white/80 hover:border-slate-300'}`}>
-                                                    <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${selectedAddressId === addr.id ? 'text-veci-primary' : 'text-slate-400'}`} />
-                                                    <div>
-                                                        <p className="text-sm font-bold text-slate-700">{addr.label}</p>
-                                                        <p className="text-sm text-slate-600">{addr.address}</p>
-                                                        <p className="text-xs text-slate-400">{[addr.comuna, addr.city].filter(Boolean).join(', ')}</p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                            <button type="button" onClick={() => handleAddressSelect('custom')}
-                                                className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-center gap-3 ${selectedAddressId === 'custom' ? 'border-veci-primary bg-veci-primary/5' : 'border-slate-200 bg-white/80 hover:border-slate-300'}`}>
-                                                <MapPin className={`w-4 h-4 flex-shrink-0 ${selectedAddressId === 'custom' ? 'text-veci-primary' : 'text-slate-400'}`} />
-                                                <p className="text-sm font-semibold text-slate-600">Usar otra dirección</p>
+                                        <div className="mt-1.5 grid sm:grid-cols-2 gap-3">
+                                            {savedAddresses.map(addr => {
+                                                const selected = selectedAddressId === addr.id;
+                                                return (
+                                                    <button
+                                                        key={addr.id}
+                                                        type="button"
+                                                        onClick={() => handleAddressSelect(addr.id)}
+                                                        aria-pressed={selected}
+                                                        className={`relative text-left p-4 rounded-2xl border-2 transition-all ${selected ? 'border-veci-primary bg-veci-primary/5 shadow-sm' : 'border-slate-200 bg-white/80 hover:border-slate-300'}`}
+                                                    >
+                                                        {selected && (
+                                                            <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-veci-primary text-white flex items-center justify-center">
+                                                                <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                                                            </span>
+                                                        )}
+                                                        <span className="flex items-center gap-2 pr-6">
+                                                            <MapPin className={`w-4 h-4 shrink-0 ${selected ? 'text-veci-primary' : 'text-slate-400'}`} />
+                                                            <span className="text-sm font-bold text-slate-700 truncate">{addr.label}</span>
+                                                            {addr.isDefault && (
+                                                                <span className="text-[10px] font-bold text-veci-primary bg-veci-primary/10 px-2 py-0.5 rounded-full shrink-0">Predeterminada</span>
+                                                            )}
+                                                        </span>
+                                                        <span className="block mt-1.5 text-sm text-slate-600 leading-snug">{addr.address}</span>
+                                                        <span className="block text-xs text-slate-400">{[addr.comuna, addr.city].filter(Boolean).join(', ')}</span>
+                                                        {addr.addressNotes && (
+                                                            <span className="block mt-1 text-xs text-slate-400 italic line-clamp-1">{addr.addressNotes}</span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+
+                                            {/* Sin libreta pero con una dirección precargada (perfil o último pedido) */}
+                                            {savedAddresses.length === 0 && contactAddress && (
+                                                <div className="relative text-left p-4 rounded-2xl border-2 border-veci-primary bg-veci-primary/5">
+                                                    <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-veci-primary text-white flex items-center justify-center">
+                                                        <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                                                    </span>
+                                                    <span className="flex items-center gap-2 pr-6">
+                                                        <MapPin className="w-4 h-4 shrink-0 text-veci-primary" />
+                                                        <span className="text-sm font-bold text-slate-700">Última dirección usada</span>
+                                                    </span>
+                                                    <span className="block mt-1.5 text-sm text-slate-600 leading-snug">{contactAddress}</span>
+                                                    <span className="block text-xs text-slate-400">{[contactComuna, contactCity].filter(Boolean).join(', ')}</span>
+                                                </div>
+                                            )}
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setAddressModalOpen(true)}
+                                                className="flex flex-col items-center justify-center gap-1.5 p-4 min-h-[104px] rounded-2xl border-2 border-dashed border-slate-300 text-slate-500 hover:border-veci-primary hover:text-veci-primary hover:bg-veci-primary/5 transition-all"
+                                            >
+                                                <span className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-lg font-bold leading-none">+</span>
+                                                <span className="text-sm font-bold">Agregar dirección</span>
                                             </button>
                                         </div>
                                     </div>
-                                )}
-
-                                {(savedAddresses.length === 0 || selectedAddressId === 'custom') && (
+                                ) : (
                                     <div className="sm:col-span-2">
                                         <AddressAutocomplete
                                             address={contactAddress}
@@ -810,7 +867,7 @@ export default function CheckoutPage() {
                                                     : `Cant: ${isWeightUnit(item.unit) ? `${item.quantity.toFixed(1)} ${(item.unit ?? 'kg').toLowerCase()}` : item.quantity}`}
                                             </p>
                                             <p className="text-sm sm:text-base font-extrabold text-slate-700 mt-1">
-                                                {money.format(hasEquiv(item) ? Math.round(getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice) * item.equivWeight! * item.quantity) : getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice) * item.quantity)}
+                                                {money.format(hasEquiv(item) ? Math.round(getItemUnitPrice(item) * item.equivWeight! * item.quantity) : getItemUnitPrice(item) * item.quantity)}
                                             </p>
                                         </div>
                                     </div>
@@ -890,6 +947,13 @@ export default function CheckoutPage() {
                     </label>
                 </aside>
             </div>
+
+            <AddressModal
+                open={addressModalOpen}
+                onClose={() => setAddressModalOpen(false)}
+                onSaved={handleAddressSaved}
+                isFirst={savedAddresses.length === 0}
+            />
 
             <Footer />
         </main>

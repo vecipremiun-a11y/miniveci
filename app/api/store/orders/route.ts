@@ -9,6 +9,7 @@ import {
     extractRaffleItems, linkRaffleEntriesToOrder,
 } from "@/lib/raffle-checkout";
 import { recalcStorePricing, resolveUnitPrice } from "@/lib/store-pricing";
+import { tierQuantities } from "@/lib/product-price";
 import { hasActiveSubscription } from "@/lib/subscriptions";
 import { extractBearer, verifyAccessToken, AuthHttpError } from "@/lib/mobile-auth";
 import { generatePublicCode } from "@/lib/bakery";
@@ -201,7 +202,19 @@ async function handleMobileOrder(req: NextRequest, token: string) {
         }> = [];
         const concatenatedItemNotes: string[] = [];
 
-        for (const item of data.items) {
+        // Los productos del mismo grupo de escala suman cantidad para el tramo.
+        const tierQty = tierQuantities(data.items.map((item) => {
+            const p = productMap.get(item.productId);
+            return {
+                quantity: item.quantity,
+                tierGroup: p?.tierGroup ?? null,
+                unit: p?.unit ?? null,
+                equivLabel: p?.equivLabel ?? null,
+                equivWeight: p?.equivWeight ?? null,
+            };
+        }));
+
+        for (const [index, item] of data.items.entries()) {
             const p = productMap.get(item.productId);
             if (!p) {
                 return NextResponse.json({ message: `Producto no disponible: ${item.productId}` }, { status: 400 });
@@ -210,7 +223,7 @@ async function handleMobileOrder(req: NextRequest, token: string) {
                 return NextResponse.json({ message: `Producto no disponible: ${p.name}` }, { status: 400 });
             }
 
-            const unitPrice = resolveUnitPrice(p, item.quantity, isSubscriber);
+            const unitPrice = resolveUnitPrice(p, tierQty[index], isSubscriber);
             const totalPrice = unitPrice * item.quantity;
 
             if (item.notes && item.notes.trim().length > 0) {
@@ -445,7 +458,7 @@ async function handleLegacyWebOrder(req: NextRequest) {
         const {
             customerName,
             customerLastName,
-            customerEmail,
+            customerEmail: rawCustomerEmail,
             customerPhone,
             customerRut,
             deliveryType,
@@ -460,6 +473,11 @@ async function handleLegacyWebOrder(req: NextRequest) {
             couponCode,
             items: cartItems,
         } = body;
+
+        // El correo se guarda siempre en minúscula: "Ana@x.cl" y "ana@x.cl" son la
+        // misma casilla, y así el pedido calza con la cuenta (Google lo manda en
+        // minúscula) y el listado de clientes no la parte en dos.
+        const customerEmail = typeof rawCustomerEmail === "string" ? rawCustomerEmail.trim().toLowerCase() : "";
 
         if (!customerName || !customerEmail) {
             return NextResponse.json({ error: "Nombre y email son requeridos" }, { status: 400 });

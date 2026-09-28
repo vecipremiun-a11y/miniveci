@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from 'lucide-react';
-import { useCart, isWeightUnit, hasEquiv, getEffectivePrice } from './CartProvider';
+import { useCart, isWeightUnit, hasEquiv } from './CartProvider';
 
 interface CartDrawerProps {
     open: boolean;
@@ -16,7 +16,7 @@ const fmtCLP = (value: number) =>
     new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
 
 export function CartDrawer({ open, onClose }: CartDrawerProps) {
-    const { items, totalItems, subtotal, updateQuantity, removeItem, clearCart } = useCart();
+    const { items, totalItems, subtotal, updateQuantity, removeItem, clearCart, getItemUnitPrice, getItemTierQuantity } = useCart();
     const [hasMounted, setHasMounted] = useState(false);
     const [highlightedId, setHighlightedId] = useState<string | null>(null);
     const prevItemsRef = useRef<Map<string, number>>(new Map());
@@ -63,13 +63,13 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
             const baseLine = equiv
                 ? Math.round(item.price * item.equivWeight! * item.quantity)
                 : item.price * item.quantity;
-            const effective = getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice);
+            const effective = getItemUnitPrice(item);
             const effLine = equiv
                 ? Math.round(effective * item.equivWeight! * item.quantity)
                 : effective * item.quantity;
             return acc + Math.max(0, baseLine - effLine);
         }, 0);
-    }, [items]);
+    }, [items, getItemUnitPrice]);
 
     return (
         <>
@@ -141,7 +141,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                                 const isKgDirect = !equiv && item.id.endsWith('__kg');
                                 const stepVal = equiv ? 1 : (isWeight || isKgDirect ? 0.5 : 1);
                                 const minQty = equiv ? 1 : (isWeight || isKgDirect ? 0.5 : 1);
-                                const effective = getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice);
+                                const effective = getItemUnitPrice(item);
                                 const lineTotal = equiv
                                     ? Math.round(effective * item.equivWeight! * item.quantity)
                                     : effective * item.quantity;
@@ -192,6 +192,12 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                                                 {fmtCLP(effective)} / {unitLabel}
                                                 {equiv && <span className="ml-1">· {item.equivWeight} kg</span>}
                                             </p>
+                                            {/* Escala compartida: avisar que el tramo sale de sumar el grupo */}
+                                            {item.tierGroup && getItemTierQuantity(item) > item.quantity && (
+                                                <p className="text-[10.5px] font-semibold text-tallo mt-0.5 leading-tight">
+                                                    Escala por grupo: {getItemTierQuantity(item)} und de “{item.tierGroup}”
+                                                </p>
+                                            )}
 
                                             <div className="flex items-center justify-between mt-auto pt-2">
                                                 <div className="inline-flex items-center bg-papel rounded-full p-0.5 border border-cerco">

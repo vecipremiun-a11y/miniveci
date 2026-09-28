@@ -43,6 +43,10 @@ export const productSchema = z.object({
     tags: z.array(z.string()).default([]),
     badges: z.array(z.string()).default([]),
 
+    // Grupo de escala: los productos con el mismo nombre suman cantidad para la
+    // escala de precios. Vacío = sin grupo. La API lo limpia con cleanTierGroup.
+    tierGroup: z.string().max(60).optional().nullable(),
+
     // Price tiers (quantity discounts)
     priceTiers: z.array(z.object({
         minQty: z.coerce.number().min(1),

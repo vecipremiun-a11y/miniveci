@@ -408,6 +408,7 @@ function ProductsPageContent() {
                                         priceTiers={product.priceTiers}
                                         subscriptionPrice={product.subscriptionPrice}
                                         badges={product.badges}
+                                        tierGroup={product.tierGroup}
                                     />
                                 ))}
                             </div>

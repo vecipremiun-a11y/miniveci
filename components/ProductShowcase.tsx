@@ -29,6 +29,7 @@ interface Product {
   /** Precio de socio: la API solo lo manda a suscriptores. */
   subscriptionPrice?: number | null;
   badges?: string[] | null;
+  tierGroup?: string | null;
 }
 
 type FilterKey = "new" | "featured" | "best";
@@ -264,6 +265,7 @@ export function ProductShowcase() {
                     priceTiers={p.priceTiers}
                     subscriptionPrice={p.subscriptionPrice}
                     badges={p.badges}
+                    tierGroup={p.tierGroup}
                   />
                 </div>
               ))}

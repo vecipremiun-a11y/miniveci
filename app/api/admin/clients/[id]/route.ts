@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { orders } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 
 export async function GET(
     req: Request,
@@ -12,7 +12,7 @@ export async function GET(
         await requireAuth();
 
         const resolvedParams = await params;
-        const email = decodeURIComponent(resolvedParams.id);
+        const email = decodeURIComponent(resolvedParams.id).trim().toLowerCase();
 
         if (!email) {
             return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -22,7 +22,8 @@ export async function GET(
         const clientOrders = await db
             .select()
             .from(orders)
-            .where(eq(orders.customerEmail, email))
+            // Sin distinguir mayúsculas: "Ana@x.cl" y "ana@x.cl" son la misma persona.
+            .where(sql`lower(trim(${orders.customerEmail})) = ${email}`)
             .orderBy(desc(orders.createdAt));
 
         if (clientOrders.length === 0) {

@@ -8,6 +8,7 @@ import { tokenizeSearch } from "@/lib/search-text";
 import { searchTokensCondition } from "@/lib/search-sql";
 import { desc, asc, eq, and, sql, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
+import { cleanTierGroup } from "@/lib/product-price";
 
 export async function GET(req: NextRequest) {
     try {
@@ -158,6 +159,7 @@ export async function POST(req: NextRequest) {
             tags: productData.tags,
             badges: productData.badges,
             priceTiers: productData.priceTiers ?? null,
+            tierGroup: cleanTierGroup(productData.tierGroup),
             subscriptionPrice: productData.subscriptionPrice ?? null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),

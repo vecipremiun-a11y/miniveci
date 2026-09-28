@@ -7,6 +7,7 @@ import { mapMutationKeysToStoreFields } from "@/lib/store-product-change-fields"
 import { productSchema } from "@/lib/validations/product";
 import { eq } from "drizzle-orm";
 import { ZodError } from "zod";
+import { cleanTierGroup } from "@/lib/product-price";
 
 export async function GET(
     req: NextRequest,
@@ -54,6 +55,9 @@ export async function PUT(
         const body = await req.json();
 
         const validatedData = productSchema.partial().parse(body);
+        if (validatedData.tierGroup !== undefined) {
+            validatedData.tierGroup = cleanTierGroup(validatedData.tierGroup);
+        }
 
         const existingResult = await db.select().from(products).where(eq(products.id, id)).limit(1);
         const existingProduct = existingResult[0];

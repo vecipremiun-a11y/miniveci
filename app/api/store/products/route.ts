@@ -8,6 +8,7 @@ import { branchIds } from "@/lib/category-tree";
 import { getSessionCustomerId } from "@/lib/session-customer";
 import { hasActiveSubscription } from "@/lib/subscriptions";
 import { quickFilterConditions } from "@/lib/store-filters";
+import { tierGroupKey } from "@/lib/product-price";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ export async function GET(req: NextRequest) {
         const isFeatured = searchParams.get("featured") === "true";
         const onlyOffer = searchParams.get("offer") === "true";
         const onlyVeciSeal = searchParams.get("veci") === "true";
+        // Productos de un grupo de escala (carrusel "combínalo con" de la ficha).
+        const tierGroupParam = tierGroupKey(searchParams.get("group"));
         const maxPriceParam = searchParams.get("maxPrice");
         const maxPrice = maxPriceParam ? parseInt(maxPriceParam) || null : null;
         const sortParam = searchParams.get("sort") || "newest";
@@ -56,6 +59,21 @@ export async function GET(req: NextRequest) {
         }
 
         conditions.push(...quickFilterConditions({ onlyOffer, onlyVeciSeal }));
+
+        // El grupo se compara sin mayúsculas ni tildes (tierGroupKey), cosa que
+        // SQLite no hace bien; como son pocos los productos con grupo, se traen
+        // los que tienen uno y se filtran acá.
+        if (tierGroupParam) {
+            const grouped = await db
+                .select({ id: products.id, tierGroup: products.tierGroup })
+                .from(products)
+                .where(sql`${products.tierGroup} IS NOT NULL`);
+            const ids = grouped.filter((g) => tierGroupKey(g.tierGroup) === tierGroupParam).map((g) => g.id);
+            if (ids.length === 0) {
+                return NextResponse.json({ data: [], meta: { total: 0, page, limit, totalPages: 0 } });
+            }
+            conditions.push(inArray(products.id, ids));
+        }
 
         // Cada palabra debe aparecer en nombre, descripción o categoría, en cualquier orden
         // y sin importar tildes. Los que tienen todas las palabras en el nombre salen primero.
@@ -161,6 +179,7 @@ export async function GET(req: NextRequest) {
                 badges: raw.badges,
                 tags: raw.tags,
                 priceTiers: (raw.priceTiers as any[]) ?? [],
+                tierGroup: raw.tierGroup ?? null,
                 subscriptionPrice: isSubscriber && raw.subscriptionPrice ? raw.subscriptionPrice : null,
             };
         });

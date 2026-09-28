@@ -21,6 +21,7 @@
     "db:migrate:presence": "node scripts/create-visitor-sessions.mjs",
     "db:migrate:store-config": "node scripts/create-store-config.mjs",
     "db:migrate:user-customer-link": "node scripts/add-user-customer-link.mjs",
+    "db:migrate:tier-group": "node scripts/add-product-tier-group.mjs",
     "pos:test:patch": "tsx --env-file=.env.local scripts/test-pos-status-patch.ts",
     "test": "vitest run"
   },

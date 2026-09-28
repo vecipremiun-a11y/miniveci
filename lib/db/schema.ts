@@ -149,6 +149,10 @@ export const products = sqliteTable("products", {
     tags: text("tags", { mode: "json" }), // array of strings
     badges: text("badges", { mode: "json" }), // array of strings
     priceTiers: text("price_tiers", { mode: "json" }), // [{minQty, maxQty, price}]
+    // Grupo de escala: los productos con el mismo nombre de grupo suman cantidad
+    // para la escala de precios (ver lib/product-price.ts → tierQuantities).
+    // Se edita solo en el admin web; el sync de POSVECI no lo toca.
+    tierGroup: text("tier_group"),
 
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),

@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { COMERCIAL_VECI_BADGE } from "@/lib/store-product-types";
+import { tierGroupKey } from "@/lib/product-price";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, X, UploadCloud, Info, Trash2, TrendingDown, Infinity, ArrowRight, Zap, Tag, DollarSign, TrendingUp, Eye, EyeOff } from "lucide-react";
@@ -37,9 +38,11 @@ import { ProductImagesUpload } from "./ProductImagesUpload";
 interface ProductFormProps {
     initialData?: Partial<ProductFormValues> & { id: string };
     categories: { id: string; name: string }[];
+    /** Grupos de escala que ya existen, para sugerirlos y no escribirlos distinto. */
+    tierGroups?: { name: string; count: number }[];
 }
 
-export function ProductForm({ initialData, categories }: ProductFormProps) {
+export function ProductForm({ initialData, categories, tierGroups = [] }: ProductFormProps) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [newTag, setNewTag] = useState("");
@@ -76,6 +79,7 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
             tags: initialData?.tags || [],
             badges: initialData?.badges || [],
             priceTiers: initialData?.priceTiers || [],
+            tierGroup: initialData?.tierGroup ?? "",
             images: initialData?.images || [],
         },
     });
@@ -781,6 +785,49 @@ export function ProductForm({ initialData, categories }: ProductFormProps) {
                                 </div>
                             </CardHeader>
                             <CardContent className="pt-5 bg-gradient-to-b from-purple-50/40 to-white">
+                                <FormField
+                                    control={form.control}
+                                    name="tierGroup"
+                                    render={({ field }) => {
+                                        const key = tierGroupKey(field.value);
+                                        const match = key ? tierGroups.find((g) => tierGroupKey(g.name) === key) : undefined;
+                                        // Sin contar este mismo producto si ya estaba en el grupo.
+                                        const inGroup = match
+                                            ? match.count - (tierGroupKey(initialData?.tierGroup) === key ? 1 : 0)
+                                            : 0;
+                                        return (
+                                            <FormItem className="mb-5 rounded-xl border border-purple-200 bg-white p-3">
+                                                <FormLabel>Grupo de escala</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        placeholder="Ej: Ilicit tintura"
+                                                        list="tier-group-options"
+                                                        maxLength={60}
+                                                        {...field}
+                                                        value={field.value ?? ""}
+                                                    />
+                                                </FormControl>
+                                                <datalist id="tier-group-options">
+                                                    {tierGroups.map((g) => (
+                                                        <option key={g.name} value={g.name}>{`${g.count} productos`}</option>
+                                                    ))}
+                                                </datalist>
+                                                <FormDescription>
+                                                    Los productos con el mismo grupo suman sus unidades para la escala:
+                                                    1 negro + 1 castaño + 1 cobrizo cuentan como 3. Déjalo vacío si el producto va solo.
+                                                </FormDescription>
+                                                {key && (
+                                                    <p className="text-xs font-semibold text-purple-700">
+                                                        {inGroup > 0
+                                                            ? `Se agrupa con ${inGroup} producto${inGroup === 1 ? '' : 's'} más de “${match!.name}”.`
+                                                            : 'Grupo nuevo: todavía no hay otros productos con este nombre.'}
+                                                    </p>
+                                                )}
+                                                <FormMessage />
+                                            </FormItem>
+                                        );
+                                    }}
+                                />
                                 <FormField
                                     control={form.control}
                                     name="priceTiers"

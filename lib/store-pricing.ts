@@ -3,7 +3,7 @@ import { products, raffles } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 import { isRaffleItemId } from "@/lib/raffle-checkout";
 import { loadStoreDeliveryConfig, resolveShippingCost } from "@/lib/store-config";
-import { resolveUnitPrice } from "@/lib/product-price";
+import { resolveUnitPrice, tierQuantities } from "@/lib/product-price";
 
 // La regla de precio vive en lib/product-price.ts (sin dependencias de base,
 // para poder testearla sola). Se re-exporta acá para no romper los imports.
@@ -115,9 +115,22 @@ export async function recalcStorePricing(
         : [];
     const raffleMap = new Map(raffleRows.map((r) => [r.id, r]));
 
+    // Cantidad con la que cada línea busca su tramo de escala: los productos
+    // del mismo grupo de escala suman entre ellos (ver tierQuantities).
+    const tierQty = tierQuantities(cartItems.map((it) => {
+        const p = isRaffleItemId(String(it?.id)) ? undefined : productMap.get(String(it?.id));
+        return {
+            quantity: Math.max(1, Math.round(Number(it?.quantity) || 0)),
+            tierGroup: p?.tierGroup ?? null,
+            unit: p?.unit ?? null,
+            equivLabel: p?.equivLabel ?? null,
+            equivWeight: p?.equivWeight ?? null,
+        };
+    }));
+
     const items: PricedCartItem[] = [];
 
-    for (const it of cartItems) {
+    for (const [index, it] of cartItems.entries()) {
         const id = String(it!.id);
         const requestedQty = Math.round(Number(it?.quantity) || 0);
         if (requestedQty > MAX_ITEM_QUANTITY) {
@@ -146,7 +159,7 @@ export async function recalcStorePricing(
         if (!p) return fail("Producto no disponible");
         if (!p.isPublished) return fail(`Producto no disponible: ${p.name}`);
 
-        const unitPrice = resolveUnitPrice(p, quantity, opts.isSubscriber ?? false);
+        const unitPrice = resolveUnitPrice(p, tierQty[index], opts.isSubscriber ?? false);
 
         items.push({
             id: p.id,

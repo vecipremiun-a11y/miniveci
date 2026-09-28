@@ -16,6 +16,16 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { claimUnclaimedOrdersForCustomer, syncCustomerToPosveci } from "@/lib/pos-customer-match";
+import { claimGuestStoreOrders } from "@/lib/claim-guest-orders";
+
+/** Pedidos de tienda hechos como invitado con este correo → a la cuenta. Best-effort. */
+async function tryClaimGuestOrders(customerId: string): Promise<void> {
+    try {
+        await claimGuestStoreOrders(customerId);
+    } catch (err) {
+        console.error(`[CLAIM] pedidos de invitado threw para ${customerId}:`, (err as Error).message);
+    }
+}
 
 export interface UpsertCustomerInput {
     googleSub: string;
@@ -57,6 +67,7 @@ function googleOnlyPasswordSentinel(): string {
  * el cliente a POSVECI (round-trip de red → diferido para no bloquear el sign-in).
  * Best-effort: nunca rompe el flujo de Google. */
 async function tryClaim(customerId: string): Promise<void> {
+    await tryClaimGuestOrders(customerId);
     try {
         await claimUnclaimedOrdersForCustomer(customerId);
     } catch (err) {
@@ -82,6 +93,8 @@ export async function upsertCustomerFromGoogle(input: UpsertCustomerInput): Prom
         const update: Record<string, unknown> = { updatedAt: now, emailVerified: true };
         if (!byGoogle.avatarUrl && input.picture) update.avatarUrl = input.picture;
         await db.update(customers).set(update).where(eq(customers.id, byGoogle.id));
+        // Cada ingreso con Google: si pidió como invitado entremedio, se le vincula.
+        await tryClaimGuestOrders(byGoogle.id);
         return toUpserted(byGoogle, { avatarUrl: (update.avatarUrl as string | undefined) ?? byGoogle.avatarUrl, isNew: false });
     }
 

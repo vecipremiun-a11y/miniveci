@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
         const {
             customerName,
             customerLastName,
-            customerEmail,
+            customerEmail: rawCustomerEmail,
             customerPhone,
             customerRut,
             deliveryType,
@@ -59,6 +59,11 @@ export async function POST(req: NextRequest) {
             couponCode,
             items: cartItems,
         } = body;
+
+        // El correo se guarda siempre en minúscula: "Ana@x.cl" y "ana@x.cl" son la
+        // misma casilla, y así el pedido calza con la cuenta (Google lo manda en
+        // minúscula) y el listado de clientes no la parte en dos.
+        const customerEmail = typeof rawCustomerEmail === "string" ? rawCustomerEmail.trim().toLowerCase() : "";
 
         if (!customerName || !customerEmail) {
             return NextResponse.json({ error: "Nombre y email son requeridos" }, { status: 400 });

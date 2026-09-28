@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { tierGroupKey, tierQuantities } from '@/lib/product-price';
 
 /** Returns true for weight-based units (kg, lt) that use decimal quantities */
 export function isWeightUnit(unit?: string | null): boolean {
@@ -30,6 +31,8 @@ export interface CartItem {
     equivWeight?: number | null;
     quantity: number;
     priceTiers?: PriceTier[];
+    /** Grupo de escala: los ítems del mismo grupo suman cantidad para el tramo. */
+    tierGroup?: string | null;
     /** Precio de socio, solo presente si quien compra tiene la membresía activa. */
     subscriptionPrice?: number | null;
     /** Item de sorteo: `raffle:<raffleId>:<number>`. Cantidad siempre 1 y reserva activa con expiresAt. */
@@ -87,6 +90,16 @@ interface CartContextValue {
     items: CartItem[];
     totalItems: number;
     subtotal: number;
+    /**
+     * Precio unitario del ítem tal como está en el carrito: con el tramo de
+     * escala que le toca contando a los demás de su grupo, y precio de socio.
+     * Es lo que cobra el servidor (lib/store-pricing), usar SIEMPRE esto.
+     */
+    getItemUnitPrice: (item: CartItem) => number;
+    /** Cantidad con la que el ítem busca su tramo (la de su grupo entero). */
+    getItemTierQuantity: (item: CartItem) => number;
+    /** Unidades en el carrito de un grupo de escala (0 si no hay). */
+    getGroupQuantity: (tierGroup?: string | null) => number;
     addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number) => void;
     updateQuantity: (id: string, quantity: number) => void;
     removeItem: (id: string) => void;
@@ -170,18 +183,44 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const clearCart = () => setItems([]);
 
+    // Cantidad de tramo por ítem: los del mismo grupo de escala suman entre sí.
+    // Los sorteos no participan.
+    const tierQtyById = useMemo(() => {
+        const lines = items.filter((item) => !isRaffleCartId(item.id) && !item.id.endsWith('__kg'));
+        const qty = tierQuantities(lines);
+        return new Map(lines.map((item, i) => [item.id, qty[i]]));
+    }, [items]);
+
+    const getItemTierQuantity = useCallback(
+        (item: CartItem) => tierQtyById.get(item.id) ?? item.quantity,
+        [tierQtyById],
+    );
+
+    const getItemUnitPrice = useCallback(
+        (item: CartItem) => getEffectivePrice(item.price, item.priceTiers, getItemTierQuantity(item), item.subscriptionPrice),
+        [getItemTierQuantity],
+    );
+
+    const getGroupQuantity = useCallback((tierGroup?: string | null) => {
+        const key = tierGroupKey(tierGroup);
+        if (!key) return 0;
+        return items.reduce((sum, item) => (
+            tierGroupKey(item.tierGroup) === key && !hasEquiv(item) && !isWeightUnit(item.unit) ? sum + item.quantity : sum
+        ), 0);
+    }, [items]);
+
     const value = useMemo<CartContextValue>(() => {
         const totalItems = items.length;
         const subtotal = items.reduce((sum, item) => {
-            const effectivePrice = getEffectivePrice(item.price, item.priceTiers, item.quantity, item.subscriptionPrice);
+            const effectivePrice = getItemUnitPrice(item);
             if (hasEquiv(item)) {
                 // precio por kg × peso unitario × cantidad de unidades
                 return sum + Math.round(effectivePrice * item.equivWeight! * item.quantity);
             }
             return sum + effectivePrice * item.quantity;
         }, 0);
-        return { items, totalItems, subtotal, addItem, updateQuantity, removeItem, clearCart };
-    }, [items]);
+        return { items, totalItems, subtotal, getItemUnitPrice, getItemTierQuantity, getGroupQuantity, addItem, updateQuantity, removeItem, clearCart };
+    }, [items, getItemUnitPrice, getItemTierQuantity, getGroupQuantity]);
 
     return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

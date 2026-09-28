@@ -21,6 +21,7 @@ interface Product {
     /** Precio de socio: la API solo lo manda a suscriptores. */
     subscriptionPrice?: number | null;
     badges?: string[] | null;
+    tierGroup?: string | null;
 }
 
 interface Category {
@@ -251,6 +252,7 @@ export function FreshCarousel() {
                                         priceTiers={p.priceTiers}
                                         subscriptionPrice={p.subscriptionPrice}
                                         badges={p.badges}
+                                        tierGroup={p.tierGroup}
                                     />
                                 </div>
                             ))}

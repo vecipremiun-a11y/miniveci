@@ -43,6 +43,11 @@ export interface StoreProductPayload {
     badges: string[] | null;
     tags: string[] | null;
     priceTiers: PriceTier[];
+    /**
+     * Grupo de escala. Los productos con el mismo grupo suman cantidad en el
+     * carrito para la escala de precios. null = sin grupo.
+     */
+    tierGroup: string | null;
     /** Precio de socio. La API solo lo manda si quien mira es suscriptor. */
     subscriptionPrice?: number | null;
 }

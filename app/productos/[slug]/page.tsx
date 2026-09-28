@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Footer } from '@/components/Footer';
+import { TierGroupCarousel } from '@/components/products/TierGroupCarousel';
 import { useCart, isWeightUnit, hasEquiv, getEffectivePrice } from '@/components/cart/CartProvider';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
@@ -27,7 +28,7 @@ export default function ProductDetailPage() {
     const params = useParams<{ slug: string }>();
     const slug = params?.slug;
 
-    const { addItem } = useCart();
+    const { addItem, getGroupQuantity } = useCart();
     const [product, setProduct] = useState<ProductDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState(0);
@@ -162,7 +163,12 @@ export default function ProductDetailPage() {
     const hasOffer = Boolean(product?.isOffer && product?.offerPrice && product.offerPrice < product.price);
     const rawPrice = hasOffer ? product!.offerPrice! : product?.price ?? 0;
     const subscriptionPrice = product?.subscriptionPrice;
-    const tieredPrice = getEffectivePrice(rawPrice, (product as any)?.priceTiers, quantity, subscriptionPrice);
+    // Grupo de escala: lo que ya hay en el carrito del mismo grupo suma para el tramo.
+    const tierGroup = product?.tierGroup ?? null;
+    const groupable = Boolean(tierGroup) && !equiv && !isWeightUnit(product?.unit);
+    const groupInCart = groupable ? getGroupQuantity(tierGroup) : 0;
+    const tierQty = quantity + groupInCart;
+    const tieredPrice = getEffectivePrice(rawPrice, (product as any)?.priceTiers, tierQty, subscriptionPrice);
     const displayPrice = equiv ? Math.round(tieredPrice * equivW) : tieredPrice;
     const discountPercent = hasOffer ? Math.round(((product!.price - product!.offerPrice!) / product!.price) * 100) : 0;
 
@@ -289,9 +295,27 @@ export default function ProductDetailPage() {
                                 ))}
                             </div>
                         )}
+
+                        {/* Descripción: bajo la foto y sus miniaturas */}
+                        <div className="bg-white/60 border border-white rounded-3xl p-6 sm:p-8">
+                            <h2 className="font-extrabold text-slate-700 text-lg mb-2">Descripción</h2>
+                            <p className="text-slate-600 leading-relaxed whitespace-pre-line">
+                                {product.description || 'Este producto no tiene descripción disponible por ahora.'}
+                            </p>
+
+                            {(product.tags || []).length > 0 && (
+                                <div className="mt-5 flex flex-wrap gap-2">
+                                    {(product.tags || []).slice(0, 10).map((tag) => (
+                                        <span key={tag} className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+                                            #{tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
-                    <div className="bg-white/60 backdrop-blur-md border border-white rounded-3xl p-8">
+                    <div className="bg-white/60 backdrop-blur-md border border-white rounded-3xl p-8 h-fit">
                         <div className="flex flex-wrap gap-2 mb-4">
                             {hasOffer && (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-sm shadow-red-200/50">
@@ -368,12 +392,17 @@ export default function ProductDetailPage() {
                                 <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500 px-4 py-3 flex items-center gap-2">
                                     <Tag className="h-4 w-4 text-white" />
                                     <p className="text-sm font-bold text-white">Ahorra comprando más</p>
+                                    {groupable && (
+                                        <span className="ml-auto text-[11px] font-semibold text-white/90 text-right leading-tight">
+                                            Suma con otros “{tierGroup}”{groupInCart > 0 ? ` · llevas ${groupInCart}` : ''}
+                                        </span>
+                                    )}
                                 </div>
                                 {/* Tiers */}
                                 <div className="bg-gradient-to-b from-purple-50/60 to-white divide-y divide-purple-100">
                                     {((product as any).priceTiers as PriceTier[]).map((tier, idx) => {
                                         const fmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
-                                        const isActive = quantity >= tier.minQty && (tier.maxQty === null || quantity <= tier.maxQty);
+                                        const isActive = tierQty >= tier.minQty && (tier.maxQty === null || tierQty <= tier.maxQty);
                                         const tierColors = [
                                             { bg: 'bg-blue-500', light: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
                                             { bg: 'bg-emerald-500', light: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
@@ -508,7 +537,7 @@ export default function ProductDetailPage() {
                                 if (kgMode) {
                                     addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, priceTiers: (product as any).priceTiers, subscriptionPrice }, quantity);
                                 } else {
-                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight, priceTiers: (product as any).priceTiers, subscriptionPrice }, quantity);
+                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight, priceTiers: (product as any).priceTiers, subscriptionPrice, tierGroup }, quantity);
                                 }
                             }}
                             disabled={maxQty <= 0}
@@ -519,24 +548,12 @@ export default function ProductDetailPage() {
                             <span className="ml-1 px-2.5 py-0.5 rounded-full bg-white/20 text-sm font-bold">{subtotalText}</span>
                         </button>
 
-                        <div className="mt-8 pt-6 border-t border-slate-200/70">
-                            <h2 className="font-extrabold text-slate-700 text-lg mb-2">Descripción</h2>
-                            <p className="text-slate-600 leading-relaxed whitespace-pre-line">
-                                {product.description || 'Este producto no tiene descripción disponible por ahora.'}
-                            </p>
-                        </div>
-
-                        {(product.tags || []).length > 0 && (
-                            <div className="mt-6 flex flex-wrap gap-2">
-                                {(product.tags || []).slice(0, 10).map((tag) => (
-                                    <span key={tag} className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
-                                        #{tag}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
                     </div>
                 </section>
+
+                {tierGroup && (
+                    <TierGroupCarousel tierGroup={tierGroup} currentProductId={product.id} />
+                )}
             </div>
 
             <Footer />

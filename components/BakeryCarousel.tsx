@@ -245,6 +245,7 @@ export function BakeryCarousel() {
                                         priceTiers={p.priceTiers}
                                         subscriptionPrice={p.subscriptionPrice}
                                         badges={p.badges}
+                                        tierGroup={p.tierGroup}
                                     />
                                 </div>
                             ))}
