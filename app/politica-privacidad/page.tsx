@@ -118,9 +118,12 @@ export default function PrivacyPolicyPage() {
                         </Section>
 
                         <Section id="responsable" n={2} title="Responsable del tratamiento">
-                            <p>El responsable de tus datos personales es MiniVeci (marca Veci), con domicilio en:</p>
+                            <p>
+                                El responsable de tus datos personales es <strong className="text-hoja">Kevin Paul Javier Chero</strong>,
+                                RUT 24.480.416-0, titular de la tienda MiniVeci (marca Veci), sitio web y app.
+                            </p>
                             <ul className="list-none space-y-1 pl-0">
-                                <li><strong className="text-hoja">Dirección:</strong> Sotomayor N°1460-A, Iquique, Región de Tarapacá, Chile</li>
+                                <li><strong className="text-hoja">Domicilio:</strong> Sotomayor N°1460-A, Iquique, Región de Tarapacá, Chile</li>
                                 <li><strong className="text-hoja">Correo:</strong> <a href={`mailto:${CONTACT_EMAIL}`} className="text-tallo font-semibold underline underline-offset-2">{CONTACT_EMAIL}</a></li>
                                 <li><strong className="text-hoja">WhatsApp:</strong> <a href={WHATSAPP_URL} className="text-tallo font-semibold underline underline-offset-2">{WHATSAPP_DISPLAY}</a></li>
                             </ul>
