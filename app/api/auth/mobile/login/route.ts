@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { db } from "@/lib/db";
 import { customers, users } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { verifyPassword } from "@/lib/auth-utils";
+import { isGoogleOnlyPassword, verifyPassword } from "@/lib/auth-utils";
 import { loginSchema } from "@/lib/validations/mobile-auth";
 import { issueTokens } from "@/lib/mobile-auth";
 import { adminToApiUser, customerToApiUser } from "@/lib/user-shape";
@@ -51,6 +51,15 @@ export async function POST(req: NextRequest) {
         });
         if (!customer) {
             return NextResponse.json({ message: "Credenciales inválidas", code: "invalid_credentials" }, { status: 401 });
+        }
+        if (isGoogleOnlyPassword(customer.passwordHash)) {
+            return NextResponse.json(
+                {
+                    message: "Esta cuenta se creó con Google. Toca \"Continuar con Google\" para entrar.",
+                    code: "google_account",
+                },
+                { status: 401 },
+            );
         }
         const validC = await verifyPassword(data.password, customer.passwordHash);
         if (!validC) {

@@ -60,7 +60,7 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
  * Si después configuran un password (set-password flow futuro), se reemplaza.
  */
 function googleOnlyPasswordSentinel(): string {
-    return `GOOGLE_AUTH_NO_PASSWORD:${randomUUID()}`;
+    return `GOOGLE_AUTH_NO_PASSWORD:${randomUUID()}`; // = GOOGLE_ONLY_PASSWORD_PREFIX (auth-utils)
 }
 
 /** Reclama encargos presenciales pendientes (solo DB, rápido → inline) y sincroniza

@@ -18,8 +18,22 @@ export async function hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, salt);
 }
 
+/** Prefijo del passwordHash de los clientes que se registraron con Google
+ *  (lo pone `googleOnlyPasswordSentinel` en customer-google-upsert). */
+export const GOOGLE_ONLY_PASSWORD_PREFIX = "GOOGLE_AUTH_NO_PASSWORD:";
+
+export function isGoogleOnlyPassword(hash: string | null | undefined): boolean {
+    return Boolean(hash?.startsWith(GOOGLE_ONLY_PASSWORD_PREFIX));
+}
+
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-    return bcrypt.compare(password, hash);
+    // bcryptjs lanza "Invalid salt version" con un hash que no es bcrypt (ej. el
+    // de las cuentas solo-Google): eso es una contraseña incorrecta, no un 500.
+    try {
+        return await bcrypt.compare(password, hash);
+    } catch {
+        return false;
+    }
 }
 
 export async function getServerSession(): Promise<Session | null> {
