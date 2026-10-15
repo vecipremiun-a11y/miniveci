@@ -21,6 +21,8 @@ interface Product {
   subscriptionPrice?: number | null;
   badges?: string[] | null;
   tierGroup?: string | null;
+  offerEndsAt?: string | null;
+  offerStock?: number | null;
 }
 
 export function OfferCarousel() {
@@ -142,6 +144,8 @@ export function OfferCarousel() {
                     subscriptionPrice={p.subscriptionPrice}
                     badges={p.badges}
                     tierGroup={p.tierGroup}
+                    offerEndsAt={p.offerEndsAt}
+                    offerStock={p.offerStock}
                   />
                 </div>
               </div>

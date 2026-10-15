@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { orderItems, orderStatusHistory, orders, products } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
-import { syncPaidOrderToPos } from "@/services/pos-sync";
 import { desc, asc, eq, like, and, or, sql, gte, lte } from "drizzle-orm";
 import * as z from "zod";
 
@@ -215,14 +214,6 @@ export async function POST(req: NextRequest) {
         createdAt: now,
       });
     });
-
-    if (normalizedStatus === "paid") {
-      try {
-        await syncPaidOrderToPos(orderId);
-      } catch (syncError) {
-        console.error("[ORDERS_POST][POS_SYNC]", syncError);
-      }
-    }
 
     return NextResponse.json({ success: true, orderId, orderNumber }, { status: 201 });
   } catch (error: any) {

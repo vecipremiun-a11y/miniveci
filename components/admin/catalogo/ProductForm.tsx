@@ -26,10 +26,10 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { COMERCIAL_VECI_BADGE } from "@/lib/store-product-types";
-import { tierGroupKey } from "@/lib/product-price";
+import { costPlusTax as costPlusTaxOf, DEFAULT_SUBSCRIPTION_MARGIN, subscriptionPriceFor, tierGroupKey } from "@/lib/product-price";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, X, UploadCloud, Info, Trash2, TrendingDown, Infinity, ArrowRight, Zap, Tag, DollarSign, TrendingUp, Eye, EyeOff } from "lucide-react";
+import { Loader2, Plus, X, UploadCloud, Info, Trash2, TrendingDown, Infinity, Zap, Tag, DollarSign, TrendingUp, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -46,7 +46,9 @@ export function ProductForm({ initialData, categories, tierGroups = [] }: Produc
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [newTag, setNewTag] = useState("");
-    const [subscriptionUtility, setSubscriptionUtility] = useState(5);
+    // Límites de la oferta (como en POSVECI): por fecha y/o por stock.
+    const [limitByDate, setLimitByDate] = useState(Boolean(initialData?.offerEndsAt));
+    const [limitByStock, setLimitByStock] = useState(initialData?.offerStock !== null && initialData?.offerStock !== undefined);
 
     const form = useForm<ProductFormValues>({
         resolver: zodResolver(productSchema) as any,
@@ -64,6 +66,8 @@ export function ProductForm({ initialData, categories, tierGroups = [] }: Produc
             seoDescription: initialData?.seoDescription || "",
             offerPrice: initialData?.offerPrice ?? null,
             isOffer: initialData?.isOffer ?? false,
+            offerEndsAt: initialData?.offerEndsAt ?? null,
+            offerStock: initialData?.offerStock ?? null,
             unit: initialData?.unit || "Und",
             equivLabel: initialData?.equivLabel ?? null,
             equivWeight: initialData?.equivWeight ?? null,
@@ -71,6 +75,7 @@ export function ProductForm({ initialData, categories, tierGroups = [] }: Produc
             costPrice: initialData?.costPrice ?? null,
             profitMargin: initialData?.profitMargin ?? null,
             subscriptionPrice: initialData?.subscriptionPrice ?? null,
+            subscriptionMargin: initialData?.subscriptionMargin ?? DEFAULT_SUBSCRIPTION_MARGIN,
             priceSource: initialData?.priceSource || "global",
             stockSource: initialData?.stockSource || "global",
             reservedQty: initialData?.reservedQty || 0,
@@ -84,6 +89,10 @@ export function ProductForm({ initialData, categories, tierGroups = [] }: Produc
         },
     });
 
+    const watchedCost = form.watch("costPrice");
+    const watchedTax = form.watch("taxRate");
+    const watchedMargin = form.watch("subscriptionMargin");
+
     const onSubmit = async (data: ProductFormValues) => {
         setIsLoading(true);
         try {
@@ -92,10 +101,19 @@ export function ProductForm({ initialData, categories, tierGroups = [] }: Produc
                 : `/api/admin/products`;
             const method = initialData ? "PUT" : "POST";
 
+            // La utilidad de todos (5%) se guarda vacía: así el producto sigue a
+            // la general. Solo se guarda si este producto tiene una distinta. El
+            // precio suscriptor lo calcula el servidor.
+            const margin = data.subscriptionMargin ?? DEFAULT_SUBSCRIPTION_MARGIN;
+            const payload = {
+                ...data,
+                subscriptionMargin: margin === DEFAULT_SUBSCRIPTION_MARGIN ? null : margin,
+            };
+
             const res = await fetch(url, {
                 method,
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                body: JSON.stringify(payload),
             });
 
             if (!res.ok) {
@@ -446,6 +464,123 @@ export function ProductForm({ initialData, categories, tierGroups = [] }: Produc
                                         </FormItem>
                                     )}
                                 />
+                                {form.watch("isOffer") && (
+                                    <FormField
+                                        control={form.control}
+                                        name="offerEndsAt"
+                                        render={({ field }) => {
+                                            const endsMs = field.value ? Date.parse(field.value) : NaN;
+                                            const hasEnd = !Number.isNaN(endsMs);
+                                            const expired = hasEnd && endsMs <= Date.now();
+                                            const setEnd = (d: Date | null) => field.onChange(d ? d.toISOString() : null);
+                                            const endOfDay = (daysAhead: number) => {
+                                                const d = new Date();
+                                                d.setDate(d.getDate() + daysAhead);
+                                                d.setHours(23, 59, 0, 0);
+                                                return d;
+                                            };
+                                            return (
+                                                <FormItem className={`rounded-lg border p-3 shadow-sm ${expired ? 'border-red-300 bg-red-50' : ''}`}>
+                                                    <div className="flex flex-row items-center justify-between">
+                                                        <div className="space-y-0.5">
+                                                            <FormLabel>Oferta por fecha</FormLabel>
+                                                            <FormDescription>Se apaga sola en la fecha y hora que elijas</FormDescription>
+                                                        </div>
+                                                        <Switch
+                                                            checked={limitByDate}
+                                                            onCheckedChange={(on) => {
+                                                                setLimitByDate(on);
+                                                                if (!on) setEnd(null);
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    {limitByDate && (<>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="datetime-local"
+                                                            value={hasEnd ? toLocalDateTimeInput(endsMs) : ''}
+                                                            onChange={(e) => setEnd(e.target.value ? new Date(e.target.value) : null)}
+                                                        />
+                                                    </FormControl>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {[
+                                                            { label: 'Hoy 23:59', days: 0 },
+                                                            { label: 'Mañana 23:59', days: 1 },
+                                                            { label: 'En 7 días', days: 7 },
+                                                        ].map((o) => (
+                                                            <Button key={o.label} type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEnd(endOfDay(o.days))}>
+                                                                {o.label}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                    <FormDescription>
+                                                        {expired
+                                                            ? 'Esta oferta ya terminó: en la tienda el producto se vende a su precio normal. Pon una fecha futura para reactivarla.'
+                                                            : hasEnd
+                                                                ? `La oferta se apaga sola el ${new Date(endsMs).toLocaleString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} y el producto vuelve a su precio normal.`
+                                                                : 'Elige la fecha y hora en que termina la oferta.'}
+                                                    </FormDescription>
+                                                    </>)}
+                                                    <FormMessage />
+                                                </FormItem>
+                                            );
+                                        }}
+                                    />
+                                )}
+                                {form.watch("isOffer") && (
+                                    <FormField
+                                        control={form.control}
+                                        name="offerStock"
+                                        render={({ field }) => {
+                                            const unit = (form.watch("unit") ?? "").toLowerCase();
+                                            const byWeight = unit === "kg" || unit === "lt";
+                                            const unitLabel = byWeight ? unit : "unidades";
+                                            const value = field.value ?? null;
+                                            const soldOut = limitByStock && value !== null && value <= 0;
+                                            return (
+                                                <FormItem className={`rounded-lg border p-3 shadow-sm ${soldOut ? 'border-red-300 bg-red-50' : ''}`}>
+                                                    <div className="flex flex-row items-center justify-between">
+                                                        <div className="space-y-0.5">
+                                                            <FormLabel>Oferta por stock</FormLabel>
+                                                            <FormDescription>Solo una cantidad se vende a precio oferta</FormDescription>
+                                                        </div>
+                                                        <Switch
+                                                            checked={limitByStock}
+                                                            onCheckedChange={(on) => {
+                                                                setLimitByStock(on);
+                                                                if (!on) field.onChange(null);
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    {limitByStock && (<>
+                                                        <FormControl>
+                                                            <div className="relative">
+                                                                <Input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    step={byWeight ? 0.001 : 1}
+                                                                    className="pr-24"
+                                                                    placeholder={byWeight ? "Ej: 10" : "Ej: 20"}
+                                                                    value={value ?? ""}
+                                                                    onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                                                                />
+                                                                <span className="absolute right-3 top-2.5 text-sm text-gray-500">{unitLabel}</span>
+                                                            </div>
+                                                        </FormControl>
+                                                        <FormDescription>
+                                                            {value === null
+                                                                ? `Cuántas ${byWeight ? `${unit} quedan` : 'unidades quedan'} a precio oferta. Cada venta las descuenta y al llegar a 0 el producto vuelve a su precio normal.`
+                                                                : soldOut
+                                                                    ? 'Oferta agotada: en la tienda el producto se vende a su precio normal. Pon una cantidad para reactivarla.'
+                                                                    : `Quedan ${value} ${unitLabel} a precio oferta. En la tienda nadie puede pedir más que eso, y al venderse todo el producto vuelve a su precio normal.`}
+                                                        </FormDescription>
+                                                    </>)}
+                                                    <FormMessage />
+                                                </FormItem>
+                                            );
+                                        }}
+                                    />
+                                )}
                                 <FormField
                                     control={form.control}
                                     name="unit"
@@ -678,75 +813,77 @@ export function ProductForm({ initialData, categories, tierGroups = [] }: Produc
                             </CardHeader>
                             <CardContent className="pt-5 bg-gradient-to-b from-blue-50/40 to-white space-y-4">
                                 {(() => {
-                                    const cost = form.watch('costPrice');
-                                    const taxRate = form.watch('taxRate');
-                                    const subscriptionPrice = form.watch('subscriptionPrice');
+                                    const cost = watchedCost;
+                                    const tax = watchedTax && watchedTax > 0 ? watchedTax : 0;
+                                    const margin = watchedMargin ?? DEFAULT_SUBSCRIPTION_MARGIN;
+                                    // Siempre calculado: (costo + IVA) × (1 + utilidad). Sin costo
+                                    // queda el que estaba guardado.
+                                    const subscriptionPrice = subscriptionPriceFor(cost, watchedTax, margin) ?? form.watch('subscriptionPrice');
                                     const webPrice = form.watch('webPrice');
-                                    const tax = taxRate && taxRate > 0 ? taxRate : 0;
-                                    const costPlusTax = cost && cost > 0 ? Math.round(cost * (1 + tax / 100)) : null;
+                                    const costPlusTax = costPlusTaxOf(cost, watchedTax);
                                     const fmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
                                     const savings = subscriptionPrice && webPrice ? webPrice - subscriptionPrice : null;
                                     const savingsPercent = savings && webPrice ? ((savings / webPrice) * 100).toFixed(0) : null;
 
-                                    const [utilityPct, setUtilityPct] = [subscriptionUtility, setSubscriptionUtility];
-                                    const suggestedPrice = costPlusTax ? Math.round(costPlusTax * (1 + utilityPct / 100)) : null;
-
                                     return (
                                         <>
-                                            {costPlusTax && (
-                                                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 space-y-2">
+                                            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 space-y-2">
+                                                {costPlusTax ? (
                                                     <div className="text-xs text-blue-700">
                                                         <span className="font-semibold">Costo + IVA:</span> {fmt.format(costPlusTax)} <span className="text-blue-500">({fmt.format(cost!)} + {tax}%)</span>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-semibold text-blue-700">Utilidad:</span>
-                                                        <div className="relative w-24">
-                                                            <Input
-                                                                type="number"
-                                                                min={0}
-                                                                step={0.5}
-                                                                value={utilityPct}
-                                                                onChange={(e) => setUtilityPct(Number(e.target.value) || 0)}
-                                                                className="h-7 pr-7 text-xs font-bold text-blue-800 border-blue-200 rounded-lg"
-                                                            />
-                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 text-xs font-bold">%</span>
-                                                        </div>
-                                                        <ArrowRight className="h-3 w-3 text-blue-400" />
-                                                        <span className="text-xs font-bold text-blue-800">{suggestedPrice ? fmt.format(suggestedPrice) : '-'}</span>
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-7 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-100"
-                                                            onClick={() => suggestedPrice && form.setValue('subscriptionPrice', suggestedPrice)}
-                                                        >
-                                                            Aplicar
-                                                        </Button>
+                                                ) : (
+                                                    <div className="text-xs text-blue-700">
+                                                        Pon el precio de costo para calcular el precio suscriptor.
                                                     </div>
-                                                </div>
-                                            )}
-                                            <FormField
-                                                control={form.control}
-                                                name="subscriptionPrice"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel className="text-xs font-bold text-blue-700 uppercase tracking-wider">Precio Suscriptor</FormLabel>
-                                                        <FormControl>
-                                                            <div className="relative">
-                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 font-bold text-sm">$</span>
-                                                                <Input
-                                                                    type="number"
-                                                                    min={0}
-                                                                    className="pl-7 h-11 border-2 border-blue-200 rounded-xl font-bold text-blue-800 focus:border-blue-400"
-                                                                    value={field.value ?? ''}
-                                                                    onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
-                                                                />
-                                                            </div>
-                                                        </FormControl>
-                                                        <FormMessage />
-                                                    </FormItem>
                                                 )}
-                                            />
+                                                <FormField
+                                                    control={form.control}
+                                                    name="subscriptionMargin"
+                                                    render={({ field }) => (
+                                                        <FormItem className="space-y-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <FormLabel className="text-xs font-semibold text-blue-700">Utilidad:</FormLabel>
+                                                                <div className="relative w-24">
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            type="number"
+                                                                            min={0}
+                                                                            step={0.5}
+                                                                            value={field.value ?? ''}
+                                                                            onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                                                                            className="h-7 pr-7 text-xs font-bold text-blue-800 border-blue-200 rounded-lg"
+                                                                        />
+                                                                    </FormControl>
+                                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 text-xs font-bold">%</span>
+                                                                </div>
+                                                                {margin !== DEFAULT_SUBSCRIPTION_MARGIN && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-800"
+                                                                        onClick={() => field.onChange(DEFAULT_SUBSCRIPTION_MARGIN)}
+                                                                    >
+                                                                        Volver al {DEFAULT_SUBSCRIPTION_MARGIN}%
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <p className="text-[11px] text-blue-500">
+                                                    {margin === DEFAULT_SUBSCRIPTION_MARGIN
+                                                        ? `Usa la utilidad de todos los productos (${DEFAULT_SUBSCRIPTION_MARGIN}%). Si la cambias, este producto queda con la suya.`
+                                                        : `Este producto usa su propia utilidad (${margin}%); los demás siguen con ${DEFAULT_SUBSCRIPTION_MARGIN}%.`}
+                                                    {' '}El precio se recalcula solo cada vez que cambia el costo, también cuando llega de POSVECI.
+                                                </p>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <p className="text-xs font-bold text-blue-700 uppercase tracking-wider">Precio Suscriptor</p>
+                                                <div className="flex items-center h-11 px-3 border-2 border-blue-100 bg-blue-50/50 rounded-xl font-bold text-blue-800">
+                                                    {subscriptionPrice ? fmt.format(subscriptionPrice) : <span className="text-blue-300 font-semibold text-sm">Sin costo para calcularlo</span>}
+                                                </div>
+                                            </div>
                                             {savings !== null && savings > 0 && (
                                                 <div className="rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/60 p-3">
                                                     <div className="grid grid-cols-3 gap-3 text-center">
@@ -1067,4 +1204,11 @@ function RefreshCwIcon({ className }: { className?: string }) {
             <path d="M3 21v-5h5" />
         </svg>
     )
+}
+
+/** Fecha/hora local en el formato que pide <input type="datetime-local">. */
+function toLocalDateTimeInput(ms: number): string {
+    const d = new Date(ms);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

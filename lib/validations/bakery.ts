@@ -72,11 +72,14 @@ export const posDeliverySchema = z.object({
 });
 
 // Cambio de estado. `delivery` es opcional (típicamente llega con status='delivered').
-// `reason` acompaña cancelaciones (POSVECI lo envía para pedidos de tienda).
+// `reason` acompaña cancelaciones (POSVECI lo envía para pedidos de tienda; se le
+// muestra al cliente). `payment_status: "paid"` llega cuando el local confirma
+// una transferencia; solo aplica a pedidos de tienda.
 export const bakeryUpdateStatusSchema = z.object({
     status: z.enum(BAKERY_STATUSES),
     reason: z.string().max(500).optional().nullable(),
     delivery: posDeliverySchema.optional(),
+    payment_status: z.enum(["pending", "paid"]).optional().nullable(),
 });
 
 // --- POSVECI → miniveci: encargo presencial creado en el POS ---

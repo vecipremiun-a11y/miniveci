@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { orders, orderItems, productImages } from "@/lib/db/schema";
 import { eq, desc, and, inArray } from "drizzle-orm";
 import { getSessionCustomerId } from "@/lib/session-customer";
+import { getPosCancelReasons } from "@/lib/order-cancel-reason";
 
 export async function GET(req: NextRequest) {
     try {
@@ -41,8 +42,13 @@ export async function GET(req: NextRequest) {
             : [];
         const imageMap = new Map(images.map(img => [img.productId, img.url]));
 
+        const cancelReasons = await getPosCancelReasons(
+            customerOrders.filter(o => o.status === "cancelled").map(o => o.id),
+        );
+
         const ordersWithItems = customerOrders.map(order => ({
             ...order,
+            cancelReason: cancelReasons.get(order.id) ?? null,
             items: allItems
                 .filter(item => item.orderId === order.id)
                 .map(item => ({

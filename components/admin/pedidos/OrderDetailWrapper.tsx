@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
 import { statusConfig, paymentStatusConfig } from "@/components/admin/pedidos/OrderTable";
+import { isConfirmedTransfer } from "@/lib/store-status";
 
 export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: string, initialOrderNumber: string }) {
     const router = useRouter();
@@ -101,6 +102,7 @@ export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: s
 
     const statusObj = statusConfig[order.status] || { label: order.status, color: "bg-gray-100" };
     const date = new Date(order.createdAt);
+    const saleInPos = isConfirmedTransfer(order);
 
     return (
         <div className="space-y-6 pb-20">
@@ -124,24 +126,31 @@ export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: s
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <div className="text-sm font-medium mr-2 flex-shrink-0">Cambiar estado:</div>
-                    <Select value={order.status} onValueChange={handleStatusChange} disabled={isUpdating}>
-                        <SelectTrigger className="w-full sm:w-[180px] bg-white">
-                            <SelectValue placeholder="Estado..." />
-                        </SelectTrigger>
-                        <SelectContent align="end">
-                            <SelectItem value="new">Nuevo</SelectItem>
-                            <SelectItem value="confirmed">Confirmado</SelectItem>
-                            <SelectItem value="paid">Pagado</SelectItem>
-                            <SelectItem value="preparing">Preparando</SelectItem>
-                            <SelectItem value="ready">Listo</SelectItem>
-                            <SelectItem value="shipped">Despachado</SelectItem>
-                            <SelectItem value="delivered">Entregado</SelectItem>
-                            <SelectItem value="cancelled" className="text-red-500 font-medium focus:text-red-600 focus:bg-red-50">Cancelar Pedido</SelectItem>
-                            <SelectItem value="refunded" className="text-orange-500 focus:text-orange-600 focus:bg-orange-50">Reembolsado</SelectItem>
-                        </SelectContent>
-                    </Select>
+                <div className="flex flex-col gap-1 w-full sm:w-auto">
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <div className="text-sm font-medium mr-2 flex-shrink-0">Cambiar estado:</div>
+                        <Select value={order.status} onValueChange={handleStatusChange} disabled={isUpdating}>
+                            <SelectTrigger className="w-full sm:w-[180px] bg-white">
+                                <SelectValue placeholder="Estado..." />
+                            </SelectTrigger>
+                            <SelectContent align="end">
+                                <SelectItem value="new">Nuevo</SelectItem>
+                                <SelectItem value="confirmed">Confirmado</SelectItem>
+                                <SelectItem value="paid">Pagado</SelectItem>
+                                <SelectItem value="preparing">Preparando</SelectItem>
+                                <SelectItem value="ready">Listo</SelectItem>
+                                <SelectItem value="shipped">Despachado</SelectItem>
+                                <SelectItem value="delivered">Entregado</SelectItem>
+                                <SelectItem value="cancelled" disabled={saleInPos} className="text-red-500 font-medium focus:text-red-600 focus:bg-red-50">Cancelar Pedido</SelectItem>
+                                <SelectItem value="refunded" disabled={saleInPos} className="text-orange-500 focus:text-orange-600 focus:bg-orange-50">Reembolsado</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {saleInPos && (
+                        <p className="text-xs text-muted-foreground sm:max-w-[300px] sm:text-right">
+                            Transferencia confirmada por el local: no se cancela desde aquí. La devolución la gestiona el local.
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -373,7 +382,25 @@ export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: s
                                     <span className="text-muted-foreground">ID Transacción</span>
                                     <span className="font-medium text-slate-600 font-mono text-xs">{order.paymentId || 'N/A'}</span>
                                 </div>
+                                <div className="flex justify-between items-center text-sm border-b pb-2">
+                                    <span className="text-muted-foreground">Documento</span>
+                                    <span className="font-medium">{order.invoice ? 'Factura' : 'Boleta'}</span>
+                                </div>
                             </div>
+                            {order.invoice && (
+                                <div className="rounded-md bg-slate-50 border p-3 text-sm space-y-0.5">
+                                    <p className="font-semibold">{order.invoice.razonSocial}</p>
+                                    <p className="text-muted-foreground">RUT {order.invoice.rut}</p>
+                                    {order.invoice.giro && <p className="text-muted-foreground">Giro: {order.invoice.giro}</p>}
+                                    {(order.invoice.direccion || order.invoice.comuna || order.invoice.ciudad) && (
+                                        <p className="text-muted-foreground">
+                                            {[order.invoice.direccion, order.invoice.comuna, order.invoice.ciudad].filter(Boolean).join(', ')}
+                                        </p>
+                                    )}
+                                    {order.invoice.email && <p className="text-muted-foreground">{order.invoice.email}</p>}
+                                    <p className="text-xs text-muted-foreground pt-1">La factura la emite el local en POSVECI.</p>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 

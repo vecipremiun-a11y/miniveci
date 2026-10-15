@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Home, ShoppingBag, Heart, MapPin, CreditCard, Settings, LogOut, Shield, Crown, Ticket, Cookie } from 'lucide-react';
+import { Home, ShoppingBag, Heart, MapPin, CreditCard, FileText, Settings, LogOut, Shield, Crown, Ticket, Cookie } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,7 @@ const menuItems = [
     { icon: Heart, label: 'Favoritos', href: '/cuenta/favoritos' },
     { icon: MapPin, label: 'Direcciones', href: '/cuenta/direcciones' },
     { icon: CreditCard, label: 'Métodos de pago', href: '/cuenta/pagos' },
+    { icon: FileText, label: 'Facturación', href: '/cuenta/facturacion' },
     { icon: Settings, label: 'Ajustes', href: '/cuenta/ajustes' },
 ];
 

@@ -119,7 +119,10 @@ export const products = sqliteTable("products", {
     // Costos / Margen
     costPrice: integer("cost_price"), // CLP (pesos) — precio de costo del POS
     profitMargin: real("profit_margin"), // porcentaje de margen de ganancia
-    subscriptionPrice: integer("subscription_price"), // CLP — precio para suscriptores
+    subscriptionPrice: integer("subscription_price"), // CLP — precio para suscriptores (calculado, ver subscriptionPriceFor)
+    // Utilidad del precio suscriptor de este producto, en %. NULL = la de todos
+    // (DEFAULT_SUBSCRIPTION_MARGIN). Precio suscriptor = (costo + IVA) × (1 + utilidad).
+    subscriptionMargin: real("subscription_margin"),
 
     // Datos Web (Editable)
     webPrice: integer("web_price"), // CLP (pesos)
@@ -137,6 +140,12 @@ export const products = sqliteTable("products", {
     // POS Sync Fields
     offerPrice: integer("offer_price"),           // CLP (pesos) — precio de oferta
     isOffer: integer("is_offer", { mode: "boolean" }).default(false),
+    // Fin programado de la oferta (ISO UTC). Desde ese momento se vende a precio
+    // normal aunque is_offer siga en 1. NULL = no vence. Ver isOfferActive.
+    offerEndsAt: text("offer_ends_at"),
+    // Oferta por stock: unidades (kg en los de peso) que quedan a precio oferta.
+    // En 0 la oferta se acaba sola. NULL = sin límite de stock. Ver isOfferActive.
+    offerStock: real("offer_stock"),
     unit: text("unit").default("Und"),              // Und, Kg, Lt, etc.
     equivLabel: text("equiv_label"),                  // Etiqueta de venta por unidad (ej: "Palta", "Pechuga")
     equivWeight: real("equiv_weight"),                // Peso equivalente en kg (ej: 0.365)
@@ -212,6 +221,14 @@ export const orders = sqliteTable("orders", {
     internalNotes: text("internal_notes"),
     couponCode: text("coupon_code"),
 
+    // Cuándo se descontó el stock web de este pedido (NULL = no descontado o ya
+    // devuelto). Garantiza que se descuente y se devuelva una sola vez. Ver
+    // lib/order-stock.ts.
+    stockAppliedAt: text("stock_applied_at"),
+    // Cuándo POSVECI recibió el pedido. Mientras esté NULL, el stock que manda
+    // POSVECI todavía no incluye esta venta. Ver pendingWebOrderQty.
+    posSentAt: text("pos_sent_at"),
+
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
@@ -241,6 +258,36 @@ export const orderStatusHistory = sqliteTable("order_status_history", {
     changedBy: text("changed_by"), // user_id or "system"
     notes: text("notes"),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Datos de facturación de un pedido web ("Quiero factura" en el checkout, con
+// cualquier medio de pago). Sin fila = boleta. Viajan a POSVECI como `invoice`
+// al mandarle el pedido (lib/posveci-store.ts); la factura la emite el local.
+export const orderInvoices = sqliteTable("order_invoices", {
+    orderId: text("order_id").primaryKey().references(() => orders.id, { onDelete: "cascade" }),
+    rut: text("rut").notNull(),
+    razonSocial: text("razon_social").notNull(),
+    giro: text("giro"),
+    direccion: text("direccion"),
+    comuna: text("comuna"),
+    ciudad: text("ciudad"),
+    email: text("email"),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Últimos datos de factura del cliente: precargan el checkout y se editan en
+// "Mi cuenta → Facturación". Se actualizan con cada pedido con factura. Solo
+// viajan a POSVECI (como order_invoices) si el cliente marca "Quiero factura".
+export const customerInvoiceData = sqliteTable("customer_invoice_data", {
+    customerId: text("customer_id").primaryKey().references(() => customers.id, { onDelete: "cascade" }),
+    rut: text("rut").notNull(),
+    razonSocial: text("razon_social").notNull(),
+    giro: text("giro"),
+    direccion: text("direccion"),
+    comuna: text("comuna"),
+    ciudad: text("ciudad"),
+    email: text("email"),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const apiCredentials = sqliteTable("api_credentials", {

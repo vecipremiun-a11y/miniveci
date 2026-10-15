@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from 'lucide-react';
-import { useCart, isWeightUnit, hasEquiv } from './CartProvider';
+import { useCart, isWeightUnit, hasEquiv, isAtOfferCap } from './CartProvider';
 
 interface CartDrawerProps {
     open: boolean;
@@ -198,6 +198,11 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                                                     Escala por grupo: {getItemTierQuantity(item)} und de “{item.tierGroup}”
                                                 </p>
                                             )}
+                                            {isAtOfferCap(item) && (
+                                                <p className="text-[10.5px] font-semibold text-tomate mt-0.5 leading-tight">
+                                                    Llevas todo lo que queda en oferta
+                                                </p>
+                                            )}
 
                                             <div className="flex items-center justify-between mt-auto pt-2">
                                                 <div className="inline-flex items-center bg-papel rounded-full p-0.5 border border-cerco">
@@ -214,7 +219,9 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                                                     </span>
                                                     <button
                                                         onClick={() => updateQuantity(item.id, Math.round((item.quantity + stepVal) * 100) / 100)}
-                                                        className="w-7 h-7 flex items-center justify-center rounded-full text-tinta hover:bg-brote hover:text-tallo transition-all"
+                                                        disabled={isAtOfferCap(item)}
+                                                        title={isAtOfferCap(item) ? 'No quedan más unidades en oferta' : undefined}
+                                                        className="w-7 h-7 flex items-center justify-center rounded-full text-tinta hover:bg-brote hover:text-tallo disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                                         aria-label="Aumentar cantidad"
                                                     >
                                                         <Plus className="w-3 h-3" />

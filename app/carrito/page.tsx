@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
-import { useCart, isWeightUnit, hasEquiv } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv, isAtOfferCap } from '@/components/cart/CartProvider';
 
 export default function CarritoPage() {
     const { items, subtotal, updateQuantity, removeItem, clearCart, getItemUnitPrice } = useCart();
@@ -89,7 +89,9 @@ export default function CarritoPage() {
                                                 <span className="min-w-[2rem] text-center font-bold text-slate-700 text-sm">{qtyLabel}</span>
                                                 <button
                                                     onClick={() => updateQuantity(item.id, Math.round((item.quantity + stepVal) * 100) / 100)}
-                                                    className="w-7 h-7 rounded-full bg-white border border-slate-200 font-bold text-slate-600 text-sm"
+                                                    disabled={isAtOfferCap(item)}
+                                                    title={isAtOfferCap(item) ? 'No quedan más unidades en oferta' : undefined}
+                                                    className="w-7 h-7 rounded-full bg-white border border-slate-200 font-bold text-slate-600 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                                                 >
                                                     +
                                                 </button>
@@ -113,7 +115,9 @@ export default function CarritoPage() {
                                             <span className="min-w-[2.5rem] text-center font-bold text-slate-700">{qtyLabel}</span>
                                             <button
                                                 onClick={() => updateQuantity(item.id, Math.round((item.quantity + stepVal) * 100) / 100)}
-                                                className="w-8 h-8 rounded-full bg-white border border-slate-200 font-bold text-slate-600"
+                                                disabled={isAtOfferCap(item)}
+                                                title={isAtOfferCap(item) ? 'No quedan más unidades en oferta' : undefined}
+                                                className="w-8 h-8 rounded-full bg-white border border-slate-200 font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
                                             >
                                                 +
                                             </button>

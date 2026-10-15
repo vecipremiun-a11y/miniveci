@@ -16,7 +16,7 @@ import { Footer } from '@/components/Footer';
  * Es una página pública y estática: no depende de sesión.
  */
 
-const LAST_UPDATED = '28 de septiembre de 2026';
+const LAST_UPDATED = '14 de octubre de 2026';
 const CONTACT_EMAIL = 'cliente@miniveci.cl';
 const WHATSAPP_DISPLAY = '+56 9 5189 2258';
 const WHATSAPP_URL = 'https://wa.me/56951892258';
@@ -150,6 +150,14 @@ export default function PrivacyPolicyPage() {
                                 <li>
                                     Las direcciones que guardas en tu libreta o escribes en un pedido: calle y número, comuna, ciudad e
                                     indicaciones de entrega (por ejemplo, número de departamento).
+                                </li>
+                            </ul>
+
+                            <H3>Datos de facturación</H3>
+                            <ul>
+                                <li>
+                                    Si pides factura: RUT, razón social, giro, dirección, comuna, ciudad y, si lo das, un correo para
+                                    la factura. Si tienes cuenta, quedan guardados en &ldquo;Mi cuenta&rdquo; para tus próximas compras.
                                 </li>
                             </ul>
 
@@ -292,8 +300,8 @@ export default function PrivacyPolicyPage() {
                                 pedidos y encargos, gestionas tu membresía y sorteos, y no tienes que volver a escribir tus datos.
                             </p>
                             <p>
-                                Desde “Mi cuenta” puedes ver y actualizar tu nombre, teléfono, RUT y foto, y agregar, editar o borrar
-                                direcciones. Si hiciste pedidos como invitado con el mismo correo verificado de tu cuenta de Google, los
+                                Desde “Mi cuenta” puedes ver y actualizar tu nombre, teléfono, RUT y foto, agregar, editar o borrar
+                                direcciones, y editar o borrar tus datos de facturación. Si hiciste pedidos como invitado con el mismo correo verificado de tu cuenta de Google, los
                                 vinculamos a tu cuenta para que aparezcan en tu historial.
                             </p>
                             <p>
@@ -486,6 +494,7 @@ export default function PrivacyPolicyPage() {
                             <ul>
                                 <li>Tu cuenta y tu perfil (nombre, correo, teléfono, RUT y foto).</li>
                                 <li>Tus direcciones guardadas.</li>
+                                <li>Tus datos de facturación guardados.</li>
                                 <li>Los tokens de notificaciones y las sesiones abiertas en la app.</li>
                                 <li>Tus conversaciones del chat de atención y sus archivos adjuntos.</li>
                                 <li>Tus registros de visitas al sitio.</li>
@@ -498,8 +507,10 @@ export default function PrivacyPolicyPage() {
                             <p>
                                 Los registros de tus pedidos, encargos y pagos (productos, montos y fechas) se conservan por
                                 obligaciones tributarias y contables, pero se les quita tu nombre, correo, teléfono, RUT y dirección.
-                                Lo mismo ocurre con tus números en sorteos ya realizados. Los pagos procesados por Mercado Pago quedan
-                                además registrados en Mercado Pago según su propia política.
+                                Lo mismo ocurre con tus números en sorteos ya realizados. Si pediste factura en un pedido, los
+                                datos de facturación de ese pedido se conservan, porque son los del documento tributario emitido.
+                                Los pagos procesados por Mercado Pago quedan además registrados en Mercado Pago según su propia
+                                política.
                             </p>
                             <p>
                                 También puedes borrar solo algunos datos (por ejemplo, una dirección o tu foto) sin eliminar tu

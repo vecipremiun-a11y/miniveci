@@ -409,6 +409,8 @@ function ProductsPageContent() {
                                         subscriptionPrice={product.subscriptionPrice}
                                         badges={product.badges}
                                         tierGroup={product.tierGroup}
+                                        offerEndsAt={product.offerEndsAt}
+                                        offerStock={product.offerStock}
                                     />
                                 ))}
                             </div>

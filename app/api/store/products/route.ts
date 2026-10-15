@@ -7,8 +7,8 @@ import { searchTokensCondition } from "@/lib/search-sql";
 import { branchIds } from "@/lib/category-tree";
 import { getSessionCustomerId } from "@/lib/session-customer";
 import { hasActiveSubscription } from "@/lib/subscriptions";
-import { quickFilterConditions } from "@/lib/store-filters";
-import { tierGroupKey } from "@/lib/product-price";
+import { activeOfferCondition, quickFilterConditions } from "@/lib/store-filters";
+import { isOfferActive, tierGroupKey } from "@/lib/product-price";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
         if (maxPrice !== null) {
             conditions.push(sql`(
                 CASE
-                    WHEN ${products.isOffer} = 1 AND ${products.offerPrice} IS NOT NULL THEN ${products.offerPrice}
+                    WHEN ${activeOfferCondition()} THEN ${products.offerPrice}
                     ELSE COALESCE(${products.webPrice}, 0)
                 END <= ${maxPrice}
             )`);
@@ -156,6 +156,9 @@ export async function GET(req: NextRequest) {
                 isPrimary: img.isPrimary,
             }));
 
+            // Oferta vencida (offerEndsAt en el pasado) = precio normal para todos.
+            const offerActive = isOfferActive(raw);
+
             return {
                 id: raw.id,
                 name: raw.name,
@@ -164,8 +167,10 @@ export async function GET(req: NextRequest) {
                 seoTitle: raw.seoTitle,
                 seoDescription: raw.seoDescription,
                 price: resolvedPrice,
-                offerPrice: raw.isOffer && raw.offerPrice ? raw.offerPrice : null,
-                isOffer: Boolean(raw.isOffer),
+                offerPrice: offerActive ? raw.offerPrice : null,
+                isOffer: offerActive,
+                offerEndsAt: offerActive ? raw.offerEndsAt ?? null : null,
+                offerStock: offerActive ? raw.offerStock ?? null : null,
                 stock: resolvedStock,
                 unit: raw.unit || "Und",
                 equivLabel: raw.equivLabel || null,

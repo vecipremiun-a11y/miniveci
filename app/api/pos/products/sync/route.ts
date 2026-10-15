@@ -1,14 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  cleanTierGroup,
+  normalizeOfferEndsAt,
+  normalizeOfferStock,
+  offerEndsAtAfterPosUpdate,
+  offerStockAfterPosUpdate,
+} from "@/lib/product-price";
 import { db } from "@/lib/db";
 import { apiCredentials, products, productImages, categories } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { put, del } from "@vercel/blob";
 import { emitProductChange } from "@/lib/product-live-updates";
+import { adjustPosStockForPendingWebOrders } from "@/lib/order-stock";
+import { recomputeSubscriptionPrice } from "@/lib/subscription-price";
 import { slugify } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
+
+const offerEndsAtSchema = z
+  .union([z.literal(""), z.string().datetime({ offset: true })])
+  .optional()
+  .nullable()
+  .transform((v) => (v === "" ? null : v));
 
 // Schema acepta snake_case y camelCase (POSKEM envía camelCase)
 const syncProductRawSchema = z.object({
@@ -61,6 +76,18 @@ const syncProductRawSchema = z.object({
     max_qty: z.number().min(1).nullable().optional(),
     price: z.number().min(0),
   })).optional().nullable(),
+  // Grupo de escala: los productos con el mismo grupo suman cantidades para la
+  // escala (ver lib/tier-groups.ts). Ausente = no tocar; null o "" = sin grupo.
+  tier_group: z.string().max(60).optional().nullable(),
+  tierGroup: z.string().max(60).optional().nullable(),
+  // Fin programado de la oferta, ISO 8601 con zona (ej. "2026-10-10T23:59:00-03:00").
+  // Ausente = no tocar; null o "" = la oferta no vence.
+  offer_ends_at: offerEndsAtSchema,
+  offerEndsAt: offerEndsAtSchema,
+  // Oferta por stock: unidades (kg en los de peso) que QUEDAN a precio oferta.
+  // Ausente = no tocar; null = sin límite de stock; 0 = oferta agotada.
+  offer_stock: z.number().min(0).optional().nullable(),
+  offerStock: z.number().min(0).optional().nullable(),
 }).transform((d) => ({
   sku: d.sku,
   pos_product_id: ((): string | undefined => {
@@ -84,6 +111,10 @@ const syncProductRawSchema = z.object({
   equiv_weight: d.equiv_weight ?? d.equivWeight,
   cost_price: d.cost_price ?? d.costPrice,
   price_tiers: d.price_tiers ?? d.priceTiers,
+  // `??` no sirve acá: null es un valor válido ("limpiar") y debe ganarle a ausente.
+  tier_group: d.tier_group !== undefined ? d.tier_group : d.tierGroup,
+  offer_ends_at: d.offer_ends_at !== undefined ? d.offer_ends_at : d.offerEndsAt,
+  offer_stock: d.offer_stock !== undefined ? d.offer_stock : d.offerStock,
   tax_rate: d.tax_rate ?? d.taxRate,
   image_url: d.image_url ?? d.imageUrl,
   image_base64: d.image_base64 ?? d.imageBase64,
@@ -294,6 +325,12 @@ async function handleProductSync(req: NextRequest) {
       is_offer: body.is_offer,
       taxRate: body.taxRate,
       tax_rate: body.tax_rate,
+      offerEndsAt: body.offerEndsAt,
+      offer_ends_at: body.offer_ends_at,
+      offerStock: body.offerStock,
+      offer_stock: body.offer_stock,
+      tierGroup: body.tierGroup,
+      tier_group: body.tier_group,
     });
 
     let data: SyncProductData;
@@ -345,12 +382,12 @@ async function handleProductSync(req: NextRequest) {
     // Identidad del producto: match por pos_product_id (llave maestra) primero;
     // fallback a SKU para productos legacy que aún no tienen el id guardado.
     // El SKU es mutable (cambia el código de barras) → no sirve como identidad.
-    let existingRow: { id: string; sku: string; slug: string | null } | undefined;
+    let existingRow: { id: string; sku: string; slug: string | null; isOffer: boolean | null; offerPrice: number | null; unit: string | null } | undefined;
     let matchedBy: "pos_id" | "sku" | null = null;
 
     if (data.pos_product_id) {
       const byId = await db
-        .select({ id: products.id, sku: products.sku, slug: products.slug })
+        .select({ id: products.id, sku: products.sku, slug: products.slug, isOffer: products.isOffer, offerPrice: products.offerPrice, unit: products.unit })
         .from(products)
         .where(eq(products.posProductId, data.pos_product_id))
         .limit(1);
@@ -359,7 +396,7 @@ async function handleProductSync(req: NextRequest) {
 
     if (!existingRow) {
       const bySku = await db
-        .select({ id: products.id, sku: products.sku, slug: products.slug })
+        .select({ id: products.id, sku: products.sku, slug: products.slug, isOffer: products.isOffer, offerPrice: products.offerPrice, unit: products.unit })
         .from(products)
         .where(sql`UPPER(TRIM(${products.sku})) = ${skuUpper}`)
         .limit(1);
@@ -405,6 +442,26 @@ async function handleProductSync(req: NextRequest) {
       if (data.is_offer !== undefined) {
         updateFields.isOffer = data.is_offer;
       }
+      const offerEndsAt = offerEndsAtAfterPosUpdate(existingRow, {
+        isOffer: data.is_offer,
+        offerPrice: data.offer_price === undefined ? undefined : (data.offer_price !== null ? Math.round(data.offer_price) : null),
+        offerEndsAt: data.offer_ends_at,
+      });
+      if (offerEndsAt !== undefined) {
+        updateFields.offerEndsAt = offerEndsAt;
+      }
+      const offerStock = offerStockAfterPosUpdate(existingRow, {
+        isOffer: data.is_offer,
+        offerPrice: data.offer_price === undefined ? undefined : (data.offer_price !== null ? Math.round(data.offer_price) : null),
+        offerStock: data.offer_stock,
+        unit: data.unit,
+      });
+      if (offerStock !== undefined) {
+        updateFields.offerStock = offerStock;
+      }
+      if (data.tier_group !== undefined) {
+        updateFields.tierGroup = cleanTierGroup(data.tier_group);
+      }
       if (data.unit !== undefined) {
         updateFields.unit = data.unit;
       }
@@ -423,6 +480,15 @@ async function handleProductSync(req: NextRequest) {
       if (priceTiers !== undefined) {
         updateFields.priceTiers = priceTiers;
       }
+
+      // El stock de POSVECI todavía no incluye los pedidos web que aún no le
+      // llegaron: se restan para no "devolver" esas ventas (lib/order-stock.ts).
+      const adjusted = await adjustPosStockForPendingWebOrders(productId, {
+        webStock: updateFields.webStock as number | undefined,
+        offerStock: updateFields.offerStock as number | null | undefined,
+      });
+      if (adjusted.webStock !== undefined) updateFields.webStock = adjusted.webStock;
+      if (adjusted.offerStock !== undefined) updateFields.offerStock = adjusted.offerStock;
 
       console.log("[POS_SYNC] Update fields for", skuUpper, ":", JSON.stringify(updateFields));
       await db.update(products).set(updateFields).where(eq(products.id, productId));
@@ -461,12 +527,19 @@ async function handleProductSync(req: NextRequest) {
         taxRate: data.tax_rate ?? null,
         costPrice: data.cost_price != null ? Math.round(data.cost_price) : null,
         priceTiers: priceTiers ?? null,
+        tierGroup: cleanTierGroup(data.tier_group),
+        offerEndsAt: normalizeOfferEndsAt(data.offer_ends_at),
+        offerStock: normalizeOfferStock(data.offer_stock, data.unit),
         isPublished: true,
         createdAt: now,
         updatedAt: now,
       });
       action = "created";
     }
+
+    // Precio suscriptor = (costo + IVA) × (1 + utilidad): si POSVECI cambió el
+    // costo o el IVA, el precio de socio sube o baja con él.
+    await recomputeSubscriptionPrice(db, productId);
 
     // Handle image
     console.log("[POS_SYNC] Fields received:", Object.keys(body));
@@ -478,7 +551,7 @@ async function handleProductSync(req: NextRequest) {
     await emitProductChange(productId, {
       slug: productSlug,
       reason: "sync-product-pos",
-      changedFields: ["name", "price", "stock", "category", "images", "priceTiers"],
+      changedFields: ["name", "price", "stock", "category", "images", "priceTiers", "tierGroup", "offerStock"],
     });
 
     return withCors(

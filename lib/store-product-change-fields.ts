@@ -20,6 +20,7 @@ const mutationKeyMap: Record<string, StoreProductField[]> = {
     equivWeight: ["equivWeight"],
     priceTiers: ["priceTiers"],
     tierGroup: ["tierGroup"],
+    offerStock: ["offerStock"],
 };
 
 export function mapMutationKeysToStoreFields(keys: string[]): StoreProductField[] {

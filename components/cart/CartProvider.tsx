@@ -35,6 +35,11 @@ export interface CartItem {
     tierGroup?: string | null;
     /** Precio de socio, solo presente si quien compra tiene la membresía activa. */
     subscriptionPrice?: number | null;
+    /**
+     * Oferta por stock: lo que queda a precio oferta, en la unidad del producto
+     * (kg en los de peso). El carrito no deja pedir más. null = sin tope.
+     */
+    offerStock?: number | null;
     /** Item de sorteo: `raffle:<raffleId>:<number>`. Cantidad siempre 1 y reserva activa con expiresAt. */
     raffle?: {
         raffleId: string;
@@ -84,6 +89,29 @@ export function getEffectivePrice(
 /** True when the product is sold in kg but displayed as equivalent units */
 export function hasEquiv(item: { equivLabel?: string | null; equivWeight?: number | null }): boolean {
     return Boolean(item.equivLabel && item.equivWeight && item.equivWeight > 0);
+}
+
+/**
+ * Tope de una línea del carrito por oferta por stock, en la cantidad de esa
+ * línea (piezas en los de unidad equivalente, kg en los de peso), o null si no
+ * hay tope. El servidor hace cumplir lo mismo (offerCapError en lib/store-pricing).
+ */
+export function getOfferCartCap(item: Pick<CartItem, 'id' | 'unit' | 'equivLabel' | 'equivWeight' | 'offerStock'>): number | null {
+    if (item.offerStock === null || item.offerStock === undefined) return null;
+    if (hasEquiv(item) && !item.id.endsWith('__kg')) return Math.floor(item.offerStock / item.equivWeight! + 1e-6);
+    if (isWeightUnit(item.unit) || item.id.endsWith('__kg')) return item.offerStock;
+    return Math.floor(item.offerStock);
+}
+
+/** La línea ya llegó a lo que queda en oferta: no se puede sumar más. */
+export function isAtOfferCap(item: CartItem): boolean {
+    const cap = getOfferCartCap(item);
+    return cap !== null && item.quantity >= cap - 1e-6;
+}
+
+function capByOffer(item: Pick<CartItem, 'id' | 'unit' | 'equivLabel' | 'equivWeight' | 'offerStock'>, quantity: number): number {
+    const cap = getOfferCartCap(item);
+    return cap === null ? quantity : Math.min(quantity, cap);
 }
 
 interface CartContextValue {
@@ -149,13 +177,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setItems((prev) => {
             const existing = prev.find((p) => p.id === item.id);
             if (existing) {
-                return prev.map((p) =>
-                    p.id === item.id
-                        ? { ...p, quantity: equiv ? p.quantity + safeQuantity : round2(p.quantity + safeQuantity) }
-                        : p
-                );
+                // El stock en oferta que llega ahora es más nuevo que el guardado.
+                const offerStock = item.offerStock ?? null;
+                const quantity = capByOffer({ ...existing, offerStock }, equiv ? existing.quantity + safeQuantity : round2(existing.quantity + safeQuantity));
+                return prev.map((p) => (p.id === item.id ? { ...p, offerStock, quantity } : p));
             }
-            return [...prev, { ...item, quantity: safeQuantity }];
+            const quantity = capByOffer(item, safeQuantity);
+            if (quantity <= 0) return prev;
+            return [...prev, { ...item, quantity }];
         });
     };
 
@@ -174,7 +203,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             return;
         }
         const safeQuantity = equiv ? Math.max(1, Math.round(quantity)) : round2(Math.max(minQty, quantity));
-        setItems((prev) => prev.map((item) => (item.id === id ? { ...item, quantity: safeQuantity } : item)));
+        setItems((prev) => prev.map((item) => (item.id === id ? { ...item, quantity: capByOffer(item, safeQuantity) } : item)));
     };
 
     const removeItem = (id: string) => {

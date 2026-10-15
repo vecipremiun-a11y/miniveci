@@ -34,6 +34,13 @@ export interface StoreProductPayload {
     price: number;
     offerPrice: number | null;
     isOffer: boolean;
+    /** Fin programado de la oferta (ISO). null = sin oferta o la oferta no vence. */
+    offerEndsAt: string | null;
+    /**
+     * Oferta por stock: unidades que quedan a precio oferta (kg en los de peso).
+     * El carrito no deja pedir más que esto. null = sin oferta o sin límite.
+     */
+    offerStock: number | null;
     stock: number;
     unit: string;
     equivLabel: string | null;

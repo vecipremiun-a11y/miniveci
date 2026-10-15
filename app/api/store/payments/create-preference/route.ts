@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { getSessionCustomerId } from "@/lib/session-customer";
 import { db } from "@/lib/db";
-import { orders, orderItems, orderStatusHistory } from "@/lib/db/schema";
+import { orders, orderInvoices, orderItems, orderStatusHistory } from "@/lib/db/schema";
+import { parseCheckoutInvoice } from "@/lib/validations/invoice";
+import { saveCustomerInvoice } from "@/lib/customer-invoice";
 import { randomUUID } from "crypto";
 import { extractRaffleItems, linkRaffleEntriesToOrder } from "@/lib/raffle-checkout";
 import { recalcStorePricing } from "@/lib/store-pricing";
@@ -60,6 +62,12 @@ export async function POST(req: NextRequest) {
             items: cartItems,
         } = body;
 
+        // "Quiero factura": sin el objeto es boleta.
+        const invoice = parseCheckoutInvoice(body.invoice);
+        if (!invoice.ok) {
+            return NextResponse.json({ error: invoice.error }, { status: 400 });
+        }
+
         // El correo se guarda siempre en minúscula: "Ana@x.cl" y "ana@x.cl" son la
         // misma casilla, y así el pedido calza con la cuenta (Google lo manda en
         // minúscula) y el listado de clientes no la parte en dos.
@@ -116,6 +124,10 @@ export async function POST(req: NextRequest) {
             updatedAt: now,
         });
 
+        if (invoice.invoice) {
+            await db.insert(orderInvoices).values({ orderId, ...invoice.invoice, createdAt: now });
+        }
+
         for (const item of pricedItems) {
             await db.insert(orderItems).values({
                 id: randomUUID(),
@@ -163,6 +175,12 @@ export async function POST(req: NextRequest) {
                 city: shippingCity,
                 addressNotes: shippingNotes,
             }));
+            // Datos de factura de este pedido → quedan como los guardados del cliente.
+            const orderInvoice = invoice.invoice;
+            if (orderInvoice) {
+                after(() => saveCustomerInvoice(customerId, orderInvoice)
+                    .catch((err) => console.error(`[INVOICE] no se guardó en la cuenta (${orderNumber}):`, (err as Error).message)));
+            }
         }
 
         // Create preference (precios ya verificados server-side)

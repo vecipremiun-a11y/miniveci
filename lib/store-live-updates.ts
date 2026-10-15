@@ -29,6 +29,8 @@ export interface SerializedStoreOrder {
     status: string;
     paymentMethod: string;
     paymentStatus: string;
+    /** Motivo que dio el local al cancelar (lib/order-cancel-reason.ts). */
+    cancelReason?: string | null;
     subtotal: number;
     shippingCost: number;
     total: number;

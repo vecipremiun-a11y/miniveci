@@ -46,6 +46,40 @@
   --color-tomate-suave: #fbe9e4;
   --color-choclo: #e9a519;        /* solo destacados                 */
   --color-choclo-suave: #fcf1da;
+
+  /* ── Tokens de shadcn/ui (components/ui, panel admin) ─────────────
+     Sin estos, Tailwind v4 no genera bg-primary, bg-popover, etc. y los
+     botones y menús desplegables quedaban transparentes. Paleta slate. */
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0f172a;
+  --color-primary: #0f172a;
+  --color-primary-foreground: #f8fafc;
+  --color-secondary: #e2e8f0;
+  --color-secondary-foreground: #0f172a;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-accent: #f1f5f9;
+  --color-accent-foreground: #0f172a;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e2e8f0;
+  --color-input: #cbd5e1;
+  --color-ring: #64748b;
+}
+
+/* Tailwind v4 pinta `border` con currentColor; shadcn espera el gris de
+   --color-border. Solo en el panel y en los popups de Radix (van en portal),
+   para no tocar los bordes de la tienda. En @layer base para que cualquier
+   border-* explícito siga ganando. */
+@layer base {
+  .admin-shell *,
+  [data-radix-popper-content-wrapper] *,
+  [role="alertdialog"],
+  [role="alertdialog"] * {
+    border-color: var(--color-border);
+  }
 }
 
 /* Toldo de feria: banda rayada verde/blanco */

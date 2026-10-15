@@ -83,11 +83,39 @@ export interface StoreOrderClientPayload {
     rut: string | null;
 }
 
+export interface StoreOrderInvoicePayload {
+    rut: string;
+    razon_social: string;
+    giro: string | null;
+    direccion: string | null;
+    comuna: string | null;
+    ciudad: string | null;
+    email: string | null;
+}
+
 export interface StoreOrderCreatedPayload {
     external_order_id: string;
     public_code: string;
     order_type: "store";
     payment_method: "webpay" | "transferencia" | "contra_entrega";
+    /**
+     * "paid": ya se pagó en la web → POSVECI registra la venta al recibirlo.
+     * "pending": se cobra al entregar → POSVECI registra la venta al cobrar.
+     * En los dos casos miniveci ya descontó su stock, y POSVECI separa el suyo
+     * al recibirlo (acuerdo de stock, ver lib/order-stock.ts).
+     */
+    payment_status: "paid" | "pending";
+    /**
+     * Solo transferencias: URL del comprobante que subió el cliente. POSVECI la
+     * muestra con "Ver comprobante" y, al confirmarlo, avisa por el callback de
+     * estado con `payment_status: "paid"`.
+     */
+    payment_proof_url?: string;
+    /**
+     * Solo si el cliente marcó "Quiero factura". Sin RUT o razón social POSVECI
+     * lo ignora y hace boleta.
+     */
+    invoice?: StoreOrderInvoicePayload;
     method: "pickup" | "delivery";
     address: string | null;
     delivery_fee: number;
@@ -377,12 +405,14 @@ const STORE_RETRY_DELAYS_MS = [2000, 5000];
  *   4xx                                  → error definitivo, no reintentar
  * Best-effort: si POSVECI no está configurado o falla definitivamente,
  * log y seguir — nunca bloquea la creación del pedido en miniveci.
+ *
+ * Devuelve true si POSVECI lo recibió (nuevo o duplicado).
  */
-export async function publishStoreOrderCreated(payload: StoreOrderCreatedPayload): Promise<void> {
+export async function publishStoreOrderCreated(payload: StoreOrderCreatedPayload): Promise<boolean> {
     const cfg = getConfig();
     if (!cfg) {
         console.log("[POSVECI] env vars no configuradas, omitiendo publish de pedido store");
-        return;
+        return false;
     }
 
     const init: RequestInit = {
@@ -400,13 +430,13 @@ export async function publishStoreOrderCreated(payload: StoreOrderCreatedPayload
 
         if (res && res.ok) {
             console.log(`[POSVECI] pedido store ${payload.public_code} publicado OK (intento ${attempt})`);
-            return;
+            return true;
         }
         if (res && res.status < 500) {
             // 4xx: reenviar no lo va a arreglar
             const text = await res.text().catch(() => "");
             console.error(`[POSVECI] pedido store ${payload.public_code} rechazado ${res.status}:`, text.slice(0, 300));
-            return;
+            return false;
         }
 
         // Red/timeout o 5xx → reintentar con backoff
@@ -419,6 +449,7 @@ export async function publishStoreOrderCreated(payload: StoreOrderCreatedPayload
             console.error(`[POSVECI] pedido store ${payload.public_code} falló definitivamente tras ${maxAttempts} intentos (${detail})`);
         }
     }
+    return false;
 }
 
 /**

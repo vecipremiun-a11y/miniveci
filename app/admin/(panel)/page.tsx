@@ -3,8 +3,13 @@ import { SalesChart } from "@/components/admin/dashboard/SalesChart";
 import { RecentOrders } from "@/components/admin/dashboard/RecentOrders";
 import { TopProducts } from "@/components/admin/dashboard/TopProducts";
 import { SystemAlerts } from "@/components/admin/dashboard/SystemAlerts";
+import { getDashboardData } from "@/lib/admin-dashboard";
 
-export default function AdminDashboard() {
+export const dynamic = "force-dynamic";
+
+export default async function AdminDashboard() {
+    const data = await getDashboardData();
+
     return (
         <div className="space-y-4 sm:space-y-6">
             <div>
@@ -15,27 +20,27 @@ export default function AdminDashboard() {
             </div>
 
             {/* Top Stats */}
-            <StatsCards />
+            <StatsCards stats={data.stats} />
 
             {/* Main Content Grid */}
             <div className="grid gap-4 sm:gap-6 lg:grid-cols-7">
                 {/* Chart Section */}
                 <div className="lg:col-span-4 min-w-0">
-                    <SalesChart />
+                    <SalesChart sales={data.sales} />
                 </div>
 
                 {/* System Alerts - Right side on large screens */}
                 <div className="lg:col-span-3 min-w-0">
-                    <SystemAlerts />
+                    <SystemAlerts alerts={data.alerts} />
                 </div>
             </div>
 
             <div className="grid gap-4 sm:gap-6 lg:grid-cols-5">
                 {/* Recent Orders */}
-                <RecentOrders />
+                <RecentOrders orders={data.recentOrders} />
 
                 {/* Top Products */}
-                <TopProducts />
+                <TopProducts products={data.topProducts} />
             </div>
         </div>
     );

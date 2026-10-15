@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
-import { bakeryOrders, bakeryOrderItems, orders, orderItems, orderStatusHistory, products } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { bakeryOrders, bakeryOrderItems, orders, orderStatusHistory } from "@/lib/db/schema";
+import { applyOrderStock, emitOrderStockChange, type TouchedProduct } from "@/lib/order-stock";
+import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { canTransition, serializeOrder } from "@/lib/bakery";
 import { publishBakeryEvent } from "@/lib/bakery-live-updates";
 import { publishStoreOrderEvent } from "@/lib/store-live-updates";
-import { emitProductChange } from "@/lib/product-live-updates";
 import { notifyOrderStatusChanged } from "@/lib/fcm";
 import { bakeryUpdateStatusSchema, type BakeryStatus } from "@/lib/validations/bakery";
-import { canStoreTransition, mapPosStatusToStore, STORE_ACTIVE_STATES } from "@/lib/store-status";
+import { canStoreTransition, mapPosStatusToStore } from "@/lib/store-status";
+import { POSVECI_ACTOR } from "@/lib/order-cancel-reason";
 import { ZodError } from "zod";
 import { requirePosCredentials, withPosCors } from "@/lib/pos-auth";
 
@@ -22,7 +23,8 @@ export async function OPTIONS() {
 /**
  * PATCH /api/pos/bakery/orders/:id/status
  *
- * Body: { "status": "confirmed" | "preparing" | "ready" | "delivered" | "cancelled", "reason"?: "..." }
+ * Body: { "status": "confirmed" | "preparing" | "ready" | "delivered" | "cancelled",
+ *         "reason"?: "...", "payment_status"?: "paid" }
  *
  * Callback de estado de POSVECI. Resuelve ENCARGOS de amasandería (bakery_orders)
  * y también PEDIDOS NORMALES de tienda (orders): si el id/código no matchea un
@@ -32,6 +34,8 @@ export async function OPTIONS() {
  * acepta bloque `delivery` con pesos reales, publica SSE para /admin/encargos.
  * Tienda: mapea el estado al vocabulario de tienda, ignora `delivery`, publica
  * SSE para /admin/pedidos y aplica la misma gestión de stock web que el admin.
+ * `payment_status: "paid"` (el local confirmó la transferencia) marca el pedido
+ * de tienda como pagado; en encargos se ignora.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const denial = await requirePosCredentials(req);
@@ -40,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     try {
         const { id: idOrCode } = await params;
         const body = await req.json().catch(() => ({}));
-        const { status, reason, delivery } = bakeryUpdateStatusSchema.parse(body);
+        const { status, reason, delivery, payment_status: paymentStatus } = bakeryUpdateStatusSchema.parse(body);
 
         // Detalle real de entrega (POSVECI lo manda al pasar a 'delivered'): mapear a camelCase.
         const deliveryDetail = delivery ? {
@@ -67,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         if (!order) {
             // No es un encargo: puede ser un pedido normal de tienda (POSVECI usa
             // el mismo endpoint de callback para ambos, con el mismo public_code).
-            return await patchStoreOrderStatus(idOrCode, isPublicCode, status, reason);
+            return await patchStoreOrderStatus(idOrCode, isPublicCode, status, reason, paymentStatus);
         }
 
         const from = order.status as BakeryStatus;
@@ -134,12 +138,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
  * out_for_delivery→shipped, etc.), valida la transición y aplica la misma
  * gestión de stock web que /api/admin/orders/[id]/status. El bloque `delivery`
  * del body se IGNORA (es para pesos reales de encargos).
+ *
+ * Transferencias: el pedido queda con pago pendiente hasta que el local revisa
+ * el comprobante. Si lo confirma, POSVECI manda `payment_status: "paid"`
+ * (normalmente con `status: "preparing"`) y el pedido queda pagado. Si lo
+ * rechaza, cancela con un `reason` que se le muestra al cliente.
  */
 async function patchStoreOrderStatus(
     idOrCode: string,
     isPublicCode: boolean,
     posStatus: BakeryStatus,
     reason: string | null | undefined,
+    posPaymentStatus: "pending" | "paid" | null | undefined,
 ) {
     const order = await db.query.orders.findFirst({
         where: isPublicCode
@@ -158,13 +168,16 @@ async function patchStoreOrderStatus(
     }
 
     const from = order.status ?? "new";
-    if (status === from) {
+    const statusChanged = status !== from;
+    const paymentConfirmed = posPaymentStatus === "paid" && order.paymentStatus !== "paid";
+    if (!statusChanged && !paymentConfirmed) {
         // Reintento del POS con el mismo estado → no-op idempotente
         return withPosCors(NextResponse.json({
             success: true, orderType: "store", publicCode: order.orderNumber, status,
+            paymentStatus: order.paymentStatus ?? "pending",
         }));
     }
-    if (!canStoreTransition(from, status)) {
+    if (statusChanged && !canStoreTransition(from, status)) {
         return withPosCors(NextResponse.json({
             error: `Transición no permitida: ${from} → ${status}`,
             from,
@@ -172,90 +185,78 @@ async function patchStoreOrderStatus(
         }, { status: 400 }));
     }
 
+    // POSVECI solo entrega un pedido cobrado ("Cobrar y entregar"): entregado =
+    // venta completa, también para los de contra entrega.
+    const paymentStatus = paymentConfirmed || status === "delivered" ? "paid" : (order.paymentStatus ?? "pending");
+    const cancelReason = status === "cancelled" ? (reason?.trim() || null) : null;
     const now = new Date().toISOString();
     // Productos cuyo stock cambió, para emitir SSE fuera de la transacción.
-    let touchedProducts: Array<{ productId: string; slug: string | null }> = [];
+    let touchedProducts: TouchedProduct[] = [];
+
+    let notes: string | null;
+    if (status === "cancelled") {
+        // Es el motivo que ve el cliente (lib/order-cancel-reason.ts): sin motivo, vacía.
+        notes = cancelReason;
+    } else if (paymentConfirmed) {
+        notes = statusChanged
+            ? `El local confirmó el pago y POSVECI cambió el estado de ${from} a ${status}`
+            : "El local confirmó el pago";
+    } else {
+        notes = reason || `POSVECI cambió el estado de ${from} a ${status}`;
+    }
 
     await db.transaction(async (tx) => {
         await tx.update(orders)
-            .set({ status, updatedAt: now })
+            .set({ status, paymentStatus, updatedAt: now })
             .where(eq(orders.id, order.id));
 
         await tx.insert(orderStatusHistory).values({
             id: randomUUID(),
             orderId: order.id,
             status,
-            changedBy: "posveci",
-            notes: reason || `POSVECI cambió el estado de ${from} a ${status}`,
+            changedBy: POSVECI_ACTOR,
+            notes,
             createdAt: now,
         });
 
-        // Stock web — misma regla que el admin: descuenta al salir de "new" a un
-        // estado activo, repone al cancelar un pedido cuyo stock ya se descontó.
-        let stockAction: "deduct" | "restore" | null = null;
-        if (from === "new" && STORE_ACTIVE_STATES.includes(status)) {
-            stockAction = "deduct";
-        } else if (status === "cancelled" && from !== "new") {
-            stockAction = "restore";
+        // Stock web (acuerdo con POSVECI, ver lib/order-stock.ts): miniveci ya lo
+        // descontó cuando el pedido quedó firme, y los estados del POS
+        // (confirmado, preparando, en camino, entregado) no lo mueven. Solo la
+        // cancelación lo devuelve, una vez.
+        if (status === "cancelled") {
+            touchedProducts = await applyOrderStock(tx, order.id, "restore");
         }
+    });
 
-        if (stockAction) {
-            const itemRows = await tx.select({
-                productId: orderItems.productId,
-                quantity: orderItems.quantity,
-                slug: products.slug,
-            })
-                .from(orderItems)
-                .leftJoin(products, eq(orderItems.productId, products.id))
-                .where(eq(orderItems.orderId, order.id));
+    await emitOrderStockChange(touchedProducts, `pos-order-status:${status}`);
 
-            for (const it of itemRows) {
-                if (!it.productId) continue;
-                const expr = stockAction === "deduct"
-                    ? sql`${products.webStock} - ${it.quantity}`
-                    : sql`${products.webStock} + ${it.quantity}`;
-                await tx.update(products).set({ webStock: expr }).where(eq(products.id, it.productId));
+    if (statusChanged) {
+        // SSE para que /admin/pedidos refleje el cambio en vivo
+        publishStoreOrderEvent({
+            type: "order.status_changed",
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            status,
+            previousStatus: from,
+            occurredAt: now,
+        });
+
+        // Push FCM al cliente del pedido — background after response
+        after(async () => {
+            try {
+                await notifyOrderStatusChanged({
+                    userId: order.customerId,
+                    status,
+                    source: "store",
+                    publicCode: order.orderNumber,
+                    orderId: order.id,
+                    reason: cancelReason,
+                });
+            } catch (err) {
+                console.error(`[FCM] notify threw para ${order.orderNumber}:`, (err as Error).message);
             }
-
-            touchedProducts = itemRows
-                .filter((i) => !!i.productId)
-                .map((i) => ({ productId: i.productId as string, slug: i.slug ?? null }));
-        }
-    });
-
-    if (touchedProducts.length > 0) {
-        const uniq = new Map(touchedProducts.map((p) => [p.productId, p.slug]));
-        await Promise.all(Array.from(uniq).map(([productId, slug]) => emitProductChange(productId, {
-            slug,
-            reason: `pos-order-status:${status}`,
-            changedFields: ["stock"],
-        })));
+        });
     }
-
-    // SSE para que /admin/pedidos refleje el cambio en vivo
-    publishStoreOrderEvent({
-        type: "order.status_changed",
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        status,
-        previousStatus: from,
-        occurredAt: now,
-    });
-
-    // Push FCM al cliente del pedido — background after response
-    after(async () => {
-        try {
-            await notifyOrderStatusChanged({
-                userId: order.customerId,
-                status,
-                source: "store",
-                publicCode: order.orderNumber,
-                orderId: order.id,
-            });
-        } catch (err) {
-            console.error(`[FCM] notify threw para ${order.orderNumber}:`, (err as Error).message);
-        }
-    });
 
     return withPosCors(NextResponse.json({
         success: true,
@@ -263,5 +264,6 @@ async function patchStoreOrderStatus(
         publicCode: order.orderNumber,
         status,
         previousStatus: from,
+        paymentStatus,
     }));
 }

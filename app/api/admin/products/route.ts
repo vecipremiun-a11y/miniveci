@@ -8,7 +8,8 @@ import { tokenizeSearch } from "@/lib/search-text";
 import { searchTokensCondition } from "@/lib/search-sql";
 import { desc, asc, eq, and, sql, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
-import { cleanTierGroup } from "@/lib/product-price";
+import { cleanTierGroup, normalizeOfferEndsAt, normalizeOfferStock } from "@/lib/product-price";
+import { recomputeSubscriptionPrice } from "@/lib/subscription-price";
 
 export async function GET(req: NextRequest) {
     try {
@@ -160,10 +161,16 @@ export async function POST(req: NextRequest) {
             badges: productData.badges,
             priceTiers: productData.priceTiers ?? null,
             tierGroup: cleanTierGroup(productData.tierGroup),
-            subscriptionPrice: productData.subscriptionPrice ?? null,
+            offerEndsAt: normalizeOfferEndsAt(productData.offerEndsAt),
+            offerStock: normalizeOfferStock(productData.offerStock, productData.unit),
+            costPrice: productData.costPrice ?? null,
+            taxRate: productData.taxRate ?? null,
+            subscriptionMargin: productData.subscriptionMargin ?? null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         }).returning();
+        // Precio suscriptor = (costo + IVA) × (1 + utilidad), calculado acá.
+        await recomputeSubscriptionPrice(db, newProduct[0].id);
 
         await emitProductChange(newProduct[0].id, {
             slug: newProduct[0].slug,

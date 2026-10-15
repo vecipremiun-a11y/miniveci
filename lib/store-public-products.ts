@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { isOfferActive } from "@/lib/product-price";
 import { productImages, products } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { resolveProduct, type CategoryInput, type ProductInput } from "@/lib/services/product-resolver";
@@ -30,6 +31,9 @@ export async function getPublicStoreProductById(productId: string): Promise<Stor
         return null;
     }
 
+    // Oferta vencida (offerEndsAt en el pasado) = precio normal para todos.
+    const offerActive = isOfferActive(rawProduct);
+
     return {
         id: rawProduct.id,
         name: rawProduct.name,
@@ -38,8 +42,10 @@ export async function getPublicStoreProductById(productId: string): Promise<Stor
         seoTitle: rawProduct.seoTitle,
         seoDescription: rawProduct.seoDescription,
         price: resolved.resolved_price,
-        offerPrice: rawProduct.isOffer && rawProduct.offerPrice ? rawProduct.offerPrice : null,
-        isOffer: Boolean(rawProduct.isOffer),
+        offerPrice: offerActive ? rawProduct.offerPrice : null,
+        isOffer: offerActive,
+        offerEndsAt: offerActive ? rawProduct.offerEndsAt ?? null : null,
+        offerStock: offerActive ? rawProduct.offerStock ?? null : null,
         stock: resolved.resolved_stock,
         unit: rawProduct.unit || "Und",
         equivLabel: rawProduct.equivLabel || null,

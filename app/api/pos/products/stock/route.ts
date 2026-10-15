@@ -4,6 +4,8 @@ import { apiCredentials, products } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { emitProductChange } from "@/lib/product-live-updates";
+import { normalizeOfferStock } from "@/lib/product-price";
+import { adjustPosStockForPendingWebOrders } from "@/lib/order-stock";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,11 @@ const syncStockSchema = z.object({
     stock: z.number().optional(),
     cantidad_vendida: z.number().positive("cantidad_vendida inválida").optional(),
     unit: z.string().trim().optional(),
+    // Oferta por stock: lo que QUEDA a precio oferta después de la venta en tienda.
+    // Ausente = no tocar; null = sin límite. Así no hace falta un sync completo
+    // del producto por cada venta.
+    offer_stock: z.number().min(0).nullable().optional(),
+    offerStock: z.number().min(0).nullable().optional(),
 }).refine((payload) => Boolean(payload.sku || payload.product_id), {
     message: "Debe enviar sku o product_id",
 }).refine((payload) => payload.stock !== undefined || payload.cantidad_vendida !== undefined, {
@@ -83,7 +90,9 @@ async function handleStockSync(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { sku, product_id, stock: rawStock, cantidad_vendida, unit: payloadUnit } = syncStockSchema.parse(body);
+        const parsed = syncStockSchema.parse(body);
+        const { sku, product_id, stock: rawStock, cantidad_vendida, unit: payloadUnit } = parsed;
+        const rawOfferStock = parsed.offer_stock !== undefined ? parsed.offer_stock : parsed.offerStock;
 
         let targetProduct = null as null | { id: string; sku: string; slug: string | null };
 
@@ -117,13 +126,24 @@ async function handleStockSync(req: NextRequest) {
             columns: { unit: true },
         });
         const effectiveUnit = payloadUnit ?? existingProduct?.unit ?? "un";
-        const stock = rawStock !== undefined ? normalizeStock(rawStock, effectiveUnit) : undefined;
+        // El stock de POSVECI es absoluto pero todavía no incluye los pedidos web
+        // que aún no le llegaron: se restan para no "devolver" esas ventas
+        // (lib/order-stock.ts).
+        const adjusted = await adjustPosStockForPendingWebOrders(targetProduct.id, {
+            webStock: rawStock !== undefined ? normalizeStock(rawStock, effectiveUnit) : undefined,
+            offerStock: rawOfferStock !== undefined ? normalizeOfferStock(rawOfferStock, effectiveUnit) : undefined,
+        });
+        const stock = adjusted.webStock;
+        const offerStockFields = adjusted.offerStock !== undefined
+            ? { offerStock: adjusted.offerStock }
+            : {};
 
         const updated = stock !== undefined
             ? await db
                 .update(products)
                 .set({
                     webStock: stock,
+                    ...offerStockFields,
                     updatedAt: new Date().toISOString(),
                 })
                 .where(eq(products.id, targetProduct.id))
@@ -137,6 +157,7 @@ async function handleStockSync(req: NextRequest) {
                 .update(products)
                 .set({
                     webStock: sql`MAX(${products.webStock} - ${cantidad_vendida ?? 0}, 0)`,
+                    ...offerStockFields,
                     updatedAt: new Date().toISOString(),
                 })
                 .where(eq(products.id, targetProduct.id))
@@ -160,7 +181,7 @@ async function handleStockSync(req: NextRequest) {
         await emitProductChange(updated[0].id, {
             slug: updated[0].slug,
             reason: "sync-stock-pos",
-            changedFields: ["stock"],
+            changedFields: rawOfferStock !== undefined ? ["stock", "offerStock"] : ["stock"],
         });
 
         return withCors(NextResponse.json({

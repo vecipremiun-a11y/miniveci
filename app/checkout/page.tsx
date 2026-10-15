@@ -13,6 +13,7 @@ import { es } from 'date-fns/locale';
 import { useSession } from 'next-auth/react';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { AddressModal, type SavedAddress } from '@/components/checkout/AddressModal';
+import { formatRut, isValidRut } from '@/lib/rut';
 
 /**
  * Ultimo checkout completado en este navegador. Precarga a los invitados y tambien
@@ -131,6 +132,18 @@ export default function CheckoutPage() {
     const [uploadingReceipt, setUploadingReceipt] = useState(false);
     const [copiedField, setCopiedField] = useState('');
 
+    // "Quiero factura" (cualquier medio de pago). Viaja a POSVECI con el pedido y
+    // el local emite la factura; sin esto se hace boleta.
+    const [wantsInvoice, setWantsInvoice] = useState(false);
+    const [invoice, setInvoice] = useState({
+        rut: '', razonSocial: '', giro: '', direccion: '', comuna: '', ciudad: '', email: '',
+    });
+    const setInvoiceField = (field: keyof typeof invoice, value: string) =>
+        setInvoice(prev => ({ ...prev, [field]: value }));
+    // Datos guardados en "Mi cuenta → Facturación": precargan los campos, pero el
+    // check queda sin marcar (la factura se pide pedido a pedido).
+    const [savedInvoiceLabel, setSavedInvoiceLabel] = useState('');
+
     // Saved addresses
     const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
     const [selectedAddressId, setSelectedAddressId] = useState<string | 'custom'>('custom');
@@ -185,6 +198,11 @@ export default function CheckoutPage() {
             // con su cuenta de cliente vinculada (session.user.customerId). Antes
             // se miraba solo el rol y al admin nunca le cargaba su libreta.
             if (session?.user?.customerId || session?.user?.role === 'customer') {
+                const savedInvoicePromise: Promise<{ invoice: Record<keyof typeof invoice, string | null> | null } | null> =
+                    fetch('/api/store/customer/invoice')
+                        .then(r => (r.ok ? r.json() : null))
+                        .catch(() => null);
+
                 const profile: CustomerProfile | null = await fetch('/api/store/customer')
                     .then(r => (r.ok ? r.json() : null))
                     .catch(() => null);
@@ -209,6 +227,18 @@ export default function CheckoutPage() {
                 } else if (profile?.address) {
                     // Cuentas viejas (o registro sin comuna): la direccion solo vive en el perfil.
                     fillAddress(profile);
+                }
+
+                const saved = (await savedInvoicePromise)?.invoice;
+                if (saved) {
+                    setInvoice(prev => {
+                        const next = { ...prev };
+                        for (const key of Object.keys(prev) as (keyof typeof prev)[]) {
+                            next[key] = prev[key] || saved[key] || '';
+                        }
+                        return next;
+                    });
+                    setSavedInvoiceLabel(`${saved.razonSocial} · RUT ${saved.rut}`);
                 }
             }
 
@@ -404,6 +434,14 @@ export default function CheckoutPage() {
             setSubmitError('Sube el comprobante de transferencia antes de finalizar.');
             return;
         }
+        if (wantsInvoice && !isValidRut(invoice.rut)) {
+            setSubmitError('El RUT de la factura no es válido.');
+            return;
+        }
+        if (wantsInvoice && !invoice.razonSocial.trim()) {
+            setSubmitError('Ingresa la razón social de la factura.');
+            return;
+        }
 
         setIsSubmitting(true);
         // Se guarda al confirmar para que el proximo checkout salga precargado incluso
@@ -437,6 +475,7 @@ export default function CheckoutPage() {
                 shippingNotes: contactNotes,
                 paymentMethod,
                 paymentId: paymentMethod === 'transferencia' ? receiptUrl : null,
+                invoice: wantsInvoice ? invoice : null,
                 couponCode: appliedCoupon || null,
                 subtotal,
                 discount,
@@ -572,6 +611,42 @@ export default function CheckoutPage() {
                                     </div>
                                 </div>
                             )}
+
+                            <div className={`mt-4 rounded-xl border p-4 transition-colors ${wantsInvoice ? 'border-blue-300 bg-blue-50/60' : 'border-slate-200 bg-white/80'}`}>
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={wantsInvoice}
+                                        onChange={(e) => setWantsInvoice(e.target.checked)}
+                                        className="mt-0.5 w-4 h-4 accent-blue-600"
+                                    />
+                                    <span>
+                                        <span className="block text-sm font-bold text-slate-700">Quiero factura</span>
+                                        <span className="block text-xs text-slate-500">
+                                            {savedInvoiceLabel && !wantsInvoice
+                                                ? `Tus datos guardados: ${savedInvoiceLabel}`
+                                                : 'Para empresas, personas con inicio de actividades en el SII u organismos públicos.'}
+                                        </span>
+                                    </span>
+                                </label>
+                                {wantsInvoice && (
+                                    <div className="mt-4 space-y-2">
+                                        <div className="grid sm:grid-cols-2 gap-4">
+                                            <InputField label="RUT *" value={invoice.rut} onChange={(v) => setInvoiceField('rut', formatRut(v))} />
+                                            <InputField label="Razón social *" value={invoice.razonSocial} onChange={(v) => setInvoiceField('razonSocial', v)} />
+                                            <InputField label="Giro" value={invoice.giro} onChange={(v) => setInvoiceField('giro', v)} />
+                                            <InputField label="Correo para la factura (opcional)" value={invoice.email} onChange={(v) => setInvoiceField('email', v)} />
+                                            <InputField label="Dirección" value={invoice.direccion} onChange={(v) => setInvoiceField('direccion', v)} className="sm:col-span-2" />
+                                            <InputField label="Comuna" value={invoice.comuna} onChange={(v) => setInvoiceField('comuna', v)} />
+                                            <InputField label="Ciudad" value={invoice.ciudad} onChange={(v) => setInvoiceField('ciudad', v)} />
+                                        </div>
+                                        <p className="text-[11px] text-slate-400">
+                                            El local emite la factura con estos datos, con cualquier medio de pago.
+                                            {hasStoreAccount && ' Quedan guardados en Mi cuenta para tus próximas compras.'}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div>

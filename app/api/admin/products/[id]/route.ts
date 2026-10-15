@@ -7,7 +7,8 @@ import { mapMutationKeysToStoreFields } from "@/lib/store-product-change-fields"
 import { productSchema } from "@/lib/validations/product";
 import { eq } from "drizzle-orm";
 import { ZodError } from "zod";
-import { cleanTierGroup } from "@/lib/product-price";
+import { cleanTierGroup, normalizeOfferEndsAt, normalizeOfferStock } from "@/lib/product-price";
+import { recomputeSubscriptionPrice } from "@/lib/subscription-price";
 
 export async function GET(
     req: NextRequest,
@@ -58,11 +59,17 @@ export async function PUT(
         if (validatedData.tierGroup !== undefined) {
             validatedData.tierGroup = cleanTierGroup(validatedData.tierGroup);
         }
+        if (validatedData.offerEndsAt !== undefined) {
+            validatedData.offerEndsAt = normalizeOfferEndsAt(validatedData.offerEndsAt);
+        }
 
         const existingResult = await db.select().from(products).where(eq(products.id, id)).limit(1);
         const existingProduct = existingResult[0];
         if (!existingProduct) {
             return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 });
+        }
+        if (validatedData.offerStock !== undefined) {
+            validatedData.offerStock = normalizeOfferStock(validatedData.offerStock, validatedData.unit ?? existingProduct.unit);
         }
 
         // Check SKU uniqueness if changed
@@ -81,6 +88,9 @@ export async function PUT(
             if (existingSlug) return NextResponse.json({ error: "El slug ya existe" }, { status: 409 });
         }
 
+        // El precio suscriptor no se escribe: se calcula del costo, el IVA y la utilidad.
+        delete validatedData.subscriptionPrice;
+
         const { categoryId, ...productData } = validatedData;
         const changedKeys = Object.entries(productData)
             .filter(([key, value]) => existingProduct[key as keyof typeof existingProduct] !== value)
@@ -95,6 +105,7 @@ export async function PUT(
             categoryId: categoryId, // Optional update
             updatedAt: new Date().toISOString(),
         }).where(eq(products.id, id));
+        await recomputeSubscriptionPrice(db, id);
 
         await emitProductChange(id, {
             slug: validatedData.slug || existingProduct.slug,

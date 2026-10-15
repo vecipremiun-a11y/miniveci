@@ -22,6 +22,8 @@ interface Product {
     subscriptionPrice?: number | null;
     badges?: string[] | null;
     tierGroup?: string | null;
+    offerEndsAt?: string | null;
+    offerStock?: number | null;
 }
 
 interface Category {
@@ -253,6 +255,8 @@ export function FreshCarousel() {
                                         subscriptionPrice={p.subscriptionPrice}
                                         badges={p.badges}
                                         tierGroup={p.tierGroup}
+                                        offerEndsAt={p.offerEndsAt}
+                                        offerStock={p.offerStock}
                                     />
                                 </div>
                             ))}

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isOfferActive } from "@/lib/product-price";
 import { db } from "@/lib/db";
 import { products, productImages } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -39,6 +40,9 @@ export async function GET(req: NextRequest, context: any) {
         // Solo se manda a quien ES suscriptor (ver la lista de productos).
         const isSubscriber = await hasActiveSubscription(await getSessionCustomerId());
 
+        // Oferta vencida (offerEndsAt en el pasado) = precio normal para todos.
+        const offerActive = isOfferActive(rawProduct);
+
         const publicProduct = {
             id: rawProduct.id,
             name: rawProduct.name,
@@ -47,8 +51,10 @@ export async function GET(req: NextRequest, context: any) {
             seoTitle: rawProduct.seoTitle,
             seoDescription: rawProduct.seoDescription,
             price: resolved.resolved_price,
-            offerPrice: rawProduct.isOffer && rawProduct.offerPrice ? rawProduct.offerPrice : null,
-            isOffer: Boolean(rawProduct.isOffer),
+            offerPrice: offerActive ? rawProduct.offerPrice : null,
+            isOffer: offerActive,
+            offerEndsAt: offerActive ? rawProduct.offerEndsAt ?? null : null,
+            offerStock: offerActive ? rawProduct.offerStock ?? null : null,
             subscriptionPrice: isSubscriber && rawProduct.subscriptionPrice ? rawProduct.subscriptionPrice : null,
             stock: resolved.resolved_stock,
             unit: rawProduct.unit || "Und",

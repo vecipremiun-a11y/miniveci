@@ -246,6 +246,8 @@ export function BakeryCarousel() {
                                         subscriptionPrice={p.subscriptionPrice}
                                         badges={p.badges}
                                         tierGroup={p.tierGroup}
+                                        offerEndsAt={p.offerEndsAt}
+                                        offerStock={p.offerStock}
                                     />
                                 </div>
                             ))}

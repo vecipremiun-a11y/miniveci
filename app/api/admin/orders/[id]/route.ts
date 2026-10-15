@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders, orderItems, orderStatusHistory, productImages } from "@/lib/db/schema";
+import { orderInvoices, orders, orderItems, orderStatusHistory, productImages } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
 import { eq, desc, inArray, and } from "drizzle-orm";
 
@@ -43,7 +43,9 @@ export async function GET(
             .where(eq(orderStatusHistory.orderId, id))
             .orderBy(desc(orderStatusHistory.createdAt));
 
-        return NextResponse.json({ ...order, items: itemsWithImages, history });
+        const invoice = await db.query.orderInvoices.findFirst({ where: eq(orderInvoices.orderId, id) });
+
+        return NextResponse.json({ ...order, items: itemsWithImages, history, invoice: invoice ?? null });
     } catch (error) {
         if (error instanceof AuthError) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

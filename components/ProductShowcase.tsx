@@ -30,6 +30,8 @@ interface Product {
   subscriptionPrice?: number | null;
   badges?: string[] | null;
   tierGroup?: string | null;
+  offerEndsAt?: string | null;
+  offerStock?: number | null;
 }
 
 type FilterKey = "new" | "featured" | "best";
@@ -266,6 +268,8 @@ export function ProductShowcase() {
                     subscriptionPrice={p.subscriptionPrice}
                     badges={p.badges}
                     tierGroup={p.tierGroup}
+                    offerEndsAt={p.offerEndsAt}
+                    offerStock={p.offerStock}
                   />
                 </div>
               ))}

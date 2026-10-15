@@ -3,11 +3,11 @@ import { products, raffles } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 import { isRaffleItemId } from "@/lib/raffle-checkout";
 import { loadStoreDeliveryConfig, resolveShippingCost } from "@/lib/store-config";
-import { resolveUnitPrice, tierQuantities } from "@/lib/product-price";
+import { offerCapError, resolveUnitPrice, tierQuantities } from "@/lib/product-price";
 
 // La regla de precio vive en lib/product-price.ts (sin dependencias de base,
 // para poder testearla sola). Se re-exporta acá para no romper los imports.
-export { resolveUnitPrice, type PriceableProduct } from "@/lib/product-price";
+export { offerCapError, resolveUnitPrice, type PriceableProduct } from "@/lib/product-price";
 
 // ============================================================
 // Recálculo de precios server-side para el checkout WEB.
@@ -127,6 +127,14 @@ export async function recalcStorePricing(
             equivWeight: p?.equivWeight ?? null,
         };
     }));
+
+    const capError = offerCapError(
+        cartItems
+            .filter((it) => !isRaffleItemId(String(it?.id)))
+            .map((it) => ({ productId: String(it!.id), quantity: Number(it?.quantity) || 0 })),
+        productMap,
+    );
+    if (capError) return fail(capError);
 
     const items: PricedCartItem[] = [];
 

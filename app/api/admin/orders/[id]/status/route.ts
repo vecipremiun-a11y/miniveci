@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
-import { orders, orderItems, products, orderStatusHistory } from "@/lib/db/schema";
+import { orders, orderStatusHistory } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
-import { emitProductChange } from "@/lib/product-live-updates";
 import { notifyOrderStatusChanged } from "@/lib/fcm";
-import { syncPaidOrderToPos } from "@/services/pos-sync";
 import { publishPreorderCancelled } from "@/lib/posveci-publisher";
-import { STORE_VALID_TRANSITIONS as validTransitions, STORE_ACTIVE_STATES } from "@/lib/store-status";
-import { eq, sql } from "drizzle-orm";
+import { STORE_VALID_TRANSITIONS as validTransitions, STORE_ACTIVE_STATES, isConfirmedTransfer } from "@/lib/store-status";
+import { applyOrderStock, emitOrderStockChange, type TouchedProduct } from "@/lib/order-stock";
+import { eq } from "drizzle-orm";
 
 export async function PUT(
     req: NextRequest,
@@ -31,13 +30,6 @@ export async function PUT(
         }
 
         const currentStatus = order.status || "new";
-        const orderItemsForUpdate = await db.select({
-            productId: orderItems.productId,
-            productSlug: products.slug,
-        })
-            .from(orderItems)
-            .leftJoin(products, eq(orderItems.productId, products.id))
-            .where(eq(orderItems.orderId, id));
 
         if (!validTransitions[currentStatus]?.includes(newStatus)) {
             return NextResponse.json({
@@ -45,10 +37,15 @@ export async function PUT(
             }, { status: 400 });
         }
 
-        // Handle stock logic based on transitions
-        // This requires executing a transaction Ideally, but Drizzle/LibSQL transactions 
-        // are supported via db.transaction()
+        // La venta de una transferencia confirmada ya está en POSVECI (que
+        // rechaza cancelarla con 409): la devolución la gestiona el local.
+        if ((newStatus === "cancelled" || newStatus === "refunded") && isConfirmedTransfer(order)) {
+            return NextResponse.json({
+                error: "La transferencia ya fue confirmada por el local y la venta está registrada en POSVECI. Si corresponde una devolución, la gestiona el local.",
+            }, { status: 409 });
+        }
 
+        let touched: TouchedProduct[] = [];
         await db.transaction(async (tx) => {
 
             // 1. Update Order Status
@@ -67,49 +64,18 @@ export async function PUT(
                 createdAt: new Date().toISOString()
             });
 
-            // 3. Stock Management
-            const activeStates = STORE_ACTIVE_STATES;
-
-            if (currentStatus === "new" && activeStates.includes(newStatus)) {
-                // Deduct stock
-                const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, id));
-                for (const item of items) {
-                    if (item.productId) {
-                        await tx.update(products)
-                            .set({ webStock: sql`${products.webStock} - ${item.quantity}` })
-                            .where(eq(products.id, item.productId));
-                    }
-                }
-            } else if ((newStatus === "cancelled" || newStatus === "refunded") && currentStatus !== "new") {
-                // If it was paid or further, we return the stock back
-                const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, id));
-                for (const item of items) {
-                    if (item.productId) {
-                        await tx.update(products)
-                            .set({ webStock: sql`${products.webStock} + ${item.quantity}` })
-                            .where(eq(products.id, item.productId));
-                    }
-                }
+            // 3. Stock (ver lib/order-stock.ts): se devuelve al cancelar o
+            // reembolsar. Si el pedido avanza y su stock todavía no se había
+            // descontado (pedidos de antes del acuerdo con POSVECI), se descuenta
+            // ahora. La marca del pedido impide hacerlo dos veces.
+            if (newStatus === "cancelled" || newStatus === "refunded") {
+                touched = await applyOrderStock(tx, id, "restore");
+            } else if (STORE_ACTIVE_STATES.includes(newStatus)) {
+                touched = await applyOrderStock(tx, id, "deduct");
             }
         });
 
-        const changedProducts = Array.from(new Map(orderItemsForUpdate
-            .filter((item) => !!item.productId)
-            .map((item) => [item.productId as string, item.productSlug ?? null])).entries());
-
-        await Promise.all(changedProducts.map(([productId, slug]) => emitProductChange(productId, {
-            slug,
-            reason: `order-status:${newStatus}`,
-            changedFields: ["stock"],
-        })));
-
-        if (newStatus === "paid" && currentStatus !== "paid") {
-            try {
-                await syncPaidOrderToPos(id);
-            } catch (syncError) {
-                console.error("[ORDER_STATUS_PUT][POS_SYNC]", syncError);
-            }
-        }
+        await emitOrderStockChange(touched, `order-status:${newStatus}`);
 
         // Push FCM al cliente — background after response
         after(async () => {

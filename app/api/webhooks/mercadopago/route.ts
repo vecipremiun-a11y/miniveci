@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { mpPayment, mpPreApproval } from "@/lib/mercadopago";
 import { db } from "@/lib/db";
-import { orders, orderItems, orderStatusHistory, products, subscriptions } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { orders, orderStatusHistory, subscriptions } from "@/lib/db/schema";
+import { applyOrderStock, emitOrderStockChange, type TouchedProduct } from "@/lib/order-stock";
+import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { confirmRaffleEntriesForOrder, cancelRaffleEntriesForOrder } from "@/lib/raffle-checkout";
-import { emitProductChange } from "@/lib/product-live-updates";
 import { sendStoreOrderToPosveci } from "@/lib/posveci-store";
 import { publishPreorderCancelled } from "@/lib/posveci-publisher";
 import { STORE_ACTIVE_STATES } from "@/lib/store-status";
@@ -259,7 +259,7 @@ export async function POST(req: NextRequest) {
             const TERMINAL_STATES = ["cancelled", "refunded"];
 
             // Productos cuyo stock cambió, para emitir SSE fuera de la transacción.
-            let touchedProducts: Array<{ productId: string; slug: string | null }> = [];
+            let touchedProducts: TouchedProduct[] = [];
             // Estado previo/final del pedido, para decidir notificaciones a POSVECI
             // fuera de la transacción.
             let previousStatus = "new";
@@ -310,50 +310,19 @@ export async function POST(req: NextRequest) {
                     });
                 }
 
-                // 3. Stock — idempotente gracias a las guardas de transición:
-                //    descuenta al pasar de "new" a un estado activo (pago confirmado),
-                //    repone al cancelar/reembolsar una orden cuyo stock ya se había descontado.
-                let stockAction: "deduct" | "restore" | null = null;
-                if (currentStatus === "new" && ACTIVE_STATES.includes(targetStatus)) {
-                    stockAction = "deduct";
-                } else if (TERMINAL_STATES.includes(targetStatus) && currentStatus !== "new" && !TERMINAL_STATES.includes(currentStatus)) {
-                    stockAction = "restore";
-                }
-
-                if (stockAction) {
-                    const itemRows = await tx.select({
-                        productId: orderItems.productId,
-                        quantity: orderItems.quantity,
-                        slug: products.slug,
-                    })
-                        .from(orderItems)
-                        .leftJoin(products, eq(orderItems.productId, products.id))
-                        .where(eq(orderItems.orderId, orderId));
-
-                    for (const it of itemRows) {
-                        if (!it.productId) continue;
-                        const expr = stockAction === "deduct"
-                            ? sql`${products.webStock} - ${it.quantity}`
-                            : sql`${products.webStock} + ${it.quantity}`;
-                        await tx.update(products).set({ webStock: expr }).where(eq(products.id, it.productId));
-                    }
-
-                    touchedProducts = itemRows
-                        .filter((i) => !!i.productId)
-                        .map((i) => ({ productId: i.productId as string, slug: i.slug ?? null }));
+                // 3. Stock (ver lib/order-stock.ts): un pedido de Mercado Pago queda
+                //    firme al aprobarse el pago → se descuenta. Si se cancela o
+                //    reembolsa → se devuelve. La marca del pedido hace que los
+                //    reintentos de MP no lo muevan dos veces.
+                if (TERMINAL_STATES.includes(targetStatus)) {
+                    touchedProducts = await applyOrderStock(tx, orderId, "restore");
+                } else if (paymentStatus === "paid") {
+                    touchedProducts = await applyOrderStock(tx, orderId, "deduct");
                 }
             });
 
             // Emitir actualización de stock en vivo (fuera de la transacción)
-            if (touchedProducts.length > 0) {
-                const uniq = new Map(touchedProducts.map((p) => [p.productId, p.slug]));
-                await Promise.all(Array.from(uniq).map(([productId, slug]) =>
-                    emitProductChange(productId, {
-                        slug,
-                        reason: "mp-webhook:payment",
-                        changedFields: ["stock"],
-                    })));
-            }
+            await emitOrderStockChange(touchedProducts, "mp-webhook:payment");
 
             // Sync raffle entries (según el pago real de MP; idempotente)
             if (paymentStatus === "paid") {

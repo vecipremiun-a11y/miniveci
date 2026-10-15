@@ -1,10 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { extractBearer, verifyAccessToken, AuthHttpError } from "@/lib/mobile-auth";
 import { createOrderPreference, type MpCheckoutOrigin } from "@/lib/mp-checkout";
+import { deductOrderStock } from "@/lib/order-stock";
+import { isReceiptUrl } from "@/lib/payment-receipt";
+import { sendStoreOrderToPosveci } from "@/lib/posveci-store";
 
 export async function POST(req: NextRequest) {
     try {
@@ -118,7 +121,9 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: "Método de pago no válido" }, { status: 400 });
         }
 
-        if (paymentMethod === 'transferencia' && !receiptUrl) {
+        // El comprobante viaja a POSVECI para que el local lo revise: solo uno
+        // subido por /api/store/upload-receipt (ver lib/payment-receipt.ts).
+        if (paymentMethod === 'transferencia' && !isReceiptUrl(receiptUrl)) {
             return NextResponse.json({ error: "Debes subir el comprobante de transferencia" }, { status: 400 });
         }
 
@@ -134,6 +139,17 @@ export async function PUT(req: NextRequest) {
         if (order.paymentStatus === "paid" || order.paymentStatus === "refunded") {
             return NextResponse.json({ error: "Este pedido ya fue pagado" }, { status: 400 });
         }
+        if (order.status === "cancelled" || order.status === "refunded") {
+            return NextResponse.json({ error: "Este pedido está cancelado" }, { status: 400 });
+        }
+        // POSVECI recibe el comprobante solo al recibir el pedido (el reenvío es
+        // idempotente y no lo actualiza): si el pedido ya está en el local, el
+        // comprobante no le llegaría y se le volvería a cobrar al entregar.
+        if (paymentMethod === 'transferencia' && order.posSentAt) {
+            return NextResponse.json({
+                error: "Este pedido ya está en el local. Para pagarlo por transferencia, coordínalo directamente con el local.",
+            }, { status: 409 });
+        }
 
         const paymentId = paymentMethod === 'transferencia' && receiptUrl
             ? receiptUrl
@@ -146,6 +162,20 @@ export async function PUT(req: NextRequest) {
             ...(paymentId ? { paymentId } : {}),
             updatedAt: new Date().toISOString(),
         }).where(eq(orders.id, orderId));
+
+        // Un pedido de Mercado Pago que no se pagó nunca llegó a POSVECI ni
+        // descontó stock (eso pasa al aprobarse el pago). Con transferencia o
+        // contra entrega queda firme ahora, igual que si se hubiera creado así.
+        if (!order.posSentAt) {
+            await deductOrderStock(orderId, "store-order:payment-method");
+            after(async () => {
+                try {
+                    await sendStoreOrderToPosveci(orderId);
+                } catch (err) {
+                    console.error(`[POSVECI] publisher threw para ${order.orderNumber}:`, (err as Error).message);
+                }
+            });
+        }
 
         return NextResponse.json({ success: true });
     } catch (error: unknown) {

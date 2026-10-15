@@ -25,6 +25,10 @@ export const productSchema = z.object({
     // POS fields
     offerPrice: z.coerce.number().min(0).optional().nullable(),
     isOffer: z.boolean().default(false),
+    // Fin programado de la oferta (ISO). null/ausente = la oferta no vence.
+    offerEndsAt: z.string().datetime({ offset: true }).nullable().optional(),
+    // Oferta por stock: unidades que quedan a precio oferta. null/ausente = sin límite.
+    offerStock: z.coerce.number().min(0, "El stock en oferta no puede ser negativo").nullable().optional(),
     unit: z.string().optional().default("Und"),
     equivLabel: z.string().optional().nullable(),
     equivWeight: z.coerce.number().min(0).optional().nullable(),
@@ -33,7 +37,10 @@ export const productSchema = z.object({
     // Cost & Margin
     costPrice: z.coerce.number().min(0).optional().nullable(),
     profitMargin: z.coerce.number().min(0).optional().nullable(),
+    // Calculado en el servidor (subscriptionPriceFor); lo que mande el cliente se ignora.
     subscriptionPrice: z.coerce.number().min(0).optional().nullable(),
+    // Utilidad del precio suscriptor de este producto (%). null = la de todos.
+    subscriptionMargin: z.coerce.number().min(0, "La utilidad no puede ser negativa").max(1000).optional().nullable(),
 
     // Status
     isPublished: z.boolean().default(true),

@@ -30,6 +30,7 @@ interface Order {
     paymentMethod: string | null;
     paymentStatus: string | null;
     paymentId: string | null;
+    cancelReason: string | null;
     deliveryType: string;
     deliveryDate: string | null;
     deliveryTimeSlot: string | null;
@@ -191,10 +192,16 @@ function OrderList({ orders, loading, page, totalPages, onPageChange, onSelectOr
                                                 Contra entrega
                                             </span>
                                         )}
-                                        {order.paymentMethod === 'transferencia' && !!order.paymentId && (
-                                            <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                                                Comprobante enviado
-                                            </span>
+                                        {order.paymentMethod === 'transferencia' && !!order.paymentId && order.status !== 'cancelled' && (
+                                            order.paymentStatus === 'paid' ? (
+                                                <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                                    Transferencia confirmada
+                                                </span>
+                                            ) : (
+                                                <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                                                    Comprobante enviado
+                                                </span>
+                                            )
                                         )}
                                     </div>
                                     <p className="text-xs sm:text-sm text-slate-500 truncate">{itemsSummary}</p>
@@ -397,6 +404,16 @@ function OrderDetail({ order, onBack }: { order: Order; onBack: () => void }) {
                     </span>
                 </div>
 
+                {order.status === 'cancelled' && order.cancelReason && (
+                    <div className="mb-4 sm:mb-6 bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-sm font-semibold text-red-800">El local canceló este pedido</p>
+                            <p className="text-xs text-red-600 mt-1">Motivo: {order.cancelReason}</p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Products */}
                 <div className="divide-y border rounded-2xl overflow-hidden bg-white/50">
                     {order.items.map(item => (
@@ -488,13 +505,21 @@ function OrderDetail({ order, onBack }: { order: Order; onBack: () => void }) {
                             </div>
                         </div>
                     )}
-                    {isTransferenciaChosen && (
+                    {isTransferenciaChosen && order.status !== 'cancelled' && (
                         <div className="mt-5">
-                            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 text-center space-y-2">
-                                <CheckCircle2 className="w-10 h-10 text-blue-500 mx-auto" />
-                                <p className="font-bold text-blue-800">Comprobante enviado</p>
-                                <p className="text-xs text-blue-600">Tu comprobante de transferencia fue recibido. Estamos verificando el pago.</p>
-                            </div>
+                            {order.paymentStatus === 'paid' ? (
+                                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 text-center space-y-2">
+                                    <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+                                    <p className="font-bold text-emerald-800">Transferencia confirmada</p>
+                                    <p className="text-xs text-emerald-600">El local confirmó tu pago. Si necesitas una devolución, contáctanos.</p>
+                                </div>
+                            ) : (
+                                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 text-center space-y-2">
+                                    <CheckCircle2 className="w-10 h-10 text-blue-500 mx-auto" />
+                                    <p className="font-bold text-blue-800">Comprobante enviado</p>
+                                    <p className="text-xs text-blue-600">Tu comprobante de transferencia fue recibido. El local está verificando el pago.</p>
+                                </div>
+                            )}
                         </div>
                     )}
 

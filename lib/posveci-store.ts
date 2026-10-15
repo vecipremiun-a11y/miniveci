@@ -12,10 +12,11 @@
  */
 
 import { db } from "@/lib/db";
-import { orders, orderItems, products } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { orders, orderInvoices, orderItems, products } from "@/lib/db/schema";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { chileLocalToUtcISO } from "@/lib/timezone";
 import { publishStoreOrderCreated, type StoreOrderCreatedPayload } from "@/lib/posveci-publisher";
+import { isReceiptUrl } from "@/lib/payment-receipt";
 
 /**
  * Mapea el método de pago interno al vocabulario de POSVECI.
@@ -83,12 +84,34 @@ export async function sendStoreOrderToPosveci(orderId: string): Promise<void> {
     const address = isPickup ? null : [order.shippingAddress, order.shippingComuna]
         .filter(Boolean).join(", ") || null;
     const scheduledFor = buildScheduledFor(order.deliveryDate, order.deliveryTimeSlot);
+    const paymentMethod = mapPaymentMethod(order.paymentMethod);
+    // El comprobante de la transferencia queda en orders.paymentId.
+    const paymentProofUrl = paymentMethod === "transferencia" && isReceiptUrl(order.paymentId)
+        ? order.paymentId
+        : null;
+    if (paymentMethod === "transferencia" && !paymentProofUrl) {
+        console.warn(`[POSVECI] pedido ${order.orderNumber} por transferencia sin comprobante válido`);
+    }
+    const invoice = await db.query.orderInvoices.findFirst({ where: eq(orderInvoices.orderId, orderId) });
 
     const payload: StoreOrderCreatedPayload = {
         external_order_id: order.id,
         public_code: order.orderNumber,
         order_type: "store",
-        payment_method: mapPaymentMethod(order.paymentMethod),
+        payment_method: paymentMethod,
+        payment_status: order.paymentStatus === "paid" ? "paid" : "pending",
+        ...(paymentProofUrl ? { payment_proof_url: paymentProofUrl } : {}),
+        ...(invoice ? {
+            invoice: {
+                rut: invoice.rut,
+                razon_social: invoice.razonSocial,
+                giro: invoice.giro,
+                direccion: invoice.direccion,
+                comuna: invoice.comuna,
+                ciudad: invoice.ciudad,
+                email: invoice.email,
+            },
+        } : {}),
         method: isPickup ? "pickup" : "delivery",
         address,
         delivery_fee: order.shippingCost ?? 0,
@@ -112,5 +135,12 @@ export async function sendStoreOrderToPosveci(orderId: string): Promise<void> {
         occurred_at: new Date().toISOString(),
     };
 
-    await publishStoreOrderCreated(payload);
+    const received = await publishStoreOrderCreated(payload);
+    if (received) {
+        // Desde ahora el stock que manda POSVECI ya incluye este pedido (ver
+        // pendingWebOrderQty en lib/order-stock.ts).
+        await db.update(orders)
+            .set({ posSentAt: new Date().toISOString() })
+            .where(and(eq(orders.id, orderId), isNull(orders.posSentAt)));
+    }
 }

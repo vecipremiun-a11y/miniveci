@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Footer } from '@/components/Footer';
 import { TierGroupCarousel } from '@/components/products/TierGroupCarousel';
-import { useCart, isWeightUnit, hasEquiv, getEffectivePrice } from '@/components/cart/CartProvider';
+import { OfferCountdown } from '@/components/products/OfferEndsLabel';
+import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getOfferCartCap } from '@/components/cart/CartProvider';
+import { formatOfferStock } from '@/components/products/ProductCard';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
 import { COMERCIAL_VECI_BADGE } from '@/lib/store-product-types';
@@ -50,8 +52,19 @@ export default function ProductDetailPage() {
     const step = kgMode ? 0.5 : (equiv ? 1 : (isWeight ? 0.1 : 1));
     const minQty = kgMode ? 0.5 : (equiv ? 1 : (isWeight ? 0.1 : 1));
     const equivW = product?.equivWeight ?? 1;
-    const availableStock = product ? (equiv ? Math.floor(product.stock / equivW) : product.stock) : 0;
-    const maxQty = kgMode ? (product?.stock ?? 0) : availableStock;
+    // Oferta por stock: mientras dure, se muestra y se vende solo lo que queda en
+    // oferta; al agotarse vuelve el precio normal con el stock real.
+    const offerStockLeft = product?.isOffer ? product.offerStock ?? null : null;
+    const shownStock = product ? (offerStockLeft !== null ? Math.min(product.stock, offerStockLeft) : product.stock) : 0;
+    const availableStock = product ? (equiv ? Math.floor(shownStock / equivW) : shownStock) : 0;
+    const offerCap = product ? getOfferCartCap({
+        id: kgMode ? `${product.id}__kg` : product.id,
+        unit: product.unit,
+        equivLabel: kgMode ? null : product.equivLabel,
+        equivWeight: kgMode ? null : product.equivWeight,
+        offerStock: offerStockLeft,
+    }) : null;
+    const maxQty = Math.min(kgMode ? shownStock : availableStock, offerCap ?? Infinity);
 
     // Format price per kg for equiv products
     const equivUnitLabel = product?.equivLabel && !/^\d+$/.test(product.equivLabel.trim()) ? product.equivLabel : 'und';
@@ -261,7 +274,10 @@ export default function ProductDetailPage() {
 
                 <section className="grid lg:grid-cols-2 gap-8">
                     <div className="space-y-4">
-                        <div className="relative bg-white/60 border border-white rounded-3xl p-8 min-h-[420px] flex items-center justify-center">
+                        <div className={`relative bg-white/60 border border-white rounded-3xl p-8 min-h-[420px] flex items-center justify-center overflow-hidden ${hasOffer && product.offerEndsAt ? 'pb-32' : ''}`}>
+                            {hasOffer && product.offerEndsAt && (
+                                <OfferCountdown endsAt={product.offerEndsAt} size="detail" />
+                            )}
                             {product.badges?.includes(COMERCIAL_VECI_BADGE) && (
                                 <img
                                     src="/sello-comercial-veci.png"
@@ -385,6 +401,12 @@ export default function ProductDetailPage() {
                             </>
                         )}
 
+                        {offerStockLeft !== null && (
+                            <p className="mt-2 text-sm font-extrabold text-red-600">
+                                ¡Quedan {formatOfferStock(offerStockLeft, product.unit)} en oferta!
+                            </p>
+                        )}
+
                         {/* --- Price Tiers Table --- */}
                         {(product as any).priceTiers && (product as any).priceTiers.length > 0 && (
                             <div className="mt-5 rounded-2xl overflow-hidden border border-purple-200 shadow-sm">
@@ -458,8 +480,8 @@ export default function ProductDetailPage() {
                         <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
                             <p className="text-sm text-slate-500">Disponibilidad</p>
                             <p className="font-bold text-slate-700">
-                                {product.stock > 0
-                                    ? `${product.stock} ${isWeightUnit(product.unit) ? (product.unit ?? 'Kg').toUpperCase() : 'UND'} en stock`
+                                {shownStock > 0
+                                    ? `${shownStock} ${isWeightUnit(product.unit) ? (product.unit ?? 'Kg').toUpperCase() : 'UND'} ${offerStockLeft !== null ? 'en oferta' : 'en stock'}`
                                     : 'Sin stock'}
                             </p>
                             {equiv && availableStock > 0 && (
@@ -535,9 +557,9 @@ export default function ProductDetailPage() {
                         <button
                             onClick={() => {
                                 if (kgMode) {
-                                    addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, priceTiers: (product as any).priceTiers, subscriptionPrice }, quantity);
+                                    addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, priceTiers: (product as any).priceTiers, subscriptionPrice, offerStock: offerStockLeft }, quantity);
                                 } else {
-                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight, priceTiers: (product as any).priceTiers, subscriptionPrice, tierGroup }, quantity);
+                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight, priceTiers: (product as any).priceTiers, subscriptionPrice, tierGroup, offerStock: offerStockLeft }, quantity);
                                 }
                             }}
                             disabled={maxQty <= 0}

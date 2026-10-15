@@ -1,4 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+    cleanTierGroup,
+    normalizeOfferEndsAt,
+    normalizeOfferStock,
+    offerEndsAtAfterPosUpdate,
+    offerStockAfterPosUpdate,
+} from "@/lib/product-price";
+import { recomputeSubscriptionPrice } from "@/lib/subscription-price";
 import { db } from "@/lib/db";
 import { apiCredentials, products, productImages, categories } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -119,6 +127,14 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
         if (priceTiers.length === 0) priceTiers = null;
     }
 
+    // Grupo de escala y fin de oferta: ausente = no tocar; null o "" = limpiar
+    const rawTierGroup = payload.tier_group !== undefined ? payload.tier_group : payload.tierGroup;
+    const tierGroup = rawTierGroup === undefined ? undefined : cleanTierGroup(typeof rawTierGroup === "string" ? rawTierGroup : null);
+    const rawOfferEndsAt = payload.offer_ends_at !== undefined ? payload.offer_ends_at : payload.offerEndsAt;
+    const offerEndsAtIn = rawOfferEndsAt === undefined ? undefined : (typeof rawOfferEndsAt === "string" ? rawOfferEndsAt : null);
+    const rawOfferStock = payload.offer_stock !== undefined ? payload.offer_stock : payload.offerStock;
+    const offerStockIn = rawOfferStock === undefined ? undefined : (typeof rawOfferStock === "number" ? rawOfferStock : null);
+
     // Normalizar stock según unidad
     const normalizedStock = normalizeStock(stock, unit);
 
@@ -126,7 +142,7 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
     if (category) categoryId = await resolveCategory(category);
 
     const existing = await db
-        .select({ id: products.id, sku: products.sku, slug: products.slug })
+        .select({ id: products.id, sku: products.sku, slug: products.slug, isOffer: products.isOffer, offerPrice: products.offerPrice, unit: products.unit })
         .from(products)
         .where(sql`UPPER(TRIM(${products.sku})) = ${sku}`)
         .limit(1);
@@ -147,6 +163,11 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
         if (salePrice !== undefined) updateFields.webPrice = salePrice;
         if (offerPrice !== undefined) updateFields.offerPrice = offerPrice;
         if (isOffer !== undefined) updateFields.isOffer = isOffer;
+        const offerEndsAt = offerEndsAtAfterPosUpdate(existing[0], { isOffer, offerPrice, offerEndsAt: offerEndsAtIn });
+        if (offerEndsAt !== undefined) updateFields.offerEndsAt = offerEndsAt;
+        const offerStock = offerStockAfterPosUpdate(existing[0], { isOffer, offerPrice, offerStock: offerStockIn, unit });
+        if (offerStock !== undefined) updateFields.offerStock = offerStock;
+        if (tierGroup !== undefined) updateFields.tierGroup = tierGroup;
         if (unit !== undefined) updateFields.unit = unit;
         if (taxRate !== undefined) updateFields.taxRate = taxRate;
         if (costPrice !== undefined) updateFields.costPrice = costPrice;
@@ -180,12 +201,18 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
             taxRate: taxRate ?? null,
             costPrice: costPrice ?? null,
             priceTiers: priceTiers ?? null,
+            tierGroup: tierGroup ?? null,
+            offerEndsAt: normalizeOfferEndsAt(offerEndsAtIn),
+            offerStock: normalizeOfferStock(offerStockIn, unit),
             isPublished: true,
             createdAt: now,
             updatedAt: now,
         });
         action = "created";
     }
+
+    // Precio suscriptor = (costo + IVA) × (1 + utilidad), al día con el costo.
+    await recomputeSubscriptionPrice(db, productId);
 
     // Handle image if provided
     if (imageUrl) {

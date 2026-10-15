@@ -3,15 +3,23 @@
 import { motion } from 'framer-motion';
 import { Plus, Minus, TrendingDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getTieredPrice } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getTieredPrice, getOfferCartCap } from '@/components/cart/CartProvider';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import { COMERCIAL_VECI_BADGE } from '@/lib/store-product-types';
+import { OfferCountdown } from '@/components/products/OfferEndsLabel';
 import { useRouter } from 'next/navigation';
 
 const PLACEHOLDER_IMAGE = '/placeholder-product-feria.svg';
 
 const fmtCLP = (value: number) =>
     new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
+
+/** "12 und" o "3.5 kg": lo que queda en oferta, en la unidad del producto. */
+export function formatOfferStock(offerStock: number, unit?: string | null): string {
+    return isWeightUnit(unit)
+        ? `${offerStock.toLocaleString('es-CL', { maximumFractionDigits: 3 })} ${(unit ?? 'kg').toLowerCase()}`
+        : `${Math.floor(offerStock)} und`;
+}
 
 interface ProductCardProps {
     id: string;
@@ -32,9 +40,13 @@ interface ProductCardProps {
     badges?: string[] | null;
     /** Grupo de escala: suma cantidad con los otros productos del grupo. */
     tierGroup?: string | null;
+    /** Fin programado de la oferta (ISO), para mostrar cuánto le queda. */
+    offerEndsAt?: string | null;
+    /** Oferta por stock: lo que queda a precio oferta (kg en los de peso). */
+    offerStock?: number | null;
 }
 
-export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers, subscriptionPrice, badges, tierGroup }: ProductCardProps) {
+export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers, subscriptionPrice, badges, tierGroup, offerEndsAt, offerStock }: ProductCardProps) {
     const hasVeciSeal = badges?.includes(COMERCIAL_VECI_BADGE) ?? false;
     const { addItem, getGroupQuantity } = useCart();
     const router = useRouter();
@@ -62,9 +74,14 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
     const displayPrice = equiv ? Math.round(tieredPrice * equivWeight!) : tieredPrice;
     const discountPercent = hasOffer ? Math.round(((price - offerPrice!) / price) * 100) : 0;
 
-    const availableUnits = equiv ? Math.floor(stock / equivWeight!) : stock;
-    const maxQty = kgMode ? stock : availableUnits;
-    const outOfStock = stock <= 0;
+    // Oferta por stock: mientras dure, se muestra y se vende solo lo que queda en
+    // oferta; al agotarse vuelve el precio normal con el stock real.
+    const offerStockLeft = hasOffer ? offerStock ?? null : null;
+    const shownStock = offerStockLeft !== null ? Math.min(stock, offerStockLeft) : stock;
+    const availableUnits = equiv ? Math.floor(shownStock / equivWeight!) : shownStock;
+    const offerCap = getOfferCartCap({ id: kgMode ? `${id}__kg` : id, unit, equivLabel: kgMode ? null : equivLabel, equivWeight: kgMode ? null : equivWeight, offerStock: offerStockLeft });
+    const maxQty = Math.min(kgMode ? shownStock : availableUnits, offerCap ?? Infinity);
+    const outOfStock = shownStock <= 0;
     const equivUnitLabel = equivLabel && !/^\d+$/.test(equivLabel.trim()) ? equivLabel : 'und';
 
     const handleBuyModeChange = (mode: 'unit' | 'kg') => {
@@ -97,14 +114,14 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
         return Math.max(0, Math.round(quantity * baseUnit) - subtotalValue);
     }, [priceTiers, equiv, kgMode, rawPrice, equivWeight, quantity, subtotalValue]);
     // Stock label always shows real kg for equiv products
-    const stockLabel = outOfStock ? 'Sin stock' : (isWeightUnit(unit) ? `${stock} ${(unit ?? 'Kg').toUpperCase()}` : `${stock} UND`);
-    const lowStock = !outOfStock && stock <= 5;
+    const stockLabel = outOfStock ? 'Sin stock' : (isWeightUnit(unit) ? `${shownStock} ${(unit ?? 'Kg').toUpperCase()}` : `${shownStock} UND`);
+    const lowStock = !outOfStock && shownStock <= 5;
 
     const handleAdd = () => {
         if (kgMode) {
-            addItem({ id: `${id}__kg`, name, price: rawPrice, image: imageSrc, slug, unit, priceTiers, subscriptionPrice }, quantity);
+            addItem({ id: `${id}__kg`, name, price: rawPrice, image: imageSrc, slug, unit, priceTiers, subscriptionPrice, offerStock: offerStockLeft }, quantity);
         } else {
-            addItem({ id, name, price: rawPrice, image: imageSrc, slug, unit, equivLabel, equivWeight, priceTiers, subscriptionPrice, tierGroup }, quantity);
+            addItem({ id, name, price: rawPrice, image: imageSrc, slug, unit, equivLabel, equivWeight, priceTiers, subscriptionPrice, tierGroup, offerStock: offerStockLeft }, quantity);
         }
         setQuantity(minQty);
     };
@@ -161,6 +178,9 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                         {lowStock && !outOfStock ? `Quedan ${stockLabel}` : stockLabel}
                     </span>
                 </div>
+
+                {/* Cuenta regresiva de la oferta, sobre la foto y del ancho de la tarjeta */}
+                {hasOffer && offerEndsAt && <OfferCountdown endsAt={offerEndsAt} />}
             </div>
 
             {/* Cuerpo */}
@@ -211,6 +231,12 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                         </>
                     )}
                 </div>
+
+                {offerStockLeft !== null && (
+                    <p className="text-[11px] font-extrabold text-tomate leading-tight">
+                        ¡Quedan {formatOfferStock(offerStockLeft, unit)} en oferta!
+                    </p>
+                )}
 
                 {/* Tramos por cantidad: se leen como boleta, no como aviso */}
                 {priceTiers && priceTiers.length > 0 && (

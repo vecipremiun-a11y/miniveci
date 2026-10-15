@@ -21,11 +21,24 @@ export const STORE_VALID_TRANSITIONS: Record<string, string[]> = {
     "refunded": [],
 };
 
-/** Estados en los que el pedido está "activo" (stock web ya descontado). */
+/**
+ * Estados en los que el pedido está "activo" (ya en marcha). El stock no se
+ * decide por estado sino por la marca `stock_applied_at` (lib/order-stock.ts).
+ */
 export const STORE_ACTIVE_STATES = ["confirmed", "paid", "preparing", "ready", "shipped", "delivered"];
 
 export function canStoreTransition(from: string, to: string): boolean {
     return STORE_VALID_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+/**
+ * Transferencia ya confirmada por el local: POSVECI registró la venta al
+ * confirmarla y rechaza (409) que se cancele desde miniveci. Ese pedido no se
+ * cancela ni se reembolsa desde la web; si hay devolución, la gestiona el local
+ * y POSVECI avisa por el callback de estado.
+ */
+export function isConfirmedTransfer(order: { paymentMethod: string | null; paymentStatus: string | null }): boolean {
+    return order.paymentMethod === "transferencia" && order.paymentStatus === "paid";
 }
 
 /**

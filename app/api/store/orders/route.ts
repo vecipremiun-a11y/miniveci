@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { getSessionCustomerId } from "@/lib/session-customer";
 import { db } from "@/lib/db";
-import { orders, orderItems, orderStatusHistory, products, customers } from "@/lib/db/schema";
+import { orders, orderInvoices, orderItems, orderStatusHistory, products, customers } from "@/lib/db/schema";
+import { parseCheckoutInvoice } from "@/lib/validations/invoice";
+import { saveCustomerInvoice } from "@/lib/customer-invoice";
 import { randomUUID } from "crypto";
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { ZodError } from "zod";
 import {
     extractRaffleItems, linkRaffleEntriesToOrder,
 } from "@/lib/raffle-checkout";
-import { recalcStorePricing, resolveUnitPrice } from "@/lib/store-pricing";
+import { offerCapError, recalcStorePricing, resolveUnitPrice } from "@/lib/store-pricing";
 import { tierQuantities } from "@/lib/product-price";
 import { hasActiveSubscription } from "@/lib/subscriptions";
 import { extractBearer, verifyAccessToken, AuthHttpError } from "@/lib/mobile-auth";
@@ -17,6 +19,9 @@ import { storeMobileOrderSchema } from "@/lib/validations/store-mobile";
 import { publishStoreOrderEvent, type SerializedStoreOrder } from "@/lib/store-live-updates";
 import { notifyOrderStatusChanged } from "@/lib/fcm";
 import { sendStoreOrderToPosveci } from "@/lib/posveci-store";
+import { deductOrderStock, isPaidOnline } from "@/lib/order-stock";
+import { getPosCancelReasons } from "@/lib/order-cancel-reason";
+import { isReceiptUrl } from "@/lib/payment-receipt";
 import { generateUniqueOrderNumber } from "@/lib/order-number";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { persistCheckoutProfile } from "@/lib/checkout-profile";
@@ -92,6 +97,10 @@ export async function GET(req: NextRequest) {
             ? await db.select().from(orderItems).where(inArray(orderItems.orderId, orderIds))
             : [];
 
+        const cancelReasons = await getPosCancelReasons(
+            slice.filter((o) => o.status === "cancelled").map((o) => o.id),
+        );
+
         type OrderItemRow = typeof itemRows[number];
         const itemsByOrder = new Map<string, OrderItemRow[]>();
         for (const it of itemRows) {
@@ -114,6 +123,7 @@ export async function GET(req: NextRequest) {
             status: o.status ?? "new",
             paymentMethod: o.paymentMethod ?? "",
             paymentStatus: o.paymentStatus ?? "pending",
+            cancelReason: cancelReasons.get(o.id) ?? null,
             subtotal: o.subtotal,
             shippingCost: o.shippingCost ?? 0,
             total: o.total,
@@ -201,6 +211,12 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             createdAt: string;
         }> = [];
         const concatenatedItemNotes: string[] = [];
+
+        // Oferta por stock: no más de lo que queda a precio oferta.
+        const capError = offerCapError(data.items, productMap);
+        if (capError) {
+            return NextResponse.json({ message: capError }, { status: 400 });
+        }
 
         // Los productos del mismo grupo de escala suman cantidad para el tramo.
         const tierQty = tierQuantities(data.items.map((item) => {
@@ -296,6 +312,10 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             updatedAt: now,
         });
 
+        if (data.invoice) {
+            await db.insert(orderInvoices).values({ orderId, ...data.invoice, createdAt: now });
+        }
+
         // 9. Insertar order items
         await db.insert(orderItems).values(
             itemsToInsert.map((it) => ({ ...it, orderId, createdAt: now })),
@@ -310,6 +330,13 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             notes: "Pedido creado desde la app móvil",
             createdAt: now,
         });
+
+        // Stock: contra entrega queda firme al crearse y se descuenta ya.
+        // Mercado Pago, al aprobarse el pago (webhook). Ver lib/order-stock.ts.
+        const paidOnline = isPaidOnline(data.paymentMethod);
+        if (!paidOnline) {
+            await deductOrderStock(orderId, "store-order:created");
+        }
 
         // 11. Serializar respuesta
         const serialized: SerializedStoreOrder = {
@@ -395,14 +422,23 @@ async function handleMobileOrder(req: NextRequest, token: string) {
                     deliveryType: data.method,
                     address: data.method === "delivery" ? data.address : null,
                 });
+                // Datos de factura de este pedido → quedan como los guardados del cliente.
+                if (data.invoice) {
+                    await saveCustomerInvoice(userId, data.invoice)
+                        .catch((err) => console.error(`[INVOICE] no se guardó en la cuenta (${orderNumber}):`, (err as Error).message));
+                }
             }
 
             // POSVECI: publica el pedido de tienda al POS (order_type: "store").
-            // Se envía al confirmarse el pedido, sin esperar el pago.
-            try {
-                await sendStoreOrderToPosveci(orderId);
-            } catch (err) {
-                console.error(`[POSVECI] publisher threw para ${orderNumber}:`, (err as Error).message);
+            // Contra entrega se envía al crearse. Mercado Pago se envía al
+            // aprobarse el pago (webhook), ya como pagado: antes viajaba al POS
+            // sin pagar y el POS no se enteraba del pago.
+            if (!paidOnline) {
+                try {
+                    await sendStoreOrderToPosveci(orderId);
+                } catch (err) {
+                    console.error(`[POSVECI] publisher threw para ${orderNumber}:`, (err as Error).message);
+                }
             }
 
             // Push FCM al cliente: "Recibimos tu pedido"
@@ -485,6 +521,16 @@ async function handleLegacyWebOrder(req: NextRequest) {
         if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
             return NextResponse.json({ error: "El carrito está vacío" }, { status: 400 });
         }
+        // El comprobante viaja a POSVECI para que el local lo revise: solo uno
+        // subido por /api/store/upload-receipt (ver lib/payment-receipt.ts).
+        if (paymentMethod === "transferencia" && !isReceiptUrl(paymentId)) {
+            return NextResponse.json({ error: "Sube el comprobante de transferencia antes de finalizar." }, { status: 400 });
+        }
+        // "Quiero factura": sin el objeto es boleta.
+        const invoice = parseCheckoutInvoice(body.invoice);
+        if (!invoice.ok) {
+            return NextResponse.json({ error: invoice.error }, { status: 400 });
+        }
 
         // SEGURIDAD: recalcular montos server-side. No confiar en price/total del cliente.
         // El precio de suscriptor se decide contra la base, nunca contra el body.
@@ -533,6 +579,10 @@ async function handleLegacyWebOrder(req: NextRequest) {
             updatedAt: now,
         });
 
+        if (invoice.invoice) {
+            await db.insert(orderInvoices).values({ orderId, ...invoice.invoice, createdAt: now });
+        }
+
         const insertedItems: Array<{ id: string; productId: string | null; productName: string; quantity: number; unitPrice: number; totalPrice: number }> = [];
         for (const item of pricedItems) {
             const itemId = randomUUID();
@@ -572,6 +622,13 @@ async function handleLegacyWebOrder(req: NextRequest) {
             notes: "Pedido creado desde la tienda web",
             createdAt: now,
         });
+
+        // Stock: contra entrega y transferencia quedan firmes al crearse. Mercado
+        // Pago web no pasa por acá (create-preference + webhook).
+        const paidOnline = isPaidOnline(paymentMethod);
+        if (!paidOnline) {
+            await deductOrderStock(orderId, "store-order:created");
+        }
 
         // También publica SSE para el admin (igual que el flujo móvil)
         const serialized: SerializedStoreOrder = {
@@ -613,15 +670,22 @@ async function handleLegacyWebOrder(req: NextRequest) {
                     city: shippingCity,
                     addressNotes: shippingNotes,
                 });
+                // Datos de factura de este pedido → quedan como los guardados del cliente.
+                if (invoice.invoice) {
+                    await saveCustomerInvoice(customerId, invoice.invoice)
+                        .catch((err) => console.error(`[INVOICE] no se guardó en la cuenta (${orderNumber}):`, (err as Error).message));
+                }
             }
 
             // POSVECI: publica el pedido de tienda al POS (order_type: "store").
             // Contra entrega y transferencia entran por aquí; Mercado Pago web
             // usa create-preference y se publica al aprobarse el pago (webhook).
-            try {
-                await sendStoreOrderToPosveci(orderId);
-            } catch (err) {
-                console.error(`[POSVECI] publisher threw para ${orderNumber}:`, (err as Error).message);
+            if (!paidOnline) {
+                try {
+                    await sendStoreOrderToPosveci(orderId);
+                } catch (err) {
+                    console.error(`[POSVECI] publisher threw para ${orderNumber}:`, (err as Error).message);
+                }
             }
 
             // Push FCM si el cliente está identificado (logueado web)

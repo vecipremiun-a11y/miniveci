@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { invoiceInputSchema } from "./invoice";
 
 /**
  * Schemas para el contrato móvil (Flutter app) de tienda regular.
@@ -24,6 +25,8 @@ export const storeMobileOrderSchema = z.object({
     phone: z.string().min(6).max(40),
     notes: z.string().max(500).optional().nullable(),
     paymentMethod: z.enum(PAYMENT_METHODS_MOBILE),
+    // "Quiero factura": solo si el cliente lo marcó en este pedido. Ausente/null = boleta.
+    invoice: invoiceInputSchema.optional().nullable(),
 }).refine(
     (d) => d.method !== "delivery" || (d.address && d.address.trim().length >= 4),
     { message: "Dirección requerida para delivery", path: ["address"] },

@@ -142,6 +142,7 @@ export function templateForOrderStatus(
     status: string,
     source: OrderSource,
     publicCode: string,
+    reason?: string | null,
 ): Template | null {
     const orderWord = source === "bakery" ? "encargo" : "pedido";
 
@@ -188,7 +189,9 @@ export function templateForOrderStatus(
         case "canceled":
             return {
                 title: `${publicCode} cancelado`,
-                body: `Tu ${orderWord} fue cancelado. Si tienes dudas, contáctanos.`,
+                body: reason
+                    ? `Tu ${orderWord} fue cancelado: ${reason}`
+                    : `Tu ${orderWord} fue cancelado. Si tienes dudas, contáctanos.`,
             };
         default:
             return null;
@@ -205,9 +208,11 @@ export async function notifyOrderStatusChanged(opts: {
     source: OrderSource;
     publicCode: string;
     orderId: string;
+    /** Motivo de cancelación para el cliente (lo manda POSVECI). */
+    reason?: string | null;
 }): Promise<void> {
     if (!opts.userId) return;
-    const t = templateForOrderStatus(opts.status, opts.source, opts.publicCode);
+    const t = templateForOrderStatus(opts.status, opts.source, opts.publicCode, opts.reason);
     if (!t) return;
     await sendPushToUser({
         userId: opts.userId,

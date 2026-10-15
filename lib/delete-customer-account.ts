@@ -7,6 +7,7 @@ import {
     chatMessages,
     chatVisitorSessions,
     customerAddresses,
+    customerInvoiceData,
     customerPaymentMethods,
     customers,
     orders,
@@ -24,13 +25,14 @@ import { publishClientUpsert } from "@/lib/posveci-publisher";
  * Es lo que promete la Política de Privacidad (/politica-privacidad#eliminar-cuenta).
  *
  * Qué hace:
- *  - Borra: la cuenta, direcciones, tokens de notificaciones, sesiones de la app,
- *    medios de pago guardados, membresías terminadas, conversaciones del chat
- *    (con sus adjuntos) y sus registros de visitas.
+ *  - Borra: la cuenta, direcciones, datos de facturación guardados, tokens de
+ *    notificaciones, sesiones de la app, medios de pago guardados, membresías
+ *    terminadas, conversaciones del chat (con sus adjuntos) y sus registros de visitas.
  *  - Anonimiza (no borra) lo que hay que conservar por obligaciones tributarias y
  *    contables: los pedidos de tienda y los encargos quedan con montos, productos
  *    y fechas, pero sin nombre, correo, teléfono, RUT ni dirección. Igual con sus
- *    números de sorteos, para no romper el sorteo.
+ *    números de sorteos, para no romper el sorteo. Los datos de factura de cada
+ *    pedido (order_invoices) se conservan: son los del documento tributario emitido.
  *  - En POSVECI, por la API de clientes (que solo sabe hacer upsert): cambia el
  *    nombre a "Cliente eliminado" y vacía la libreta de direcciones que vino de la
  *    tienda. El correo, teléfono y RUT que POSVECI ya tenga NO se pueden borrar
@@ -162,6 +164,7 @@ export async function deleteCustomerAccount(customerId: string): Promise<Account
             : []),
         db.delete(chatVisitorSessions).where(eq(chatVisitorSessions.customerId, customerId)),
         db.delete(customerAddresses).where(eq(customerAddresses.customerId, customerId)),
+        db.delete(customerInvoiceData).where(eq(customerInvoiceData.customerId, customerId)),
         db.delete(userPushTokens).where(eq(userPushTokens.userId, customerId)),
         db.delete(customerPaymentMethods).where(eq(customerPaymentMethods.customerId, customerId)),
         db.delete(subscriptions).where(eq(subscriptions.customerId, customerId)),

@@ -97,6 +97,8 @@ export function TierGroupCarousel({ tierGroup, currentProductId }: TierGroupCaro
                             subscriptionPrice={p.subscriptionPrice}
                             badges={p.badges}
                             tierGroup={p.tierGroup}
+                            offerEndsAt={p.offerEndsAt}
+                            offerStock={p.offerStock}
                         />
                     </div>
                 ))}

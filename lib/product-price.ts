@@ -26,6 +26,16 @@ export function tierGroupKey(group?: string | null): string | null {
     return key || null;
 }
 
+/**
+ * Normaliza el fin de oferta que manda el admin a ISO en UTC ("...Z"), que es
+ * como se compara en SQL (activeOfferCondition). Vacío o inválido = sin fin.
+ */
+export function normalizeOfferEndsAt(value?: string | null): string | null {
+    if (!value) return null;
+    const t = Date.parse(value);
+    return Number.isNaN(t) ? null : new Date(t).toISOString();
+}
+
 /** Limpia el nombre de grupo que escribe el admin: sin espacios de más; vacío = sin grupo. */
 export function cleanTierGroup(group?: string | null): string | null {
     const clean = (group ?? "").replace(/\s+/g, " ").trim();
@@ -77,11 +87,162 @@ export function tierQuantities(lines: TierLine[]): number[] {
     });
 }
 
+/**
+ * Normaliza el stock en oferta: null/vacío = sin límite; negativo = 0.
+ * Unidades enteras salvo kg/lt (3 decimales), igual que el stock web.
+ */
+export function normalizeOfferStock(value?: number | null, unit?: string | null): number | null {
+    if (value === null || value === undefined || Number.isNaN(value)) return null;
+    const v = Math.max(0, value);
+    const u = (unit ?? "").toLowerCase();
+    return u === "kg" || u === "lt" ? Math.round(v * 1000) / 1000 : Math.floor(v);
+}
+
+/**
+ * ¿La oferta está vigente ahora?
+ *
+ * Además de `isOffer` y un `offerPrice`, la oferta puede tener dos límites
+ * (los pone el admin o POSVECI):
+ * - `offerEndsAt` (ISO en UTC): desde ese momento el producto se vende a precio
+ *   normal aunque `isOffer` siga en true (POSVECI puede volver a mandarlo así).
+ * - `offerStock`: unidades que quedan a precio oferta. En 0 la oferta se acaba.
+ *   null = sin límite de stock.
+ * Su espejo en SQL es `activeOfferCondition` (lib/store-filters.ts).
+ */
+export function isOfferActive(
+    product: { isOffer?: boolean | null; offerPrice?: number | null; offerEndsAt?: string | null; offerStock?: number | null },
+    now: number = Date.now(),
+): boolean {
+    if (!product.isOffer || !product.offerPrice) return false;
+    if (product.offerStock !== null && product.offerStock !== undefined && product.offerStock <= 0) return false;
+    if (!product.offerEndsAt) return true;
+    const ends = Date.parse(product.offerEndsAt);
+    return Number.isNaN(ends) || ends > now;
+}
+
+/**
+ * POSVECI (versiones que no mandan los límites) empezó una oferta nueva (pasa a
+ * true, o cambia el precio de oferta) o la apagó: los límites de la anterior
+ * ya no corresponden.
+ */
+function posReplacedOffer(
+    existing: { isOffer: boolean | null; offerPrice: number | null },
+    incoming: { isOffer?: boolean; offerPrice?: number | null },
+): boolean {
+    if (incoming.isOffer === false && existing.isOffer) return true;
+    if (incoming.isOffer === true && !existing.isOffer) return true;
+    return incoming.offerPrice !== undefined && incoming.offerPrice !== existing.offerPrice;
+}
+
+/**
+ * Qué hacer con el fin programado cuando POSVECI actualiza la oferta.
+ *
+ * Si POSVECI manda `offerEndsAt` (fecha o null), esa es la verdad: se guarda tal
+ * cual. Si no lo manda (versiones viejas del POS), puede volver a mandar
+ * `is_offer: true` con el mismo precio en cada sync: eso NO debe revivir una
+ * oferta vencida. Pero si empieza una oferta nueva o la apaga, el fin
+ * programado de la anterior se limpia.
+ *
+ * Devuelve la fecha (ISO UTC) o null para guardarla, o undefined para no tocarla.
+ */
+export function offerEndsAtAfterPosUpdate(
+    existing: { isOffer: boolean | null; offerPrice: number | null },
+    incoming: { isOffer?: boolean; offerPrice?: number | null; offerEndsAt?: string | null },
+): string | null | undefined {
+    if (incoming.offerEndsAt !== undefined) return normalizeOfferEndsAt(incoming.offerEndsAt);
+    return posReplacedOffer(existing, incoming) ? null : undefined;
+}
+
+/**
+ * Lo mismo para el stock en oferta: si POSVECI lo manda (número o null), manda
+ * él; si no, una oferta repetida no revive una agotada, pero una oferta nueva o
+ * apagada limpia el límite de la anterior.
+ */
+export function offerStockAfterPosUpdate(
+    existing: { isOffer: boolean | null; offerPrice: number | null; unit?: string | null },
+    incoming: { isOffer?: boolean; offerPrice?: number | null; offerStock?: number | null; unit?: string | null },
+): number | null | undefined {
+    if (incoming.offerStock !== undefined) return normalizeOfferStock(incoming.offerStock, incoming.unit ?? existing.unit);
+    return posReplacedOffer(existing, incoming) ? null : undefined;
+}
+
+/**
+ * Cuántas unidades se pueden pedir a precio oferta, o null si no hay tope
+ * (sin oferta vigente o sin límite de stock). Con oferta por stock, el carrito
+ * no deja pedir más de lo que queda en oferta: para llevar más hay que esperar
+ * a que se acabe. Se mide en la unidad del producto (kg para los de peso).
+ */
+export function offerQuantityCap(
+    product: { isOffer?: boolean | null; offerPrice?: number | null; offerEndsAt?: string | null; offerStock?: number | null },
+    now: number = Date.now(),
+): number | null {
+    if (product.offerStock === null || product.offerStock === undefined) return null;
+    return isOfferActive(product, now) ? product.offerStock : null;
+}
+
+/**
+ * Oferta por stock: no se puede pedir más de lo que queda a precio oferta (ver
+ * `offerQuantityCap`). El carrito ya pone ese tope; esto lo hace cumplir en el
+ * checkout por si el carrito quedó viejo o el pedido viene de la app. Suma las
+ * líneas del mismo producto. Devuelve el mensaje de error, o null si está bien.
+ */
+export function offerCapError(
+    lines: { productId: string; quantity: number }[],
+    productMap: Map<string, { name: string; unit?: string | null } & Parameters<typeof offerQuantityCap>[0]>,
+    now: number = Date.now(),
+): string | null {
+    const totals = new Map<string, number>();
+    for (const line of lines) totals.set(line.productId, (totals.get(line.productId) ?? 0) + line.quantity);
+    for (const [productId, quantity] of totals) {
+        const p = productMap.get(productId);
+        if (!p) continue;
+        const cap = offerQuantityCap(p, now);
+        // Margen para los decimales de los productos por peso.
+        if (cap !== null && quantity > cap + 1e-6) {
+            const unit = (p.unit ?? "").toLowerCase();
+            const amount = unit === "kg" || unit === "lt" ? `${cap} ${unit}` : `${cap} ${cap === 1 ? "unidad" : "unidades"}`;
+            return `${p.name}: solo quedan ${amount} en oferta`;
+        }
+    }
+    return null;
+}
+
+/**
+ * Utilidad del precio suscriptor para todos los productos, en %. Cada producto
+ * puede tener la suya (`subscriptionMargin`); null = usa esta.
+ */
+export const DEFAULT_SUBSCRIPTION_MARGIN = 5;
+
+/** Costo + IVA, o null si no hay costo. */
+export function costPlusTax(cost?: number | null, taxRate?: number | null): number | null {
+    if (!cost || cost <= 0) return null;
+    const tax = taxRate && taxRate > 0 ? taxRate : 0;
+    return Math.round(cost * (1 + tax / 100));
+}
+
+/**
+ * Precio suscriptor = (costo + IVA) × (1 + utilidad). Siempre se calcula, nunca
+ * se escribe a mano: si cambia el costo (en el admin o desde POSVECI), el IVA o
+ * la utilidad, cambia el precio. Su espejo en SQL es `subscriptionPriceSql`
+ * (lib/subscription-price.ts). null si no hay costo para calcularlo.
+ */
+export function subscriptionPriceFor(
+    cost?: number | null,
+    taxRate?: number | null,
+    margin?: number | null,
+): number | null {
+    const base = costPlusTax(cost, taxRate);
+    if (base === null) return null;
+    return Math.round(base * (1 + (margin ?? DEFAULT_SUBSCRIPTION_MARGIN) / 100));
+}
+
 /** Lo que hace falta de un producto para ponerle precio. */
 export interface PriceableProduct {
     webPrice?: number | null;
     offerPrice?: number | null;
     isOffer?: boolean | null;
+    offerEndsAt?: string | null;
+    offerStock?: number | null;
     subscriptionPrice?: number | null;
     priceTiers?: unknown;
 }
@@ -120,7 +281,7 @@ export function resolveUnitPrice(
     const basePrice = product.webPrice ?? 0;
     const tiers = (product.priceTiers as PriceTier[] | null) ?? [];
     const matchedTier = tiers.find((t) => quantity >= t.minQty && (t.maxQty === null || quantity <= t.maxQty));
-    const offerPrice = product.isOffer && product.offerPrice ? product.offerPrice : null;
+    const offerPrice = isOfferActive(product) ? product.offerPrice! : null;
     const regularPrice = matchedTier ? matchedTier.price : (offerPrice ?? basePrice);
 
     if (!isSubscriber) return regularPrice;
