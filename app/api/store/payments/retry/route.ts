@@ -58,6 +58,16 @@ export async function POST(req: NextRequest) {
         if (order.paymentStatus === "paid" || order.paymentStatus === "refunded") {
             return NextResponse.json({ error: "Este pedido ya fue pagado" }, { status: 400 });
         }
+        if (order.status === "cancelled" || order.status === "refunded") {
+            return NextResponse.json({ error: "Este pedido está cancelado" }, { status: 400 });
+        }
+        // El local ya está revisando el comprobante en POSVECI: pagar además con
+        // Mercado Pago sería un cobro doble.
+        if (order.paymentMethod === "transferencia" && isReceiptUrl(order.paymentId)) {
+            return NextResponse.json({
+                error: "Este pedido se paga por transferencia y el local está verificando tu comprobante.",
+            }, { status: 409 });
+        }
 
         // Fetch order items
         const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
