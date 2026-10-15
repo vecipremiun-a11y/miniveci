@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { invoiceInputSchema } from "./invoice";
+import { isReceiptUrl } from "../payment-receipt";
 
 /**
  * Schemas para el contrato móvil (Flutter app) de tienda regular.
  * El contrato web legacy vive directo en app/api/store/orders/route.ts y no se toca.
  */
 
-export const PAYMENT_METHODS_MOBILE = ["cash", "mercado_pago"] as const;
+export const PAYMENT_METHODS_MOBILE = ["cash", "mercado_pago", "transferencia"] as const;
 export type PaymentMethodMobile = (typeof PAYMENT_METHODS_MOBILE)[number];
 
 export const DELIVERY_METHODS = ["pickup", "delivery"] as const;
@@ -25,11 +26,16 @@ export const storeMobileOrderSchema = z.object({
     phone: z.string().min(6).max(40),
     notes: z.string().max(500).optional().nullable(),
     paymentMethod: z.enum(PAYMENT_METHODS_MOBILE),
+    // Transferencia: la URL que devolvió POST /api/store/upload-receipt.
+    receiptUrl: z.string().max(1000).optional().nullable(),
     // "Quiero factura": solo si el cliente lo marcó en este pedido. Ausente/null = boleta.
     invoice: invoiceInputSchema.optional().nullable(),
 }).refine(
     (d) => d.method !== "delivery" || (d.address && d.address.trim().length >= 4),
     { message: "Dirección requerida para delivery", path: ["address"] },
+).refine(
+    (d) => d.paymentMethod !== "transferencia" || isReceiptUrl(d.receiptUrl),
+    { message: "Sube el comprobante de transferencia", path: ["receiptUrl"] },
 );
 
 export type StoreMobileOrderInput = z.infer<typeof storeMobileOrderSchema>;

@@ -300,7 +300,8 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             deliveryTimeSlot: null,
             status: "new",
             paymentMethod: data.paymentMethod,
-            paymentId: null,
+            // Transferencia: el comprobante (va a POSVECI como payment_proof_url).
+            paymentId: data.paymentMethod === "transferencia" ? data.receiptUrl ?? null : null,
             paymentStatus: "pending",
             subtotal,
             discount: 0,
@@ -331,8 +332,8 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             createdAt: now,
         });
 
-        // Stock: contra entrega queda firme al crearse y se descuenta ya.
-        // Mercado Pago, al aprobarse el pago (webhook). Ver lib/order-stock.ts.
+        // Stock: contra entrega y transferencia quedan firmes al crearse y se
+        // descuenta ya. Mercado Pago, al aprobarse el pago (webhook). Ver lib/order-stock.ts.
         const paidOnline = isPaidOnline(data.paymentMethod);
         if (!paidOnline) {
             await deductOrderStock(orderId, "store-order:created");
