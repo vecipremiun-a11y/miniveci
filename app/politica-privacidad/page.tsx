@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { Footer } from '@/components/Footer';
+import { BRAND_NAME, DEFAULT_OG_IMAGE } from '@/lib/seo';
 
 /**
  * Política de Privacidad de MiniVeci (web + app Android).
@@ -23,16 +24,17 @@ const WHATSAPP_URL = 'https://wa.me/56951892258';
 const CANONICAL = 'https://www.miniveci.cl/politica-privacidad';
 
 export const metadata: Metadata = {
-    title: 'Política de Privacidad | MiniVeci',
+    title: 'Política de Privacidad',
     description:
         'Cómo MiniVeci recopila, usa, comparte y protege tus datos personales en su tienda web y en su app Android, y cómo pedir la eliminación de tu cuenta.',
     alternates: { canonical: CANONICAL },
     robots: { index: true, follow: true },
     openGraph: {
-        title: 'Política de Privacidad | MiniVeci',
+        title: `Política de Privacidad | ${BRAND_NAME}`,
         description: 'Cómo MiniVeci trata tus datos personales en la tienda web y en la app.',
         url: CANONICAL,
-        siteName: 'MiniVeci',
+        siteName: BRAND_NAME,
+        images: [DEFAULT_OG_IMAGE],
         locale: 'es_CL',
         type: 'article',
     },

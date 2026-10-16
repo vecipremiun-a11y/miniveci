@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Download, Smartphone, Settings, CheckCircle2, MapPin, Clock, Truck } from 'lucide-react';
+import { BRAND_NAME, STORE_MAPS_URL } from '@/lib/seo';
 
 const TIENDA_LINKS = [
     { href: '/productos', label: 'Tienda' },
@@ -79,11 +80,11 @@ export function Footer() {
 
                     <div>
                         <div className="flex items-center gap-2.5 mb-4">
-                            <img src="/logo%20veci.png" alt="" className="w-11 h-11 object-contain rounded-lg bg-white p-0.5" />
+                            <img src="/logo%20veci.png" alt={BRAND_NAME} className="w-11 h-11 object-contain rounded-lg bg-white p-0.5" />
                             <span className="text-lg font-extrabold tracking-tight">MiniVeci</span>
                         </div>
                         <p className="text-sm text-hoja font-medium leading-relaxed">
-                            Tu minimarket de barrio, ahora también online. Abarrotes, amasandería y verdura fresca.
+                            {BRAND_NAME}: tu almacén de barrio en Iquique, ahora también online. Abarrotes, amasandería y verdura fresca.
                         </p>
                     </div>
 
@@ -116,9 +117,11 @@ export function Footer() {
                     <div>
                         <h4 className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-hoja mb-3">El local</h4>
                         <ul className="space-y-3 text-sm text-hoja font-semibold">
-                            <li className="flex items-start gap-2.5">
-                                <MapPin className="w-4 h-4 text-hoja shrink-0 mt-0.5" strokeWidth={2.4} />
-                                Sotomayor N°1460-A, Iquique
+                            <li>
+                                <a href={STORE_MAPS_URL} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2.5 hover:underline">
+                                    <MapPin className="w-4 h-4 text-hoja shrink-0 mt-0.5" strokeWidth={2.4} />
+                                    Sotomayor N°1460-A, Iquique
+                                </a>
                             </li>
                             <li className="flex items-start gap-2.5">
                                 <Clock className="w-4 h-4 text-hoja shrink-0 mt-0.5" strokeWidth={2.4} />
@@ -134,7 +137,7 @@ export function Footer() {
 
                 <div className="border-t border-hoja/15">
                     <div className="max-w-7xl mx-auto px-4 sm:px-12 py-4 text-xs text-hoja font-semibold flex flex-col sm:flex-row items-center justify-between gap-2 text-center sm:text-left">
-                        <span>MiniVeci © 2026 · Todos los derechos reservados.</span>
+                        <span>{BRAND_NAME} (MiniVeci) © 2026 · Todos los derechos reservados.</span>
                         <Link href="/politica-privacidad" className="underline underline-offset-2 hover:no-underline">
                             Política de Privacidad
                         </Link>
