@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from 'lucide-react';
 import { useCart, isWeightUnit, hasEquiv, isAtOfferCap } from './CartProvider';
+import { formatPresentationLine } from '@/lib/product-presentations';
 
 interface CartDrawerProps {
     open: boolean;
@@ -16,7 +17,7 @@ const fmtCLP = (value: number) =>
     new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
 
 export function CartDrawer({ open, onClose }: CartDrawerProps) {
-    const { items, totalItems, subtotal, updateQuantity, removeItem, clearCart, getItemUnitPrice, getItemTierQuantity } = useCart();
+    const { items, totalItems, subtotal, updateQuantity, removeItem, clearCart, getItemUnitPrice, getItemTierQuantity, isAtStockCap } = useCart();
     const [hasMounted, setHasMounted] = useState(false);
     const [highlightedId, setHighlightedId] = useState<string | null>(null);
     const prevItemsRef = useRef<Map<string, number>>(new Map());
@@ -152,6 +153,9 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                                 const unitLabel = equiv ? (item.equivLabel || 'und') : (isWeight || isKgDirect ? 'kg' : 'und');
                                 const qtyDisplay = (isWeight || isKgDirect) ? item.quantity.toFixed(1) : item.quantity;
                                 const isHighlighted = highlightedId === item.id;
+                                // Tope de "+": lo que queda en oferta o, en una caja, el stock para otra entera.
+                                const atStockCap = isAtStockCap(item);
+                                const atCap = isAtOfferCap(item) || atStockCap;
 
                                 return (
                                     <li
@@ -188,10 +192,21 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                                                 </button>
                                             </div>
 
-                                            <p className="text-[11px] text-tinta mt-0.5 tabular-nums">
-                                                {fmtCLP(effective)} / {unitLabel}
-                                                {equiv && <span className="ml-1">· {item.equivWeight} kg</span>}
-                                            </p>
+                                            {item.presentation ? (
+                                                <p className="text-[11px] font-semibold text-tallo mt-0.5 tabular-nums">
+                                                    {formatPresentationLine({ qty: item.quantity, ...item.presentation })}
+                                                </p>
+                                            ) : (
+                                                <p className="text-[11px] text-tinta mt-0.5 tabular-nums">
+                                                    {fmtCLP(effective)} / {unitLabel}
+                                                    {equiv && <span className="ml-1">· {item.equivWeight} kg</span>}
+                                                </p>
+                                            )}
+                                            {atStockCap && item.presentation && (
+                                                <p className="text-[10.5px] font-semibold text-tomate mt-0.5 leading-tight">
+                                                    No hay stock para otra {item.presentation.name.toLowerCase()}
+                                                </p>
+                                            )}
                                             {/* Escala compartida: avisar que el tramo sale de sumar el grupo */}
                                             {item.tierGroup && getItemTierQuantity(item) > item.quantity && (
                                                 <p className="text-[10.5px] font-semibold text-tallo mt-0.5 leading-tight">
@@ -219,8 +234,8 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                                                     </span>
                                                     <button
                                                         onClick={() => updateQuantity(item.id, Math.round((item.quantity + stepVal) * 100) / 100)}
-                                                        disabled={isAtOfferCap(item)}
-                                                        title={isAtOfferCap(item) ? 'No quedan más unidades en oferta' : undefined}
+                                                        disabled={atCap}
+                                                        title={atStockCap ? `No hay stock para otra ${item.presentation?.name.toLowerCase() ?? ''}` : isAtOfferCap(item) ? 'No quedan más unidades en oferta' : undefined}
                                                         className="w-7 h-7 flex items-center justify-center rounded-full text-tinta hover:bg-brote hover:text-tallo disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                                         aria-label="Aumentar cantidad"
                                                     >

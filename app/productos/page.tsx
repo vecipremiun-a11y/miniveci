@@ -411,6 +411,7 @@ function ProductsPageContent() {
                                         tierGroup={product.tierGroup}
                                         offerEndsAt={product.offerEndsAt}
                                         offerStock={product.offerStock}
+                                        presentations={product.presentations}
                                     />
                                 ))}
                             </div>

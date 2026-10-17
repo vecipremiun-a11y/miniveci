@@ -13,6 +13,7 @@ import { es } from "date-fns/locale";
 import { toast } from "sonner";
 import { statusConfig, paymentStatusConfig } from "@/components/admin/pedidos/OrderTable";
 import { isConfirmedTransfer } from "@/lib/store-status";
+import { formatPresentationLine, orderItemPresentation } from "@/lib/product-presentations";
 
 export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: string, initialOrderNumber: string }) {
     const router = useRouter();
@@ -170,7 +171,10 @@ export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: s
                         </CardHeader>
                         <CardContent className="p-0">
                             <div className="divide-y">
-                                {order.items?.map((item: any) => (
+                                {order.items?.map((item: any) => {
+                                    // Vendido por unidad de medida: "2 Caja (30 und) × $7.500" (= 60 und).
+                                    const presentation = orderItemPresentation(item);
+                                    return (
                                     <div key={item.id} className="p-4 flex gap-4 items-center">
                                         <div className="w-12 h-12 bg-gray-100 rounded-md flex-shrink-0 flex items-center justify-center border border-gray-200 overflow-hidden">
                                             {item.imageUrl ? (
@@ -182,19 +186,35 @@ export function OrderDetailWrapper({ orderId, initialOrderNumber }: { orderId: s
                                         <div className="flex-1 min-w-0">
                                             <p className="font-medium text-sm text-gray-900 truncate">{item.productName}</p>
                                             <p className="text-xs text-muted-foreground">{item.productSku}</p>
+                                            {presentation && (
+                                                <p className="mt-1 inline-flex flex-wrap items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                                    {formatPresentationLine(presentation)}
+                                                    <span className="font-normal text-blue-600">= {item.quantity} und</span>
+                                                </p>
+                                            )}
                                             <div className="text-xs text-muted-foreground mt-1">
                                                 Stock devengado de: <span className="uppercase font-semibold">{item.stockSource || 'GLOBAL'}</span>
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-medium text-sm">${(item.unitPrice).toLocaleString('es-CL')}</p>
-                                            <p className="text-xs text-muted-foreground">x {item.quantity}</p>
+                                            {presentation ? (
+                                                <>
+                                                    <p className="font-medium text-sm">${presentation.price.toLocaleString('es-CL')}</p>
+                                                    <p className="text-xs text-muted-foreground">x {presentation.qty} {presentation.name.toLowerCase()}</p>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <p className="font-medium text-sm">${(item.unitPrice).toLocaleString('es-CL')}</p>
+                                                    <p className="text-xs text-muted-foreground">x {item.quantity}</p>
+                                                </>
+                                            )}
                                         </div>
                                         <div className="pl-4 text-right min-w-[80px]">
                                             <p className="font-bold text-sm">${(item.totalPrice).toLocaleString('es-CL')}</p>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             {/* Totals */}

@@ -1,5 +1,6 @@
 import { mpPreference } from "@/lib/mercadopago";
 import { getSiteUrl } from "@/lib/site-url";
+import { presentationLabel } from "@/lib/product-presentations";
 
 /**
  * Construcción centralizada de preferencias de Mercado Pago para pedidos de
@@ -13,6 +14,27 @@ export type MpLineItem = {
     quantity: number;
     unitPrice: number;
 };
+
+/**
+ * Ítem de Mercado Pago de un renglón del pedido. Por unidad de medida va como
+ * la vio el cliente: "Huevo Extra — Caja (30 und)", 2 × $7.500 (no 60 × $250).
+ * El total es el mismo.
+ */
+export function mpLineItem(
+    title: string,
+    quantity: number,
+    unitPrice: number,
+    presentation?: { name: string; units: number; qty: number; price: number } | null,
+): MpLineItem {
+    if (presentation) {
+        return {
+            title: `${title} — ${presentationLabel(presentation.name, presentation.units)}`,
+            quantity: presentation.qty,
+            unitPrice: presentation.price,
+        };
+    }
+    return { title, quantity, unitPrice };
+}
 
 /**
  * `web`  → MP vuelve a las páginas del sitio.

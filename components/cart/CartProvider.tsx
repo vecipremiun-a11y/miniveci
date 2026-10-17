@@ -2,6 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { tierGroupKey, tierQuantities } from '@/lib/product-price';
+import { cartLineProductId, maxPresentationBoxes, type StorePresentation } from '@/lib/product-presentations';
+
+/** Presentación de un renglón del carrito (Caja, Bandeja…). */
+export type CartPresentation = StorePresentation;
 
 /** Returns true for weight-based units (kg, lt) that use decimal quantities */
 export function isWeightUnit(unit?: string | null): boolean {
@@ -40,6 +44,16 @@ export interface CartItem {
      * (kg en los de peso). El carrito no deja pedir más. null = sin tope.
      */
     offerStock?: number | null;
+    /**
+     * Unidad de medida (Caja de 30, Bandeja de 15…). En estos renglones
+     * `quantity` cuenta presentaciones y el precio es el fijo de la presentación:
+     * sin escala, grupo de escala, oferta ni precio de socio. El id del renglón
+     * es `presentationCartId(producto, presentación)`, así conviven con las
+     * unidades sueltas del mismo producto en renglones separados.
+     */
+    presentation?: CartPresentation | null;
+    /** Stock del producto en unidades al agregarlo: tope de presentaciones. */
+    stock?: number | null;
     /** Item de sorteo: `raffle:<raffleId>:<number>`. Cantidad siempre 1 y reserva activa con expiresAt. */
     raffle?: {
         raffleId: string;
@@ -114,6 +128,30 @@ function capByOffer(item: Pick<CartItem, 'id' | 'unit' | 'equivLabel' | 'equivWe
     return cap === null ? quantity : Math.min(quantity, cap);
 }
 
+/** Unidades del producto que ocupa un renglón (cajas × unidades en los de presentación). */
+export function cartLineUnits(item: Pick<CartItem, 'quantity' | 'presentation'>): number {
+    return item.presentation ? item.quantity * item.presentation.units : item.quantity;
+}
+
+/**
+ * Tope de un renglón por presentación: las cajas que caben en el stock que
+ * dejan los otros renglones del mismo producto. null = sin tope (por unidad).
+ * El servidor hace cumplir lo mismo (presentationStockError).
+ */
+export function getPresentationCap(item: CartItem, items: CartItem[]): number | null {
+    if (!item.presentation || item.stock === null || item.stock === undefined) return null;
+    const productId = cartLineProductId(item.id);
+    const others = items
+        .filter((other) => other.id !== item.id && cartLineProductId(other.id) === productId)
+        .reduce((sum, other) => sum + cartLineUnits(other), 0);
+    return maxPresentationBoxes(item.stock, item.presentation.units, others);
+}
+
+function capByPresentationStock(item: CartItem, quantity: number, items: CartItem[]): number {
+    const cap = getPresentationCap(item, items);
+    return cap === null ? quantity : Math.min(quantity, cap);
+}
+
 interface CartContextValue {
     items: CartItem[];
     totalItems: number;
@@ -128,6 +166,8 @@ interface CartContextValue {
     getItemTierQuantity: (item: CartItem) => number;
     /** Unidades en el carrito de un grupo de escala (0 si no hay). */
     getGroupQuantity: (tierGroup?: string | null) => number;
+    /** Renglón por presentación que ya no tiene stock para otra caja. */
+    isAtStockCap: (item: CartItem) => boolean;
     addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number) => void;
     updateQuantity: (id: string, quantity: number) => void;
     removeItem: (id: string) => void;
@@ -167,6 +207,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             });
             return;
         }
+        if (item.presentation) {
+            // Presentaciones enteras, sin pasarse del stock del producto.
+            const boxes = Math.max(1, Math.round(quantity ?? 1));
+            setItems((prev) => {
+                const existing = prev.find((p) => p.id === item.id);
+                if (existing) {
+                    // Precio y stock más nuevos que los guardados.
+                    const fresh = { ...existing, price: item.price, presentation: item.presentation, stock: item.stock ?? null };
+                    const next = capByPresentationStock(fresh, existing.quantity + boxes, prev);
+                    return prev.map((p) => (p.id === item.id ? { ...fresh, quantity: Math.max(next, 1) } : p));
+                }
+                const line = { ...item, quantity: boxes } as CartItem;
+                const next = capByPresentationStock(line, boxes, prev);
+                if (next <= 0) return prev;
+                return [...prev, { ...line, quantity: next }];
+            });
+            return;
+        }
         const equiv = hasEquiv(item);
         const isWeight = !equiv && isWeightUnit(item.unit);
         const isKgDirect = !equiv && item.id.endsWith('__kg');
@@ -194,6 +252,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             return; // No se puede cambiar la cantidad de un número de sorteo
         }
         const item = items.find((i) => i.id === id);
+        if (item?.presentation) {
+            if (quantity < 1) {
+                removeItem(id);
+                return;
+            }
+            setItems((prev) => prev.map((p) => (
+                p.id === id ? { ...p, quantity: Math.max(1, capByPresentationStock(p, Math.round(quantity), prev)) } : p
+            )));
+            return;
+        }
         const equiv = item ? hasEquiv(item) : false;
         const isWeight = !equiv && isWeightUnit(item?.unit);
         const isKgDirect = !equiv && id.endsWith('__kg');
@@ -213,9 +281,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const clearCart = () => setItems([]);
 
     // Cantidad de tramo por ítem: los del mismo grupo de escala suman entre sí.
-    // Los sorteos no participan.
+    // Los sorteos y las presentaciones (precio fijo) no participan.
     const tierQtyById = useMemo(() => {
-        const lines = items.filter((item) => !isRaffleCartId(item.id) && !item.id.endsWith('__kg'));
+        const lines = items.filter((item) => !isRaffleCartId(item.id) && !item.id.endsWith('__kg') && !item.presentation);
         const qty = tierQuantities(lines);
         return new Map(lines.map((item, i) => [item.id, qty[i]]));
     }, [items]);
@@ -225,8 +293,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         [tierQtyById],
     );
 
+    // En un renglón por presentación es el precio de la presentación entera
+    // (`quantity` cuenta presentaciones), igual que lo cobra el servidor.
     const getItemUnitPrice = useCallback(
-        (item: CartItem) => getEffectivePrice(item.price, item.priceTiers, getItemTierQuantity(item), item.subscriptionPrice),
+        (item: CartItem) => item.presentation
+            ? item.presentation.price
+            : getEffectivePrice(item.price, item.priceTiers, getItemTierQuantity(item), item.subscriptionPrice),
         [getItemTierQuantity],
     );
 
@@ -234,8 +306,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         const key = tierGroupKey(tierGroup);
         if (!key) return 0;
         return items.reduce((sum, item) => (
-            tierGroupKey(item.tierGroup) === key && !hasEquiv(item) && !isWeightUnit(item.unit) ? sum + item.quantity : sum
+            tierGroupKey(item.tierGroup) === key && !item.presentation && !hasEquiv(item) && !isWeightUnit(item.unit) ? sum + item.quantity : sum
         ), 0);
+    }, [items]);
+
+    const isAtStockCap = useCallback((item: CartItem) => {
+        const cap = getPresentationCap(item, items);
+        return cap !== null && item.quantity >= cap;
     }, [items]);
 
     const value = useMemo<CartContextValue>(() => {
@@ -248,8 +325,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             }
             return sum + effectivePrice * item.quantity;
         }, 0);
-        return { items, totalItems, subtotal, getItemUnitPrice, getItemTierQuantity, getGroupQuantity, addItem, updateQuantity, removeItem, clearCart };
-    }, [items, getItemUnitPrice, getItemTierQuantity, getGroupQuantity]);
+        return { items, totalItems, subtotal, getItemUnitPrice, getItemTierQuantity, getGroupQuantity, isAtStockCap, addItem, updateQuantity, removeItem, clearCart };
+    }, [items, getItemUnitPrice, getItemTierQuantity, getGroupQuantity, isAtStockCap]);
 
     return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

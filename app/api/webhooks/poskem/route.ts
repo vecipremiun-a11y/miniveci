@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { apiCredentials, products, productImages, categories } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { emitProductChange } from "@/lib/product-live-updates";
+import { readSyncPresentations, syncPosPresentations, type PresentationSyncResult } from "@/lib/presentation-sync";
 import { createHmac, timingSafeEqual } from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -214,6 +215,19 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
     // Precio suscriptor = (costo + IVA) × (1 + utilidad), al día con el costo.
     await recomputeSubscriptionPrice(db, productId);
 
+    // Unidades de medida: misma regla que /api/pos/products/sync (ausente o
+    // null = no tocar; array = la lista completa del POS).
+    let presentations: PresentationSyncResult | { error: string } | undefined;
+    const incomingPresentations = readSyncPresentations(payload.presentations);
+    if (incomingPresentations) {
+        try {
+            presentations = await syncPosPresentations(db, { id: productId, unit: unit ?? existing[0]?.unit ?? "Und" }, incomingPresentations);
+        } catch (err) {
+            console.error("[POSKEM_WEBHOOK] presentations falló para", sku, err);
+            presentations = { error: "No se pudieron guardar las unidades de medida" };
+        }
+    }
+
     // Handle image if provided
     if (imageUrl) {
         const existingImg = await db.query.productImages.findFirst({
@@ -236,10 +250,10 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
     await emitProductChange(productId, {
         slug: productSlug,
         reason: `webhook:product.${action}`,
-        changedFields: ["name", "price", "stock", "category", "images", "priceTiers"],
+        changedFields: ["name", "price", "stock", "category", "images", "priceTiers", ...(presentations ? ["presentations" as const] : [])],
     });
 
-    return { action, productId, sku };
+    return { action, productId, sku, ...(presentations ? { presentations } : {}) };
 }
 
 async function handleProductDeactivated(payload: Record<string, unknown>) {

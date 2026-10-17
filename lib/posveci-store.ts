@@ -17,6 +17,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { chileLocalToUtcISO } from "@/lib/timezone";
 import { publishStoreOrderCreated, type StoreOrderCreatedPayload } from "@/lib/posveci-publisher";
 import { isReceiptUrl } from "@/lib/payment-receipt";
+import { orderItemPresentation } from "@/lib/product-presentations";
 
 /**
  * Mapea el método de pago interno al vocabulario de POSVECI.
@@ -122,13 +123,27 @@ export async function sendStoreOrderToPosveci(orderId: string): Promise<void> {
             email: order.customerEmail || null,
             rut: order.customerRut,
         },
-        items: items.map((it) => ({
-            product_external_id: (it.productId ? posIdByProduct.get(it.productId) : null) ?? it.productSku ?? null,
-            product_name: it.productName,
-            quantity: it.quantity,
-            unit_price: it.unitPrice,
-            line_subtotal: it.totalPrice,
-        })),
+        items: items.map((it) => {
+            // Por unidad de medida: igual va en unidades (60 × $250) y se agrega
+            // la presentación para que el POS muestre "2 Caja (30 und)".
+            const presentation = orderItemPresentation(it);
+            return {
+                product_external_id: (it.productId ? posIdByProduct.get(it.productId) : null) ?? it.productSku ?? null,
+                product_name: it.productName,
+                quantity: it.quantity,
+                unit_price: it.unitPrice,
+                line_subtotal: it.totalPrice,
+                ...(presentation ? {
+                    presentation: {
+                        pos_presentation_id: presentation.posPresentationId,
+                        name: presentation.name,
+                        units: presentation.units,
+                        quantity: presentation.qty,
+                        price: presentation.price,
+                    },
+                } : {}),
+            };
+        }),
         subtotal: order.subtotal,
         total: order.total,
         ...(scheduledFor ? { scheduled_for: scheduledFor } : {}),

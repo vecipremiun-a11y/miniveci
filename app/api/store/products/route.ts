@@ -9,6 +9,8 @@ import { getSessionCustomerId } from "@/lib/session-customer";
 import { hasActiveSubscription } from "@/lib/subscriptions";
 import { activeOfferCondition, quickFilterConditions } from "@/lib/store-filters";
 import { isOfferActive, tierGroupKey } from "@/lib/product-price";
+import { presentationsAllowed } from "@/lib/product-presentations";
+import { loadStorePresentations } from "@/lib/product-presentations-db";
 
 export const dynamic = "force-dynamic";
 
@@ -137,6 +139,11 @@ export async function GET(req: NextRequest) {
         // mandarle aparte si tiene membresía. Ver resolveUnitPrice.
         const isSubscriber = await hasActiveSubscription(await getSessionCustomerId());
 
+        // Unidades de medida (Caja, Bandeja…), solo en los productos por unidad.
+        const presentationsByProduct = await loadStorePresentations(
+            rawProducts.filter((row) => presentationsAllowed(row.product)).map((row) => row.product.id),
+        );
+
         // Map results (resolve price/stock inline — no loop over all products)
         const publicProducts = rawProducts.map(row => {
             const raw = row.product;
@@ -186,6 +193,7 @@ export async function GET(req: NextRequest) {
                 priceTiers: (raw.priceTiers as any[]) ?? [],
                 tierGroup: raw.tierGroup ?? null,
                 subscriptionPrice: isSubscriber && raw.subscriptionPrice ? raw.subscriptionPrice : null,
+                presentations: presentationsByProduct.get(raw.id) ?? [],
             };
         });
 

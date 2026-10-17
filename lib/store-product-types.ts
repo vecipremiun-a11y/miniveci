@@ -1,3 +1,7 @@
+import type { StorePresentation } from "@/lib/product-presentations";
+
+export type { StorePresentation };
+
 /**
  * Badge que prende el sello "Comercial Veci" (logo arriba a la izquierda de la
  * foto del producto). Se guarda en `products.badges` y se activa desde la ficha
@@ -57,6 +61,14 @@ export interface StoreProductPayload {
     tierGroup: string | null;
     /** Precio de socio. La API solo lo manda si quien mira es suscriptor. */
     subscriptionPrice?: number | null;
+    /**
+     * Unidades de medida a la venta (Caja de 30, Bandeja de 15…), de la más chica
+     * a la más grande. Solo las activas y visibles, y solo en productos por
+     * unidad; vacío si no hay. `price` es el de la presentación entera (fijo:
+     * sin escala, oferta ni precio de socio). El stock sigue en unidades: está
+     * agotada si `stock < units`. Ver lib/product-presentations.ts.
+     */
+    presentations?: StorePresentation[];
 }
 
 export type StoreProductField = keyof StoreProductPayload;

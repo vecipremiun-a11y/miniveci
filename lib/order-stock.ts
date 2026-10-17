@@ -47,10 +47,13 @@ export async function applyOrderStock(
             .returning({ id: orders.id });
     if (marked.length === 0) return [];
 
+    // quantity está en unidades también en las cajas (cajas × units): el stock
+    // se descuenta igual. Lo que no gastan las cajas es el stock en oferta.
     const lines = await conn.select({
         productId: orderItems.productId,
         quantity: orderItems.quantity,
         unitPrice: orderItems.unitPrice,
+        presentationQty: orderItems.presentationQty,
         slug: products.slug,
     })
         .from(orderItems)
@@ -65,7 +68,12 @@ export async function applyOrderStock(
                 webStock: action === "deduct"
                     ? sql`${products.webStock} - ${line.quantity}`
                     : sql`${products.webStock} + ${line.quantity}`,
-                offerStock: offerStockAfterSale(line, action),
+                offerStock: offerStockAfterSale(
+                    // Precio fijo de la presentación: nunca se cobró a precio oferta,
+                    // aunque price/units coincida con el precio oferta.
+                    { quantity: line.quantity, unitPrice: line.presentationQty ? null : line.unitPrice },
+                    action,
+                ),
             })
             .where(eq(products.id, line.productId));
         touched.set(line.productId, line.slug ?? null);
@@ -97,7 +105,7 @@ export async function deductOrderStock(orderId: string, reason: string): Promise
 export async function pendingWebOrderQty(productId: string): Promise<{ qty: number; offerQty: number }> {
     const [row] = await db.select({
         qty: sql<number>`COALESCE(SUM(${orderItems.quantity}), 0)`,
-        offerQty: sql<number>`COALESCE(SUM(CASE WHEN ${orderItems.unitPrice} = ${products.offerPrice} THEN ${orderItems.quantity} ELSE 0 END), 0)`,
+        offerQty: sql<number>`COALESCE(SUM(CASE WHEN ${orderItems.presentationQty} IS NULL AND ${orderItems.unitPrice} = ${products.offerPrice} THEN ${orderItems.quantity} ELSE 0 END), 0)`,
     })
         .from(orderItems)
         .innerJoin(orders, eq(orderItems.orderId, orders.id))

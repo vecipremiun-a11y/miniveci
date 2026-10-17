@@ -6,6 +6,8 @@ import { eq, and, sql } from "drizzle-orm";
 import { resolveProduct, ProductInput, CategoryInput } from "@/lib/services/product-resolver";
 import { getSessionCustomerId } from "@/lib/session-customer";
 import { hasActiveSubscription } from "@/lib/subscriptions";
+import { presentationsAllowed } from "@/lib/product-presentations";
+import { loadStorePresentations } from "@/lib/product-presentations-db";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +45,11 @@ export async function GET(req: NextRequest, context: any) {
         // Oferta vencida (offerEndsAt en el pasado) = precio normal para todos.
         const offerActive = isOfferActive(rawProduct);
 
+        // Unidades de medida (Caja, Bandeja…), solo en los productos por unidad.
+        const presentations = presentationsAllowed(rawProduct)
+            ? (await loadStorePresentations([rawProduct.id])).get(rawProduct.id) ?? []
+            : [];
+
         const publicProduct = {
             id: rawProduct.id,
             name: rawProduct.name,
@@ -75,6 +82,7 @@ export async function GET(req: NextRequest, context: any) {
             tags: rawProduct.tags,
             priceTiers: (rawProduct.priceTiers as any[]) ?? [],
             tierGroup: rawProduct.tierGroup ?? null,
+            presentations,
         };
 
         return NextResponse.json(publicProduct);

@@ -12,7 +12,8 @@ import { generateUniqueOrderNumber } from "@/lib/order-number";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { persistCheckoutProfile } from "@/lib/checkout-profile";
 import { extractBearer, verifyAccessToken } from "@/lib/mobile-auth";
-import { createOrderPreference, type MpCheckoutOrigin } from "@/lib/mp-checkout";
+import { createOrderPreference, mpLineItem, type MpCheckoutOrigin } from "@/lib/mp-checkout";
+import { orderItemPresentationColumns } from "@/lib/product-presentations";
 
 export async function POST(req: NextRequest) {
     const limited = enforceRateLimit(req, RATE_LIMITS.checkout);
@@ -138,6 +139,7 @@ export async function POST(req: NextRequest) {
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
                 totalPrice: item.totalPrice,
+                ...orderItemPresentationColumns(item.presentation),
                 createdAt: now,
             });
         }
@@ -191,11 +193,7 @@ export async function POST(req: NextRequest) {
             customerLastName,
             customerEmail,
             customerPhone,
-            items: pricedItems.map((item) => ({
-                title: item.name,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-            })),
+            items: pricedItems.map((item) => mpLineItem(item.name, item.quantity, item.unitPrice, item.presentation)),
             shippingCost,
             discount,
             origin,

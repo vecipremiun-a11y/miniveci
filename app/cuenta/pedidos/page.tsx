@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
+import { formatPresentationLine, orderItemPresentation } from '@/lib/product-presentations';
 
 interface OrderItem {
     id: string;
@@ -17,6 +18,11 @@ interface OrderItem {
     unitPrice: number;
     totalPrice: number;
     imageUrl: string | null;
+    // Vendido por unidad de medida (Caja, Bandeja…); null si fue por unidad.
+    presentationName?: string | null;
+    presentationUnits?: number | null;
+    presentationQty?: number | null;
+    presentationPrice?: number | null;
 }
 
 interface Order {
@@ -427,7 +433,12 @@ function OrderDetail({ order, onBack }: { order: Order; onBack: () => void }) {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm text-slate-800 truncate">{item.productName}</p>
-                                <p className="text-xs text-slate-400">x{item.quantity}</p>
+                                {(() => {
+                                    const presentation = orderItemPresentation(item);
+                                    return presentation
+                                        ? <p className="text-xs text-slate-500">{formatPresentationLine(presentation)}</p>
+                                        : <p className="text-xs text-slate-400">x{item.quantity}</p>;
+                                })()}
                             </div>
                             <p className="font-bold text-sm text-slate-800">${item.totalPrice.toLocaleString('es-CL')}</p>
                         </div>

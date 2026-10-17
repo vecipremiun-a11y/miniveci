@@ -70,9 +70,27 @@ interface PreorderCancelledPayload {
 export interface StoreOrderItemPayload {
     product_external_id: string | null;
     product_name: string;
+    /** Siempre en UNIDADES (lo que el POS separa de stock y factura). */
     quantity: number;
     unit_price: number;
     line_subtotal: number;
+    /**
+     * Solo si se vendió por unidad de medida (Caja, Bandeja…). Se cumple
+     * quantity = presentation.quantity × presentation.units y
+     * unit_price × quantity = line_subtotal. Ver POSVECI-UNIDADES.md.
+     */
+    presentation?: StoreOrderItemPresentationPayload;
+}
+
+export interface StoreOrderItemPresentationPayload {
+    /** Id de la presentación en POSVECI; null si es una propia de miniveci. */
+    pos_presentation_id: string | null;
+    name: string;
+    units: number;
+    /** Cuántas presentaciones (cajas). */
+    quantity: number;
+    /** Precio de la presentación entera. */
+    price: number;
 }
 
 export interface StoreOrderClientPayload {

@@ -34,15 +34,19 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductImagesUpload } from "./ProductImagesUpload";
+import { ProductPresentations, type AdminPresentation } from "./ProductPresentations";
+import { presentationsAllowed } from "@/lib/product-presentations";
 
 interface ProductFormProps {
     initialData?: Partial<ProductFormValues> & { id: string };
     categories: { id: string; name: string }[];
     /** Grupos de escala que ya existen, para sugerirlos y no escribirlos distinto. */
     tierGroups?: { name: string; count: number }[];
+    /** Unidades de medida del producto (Caja, Bandeja…), las del POS y las propias. */
+    presentations?: AdminPresentation[];
 }
 
-export function ProductForm({ initialData, categories, tierGroups = [] }: ProductFormProps) {
+export function ProductForm({ initialData, categories, tierGroups = [], presentations = [] }: ProductFormProps) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [newTag, setNewTag] = useState("");
@@ -262,6 +266,29 @@ export function ProductForm({ initialData, categories, tierGroups = [] }: Produc
                                 </FormItem>
                             </CardContent>
                         </Card>
+
+                        {/* Unidades de medida (Caja, Bandeja…): solo productos por unidad, como en el POS. */}
+                        {presentationsAllowed({ unit: form.watch("unit") }) && (
+                            initialData?.id ? (
+                                <ProductPresentations
+                                    productId={initialData.id}
+                                    initialPresentations={presentations}
+                                    stock={Number(form.watch("webStock")) || 0}
+                                    unitPrice={Number(form.watch("webPrice")) || 0}
+                                />
+                            ) : (
+                                <Card>
+                                    <CardHeader className="pb-3">
+                                        <CardTitle className="text-base">Unidades de medida</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <p className="rounded-lg border-2 border-dashed bg-gray-50 p-6 text-center text-sm text-muted-foreground">
+                                            Guarda el producto primero para agregarle caja, bandeja o pack.
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            )
+                        )}
 
                         <Card>
                             <CardHeader>

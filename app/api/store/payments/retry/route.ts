@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { extractBearer, verifyAccessToken, AuthHttpError } from "@/lib/mobile-auth";
-import { createOrderPreference, type MpCheckoutOrigin } from "@/lib/mp-checkout";
+import { createOrderPreference, mpLineItem, type MpCheckoutOrigin } from "@/lib/mp-checkout";
+import { orderItemPresentation } from "@/lib/product-presentations";
 import { deductOrderStock } from "@/lib/order-stock";
 import { isReceiptUrl } from "@/lib/payment-receipt";
 import { sendStoreOrderToPosveci } from "@/lib/posveci-store";
@@ -78,11 +79,7 @@ export async function POST(req: NextRequest) {
             customerName: order.customerName,
             customerEmail: order.customerEmail,
             customerPhone: order.customerPhone,
-            items: items.map((item) => ({
-                title: item.productName,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-            })),
+            items: items.map((item) => mpLineItem(item.productName, item.quantity, item.unitPrice, orderItemPresentation(item))),
             shippingCost: order.shippingCost,
             discount: order.discount,
             origin,

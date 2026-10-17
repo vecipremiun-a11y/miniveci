@@ -15,8 +15,15 @@ export type DeliveryMethod = (typeof DELIVERY_METHODS)[number];
 
 export const storeOrderItemInputSchema = z.object({
     productId: z.string().min(1),
+    /** Unidades; si viene `presentationId`, cuántas presentaciones (cajas). */
     quantity: z.number().int().min(1).max(500),
     notes: z.string().max(280).optional().nullable(),
+    /**
+     * Unidad de medida (Caja, Bandeja…) de `presentations[].id` del producto.
+     * Opcional: sin esto el ítem es por unidad, como siempre. El precio lo pone
+     * el servidor; el pedido guarda la cantidad en unidades (cajas × units).
+     */
+    presentationId: z.string().trim().min(1).max(64).optional().nullable(),
 });
 
 export const storeMobileOrderSchema = z.object({

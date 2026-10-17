@@ -5,7 +5,7 @@ import { Plus, Minus, TrendingDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getTieredPrice, getOfferCartCap } from '@/components/cart/CartProvider';
 import type { PriceTier } from '@/components/cart/CartProvider';
-import { COMERCIAL_VECI_BADGE } from '@/lib/store-product-types';
+import { COMERCIAL_VECI_BADGE, type StorePresentation } from '@/lib/store-product-types';
 import { OfferCountdown } from '@/components/products/OfferEndsLabel';
 import { useRouter } from 'next/navigation';
 
@@ -44,9 +44,11 @@ interface ProductCardProps {
     offerEndsAt?: string | null;
     /** Oferta por stock: lo que queda a precio oferta (kg en los de peso). */
     offerStock?: number | null;
+    /** Unidades de medida (Caja, Bandeja…). Se eligen en la ficha; acá solo se avisa. */
+    presentations?: StorePresentation[];
 }
 
-export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers, subscriptionPrice, badges, tierGroup, offerEndsAt, offerStock }: ProductCardProps) {
+export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers, subscriptionPrice, badges, tierGroup, offerEndsAt, offerStock, presentations }: ProductCardProps) {
     const hasVeciSeal = badges?.includes(COMERCIAL_VECI_BADGE) ?? false;
     const { addItem, getGroupQuantity } = useCart();
     const router = useRouter();
@@ -235,6 +237,13 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                 {offerStockLeft !== null && (
                     <p className="text-[11px] font-extrabold text-tomate leading-tight">
                         ¡Quedan {formatOfferStock(offerStockLeft, unit)} en oferta!
+                    </p>
+                )}
+
+                {/* Unidades de medida: se eligen en la ficha (la tarjeta abre la ficha). */}
+                {presentations && presentations.length > 0 && (
+                    <p className="text-[11px] font-bold text-tallo leading-tight">
+                        También por {presentations.map((p) => `${p.name.toLowerCase()} (${p.units})`).join(', ')}
                     </p>
                 )}
 

@@ -6,7 +6,8 @@ import { useParams } from 'next/navigation';
 import { Footer } from '@/components/Footer';
 import { TierGroupCarousel } from '@/components/products/TierGroupCarousel';
 import { OfferCountdown } from '@/components/products/OfferEndsLabel';
-import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getOfferCartCap } from '@/components/cart/CartProvider';
+import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getOfferCartCap, cartLineUnits } from '@/components/cart/CartProvider';
+import { cartLineProductId, maxPresentationBoxes, presentationCartId } from '@/lib/product-presentations';
 import { formatOfferStock } from '@/components/products/ProductCard';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
@@ -30,12 +31,14 @@ export default function ProductDetailPage() {
     const params = useParams<{ slug: string }>();
     const slug = params?.slug;
 
-    const { addItem, getGroupQuantity } = useCart();
+    const { addItem, getGroupQuantity, items: cartItems } = useCart();
     const [product, setProduct] = useState<ProductDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState(0);
     const [quantity, setQuantity] = useState(1);
     const [buyMode, setBuyMode] = useState<'unit' | 'kg'>('unit');
+    // Unidad de medida elegida (Caja, Bandeja…); null = por unidad suelta.
+    const [presentationId, setPresentationId] = useState<string | null>(null);
 
     // Reset quantity when product loads/changes unit
     useEffect(() => {
@@ -52,6 +55,25 @@ export default function ProductDetailPage() {
     const step = kgMode ? 0.5 : (equiv ? 1 : (isWeight ? 0.1 : 1));
     const minQty = kgMode ? 0.5 : (equiv ? 1 : (isWeight ? 0.1 : 1));
     const equivW = product?.equivWeight ?? 1;
+
+    // Unidades de medida (Caja, Bandeja…), solo en los productos por unidad. El
+    // stock sigue en unidades: una caja de 30 necesita 30 en stock.
+    const presentations = product && !equiv && !isWeight ? product.presentations ?? [] : [];
+    const presentation = presentations.find((p) => p.id === presentationId) ?? null;
+    // Lo que ya hay de este producto en el carrito (sueltas + cajas), en unidades.
+    const unitsInCart = product
+        ? cartItems.filter((item) => cartLineProductId(item.id) === product.id).reduce((sum, item) => sum + cartLineUnits(item), 0)
+        : 0;
+    const presentationMax = presentation && product ? maxPresentationBoxes(product.stock, presentation.units, unitsInCart) : 0;
+
+    // Si la presentación elegida deja de venderse (el admin o el POS la apagan), vuelve a unidad.
+    useEffect(() => {
+        if (presentationId && !presentation) {
+            setPresentationId(null);
+            setQuantity(1);
+        }
+    }, [presentationId, presentation]);
+
     // Oferta por stock: mientras dure, se muestra y se vende solo lo que queda en
     // oferta; al agotarse vuelve el precio normal con el stock real.
     const offerStockLeft = product?.isOffer ? product.offerStock ?? null : null;
@@ -64,7 +86,15 @@ export default function ProductDetailPage() {
         equivWeight: kgMode ? null : product.equivWeight,
         offerStock: offerStockLeft,
     }) : null;
-    const maxQty = Math.min(kgMode ? shownStock : availableStock, offerCap ?? Infinity);
+    const maxQty = presentation
+        ? presentationMax
+        : Math.min(kgMode ? shownStock : availableStock, offerCap ?? Infinity);
+
+    const handlePresentationChange = (id: string | null) => {
+        if (id === presentationId) return;
+        setPresentationId(id);
+        setQuantity(1);
+    };
 
     // Format price per kg for equiv products
     const equivUnitLabel = product?.equivLabel && !/^\d+$/.test(product.equivLabel.trim()) ? product.equivLabel : 'und';
@@ -210,10 +240,21 @@ export default function ProductDetailPage() {
 
     const subtotal = useMemo(() => {
         if (!product) return 0;
+        // Caja: precio fijo de la presentación entera.
+        if (presentation) return quantity * presentation.price;
         if (kgMode) return Math.round(quantity * tieredPrice);
         if (equiv) return quantity * displayPrice;
         return Math.round(quantity * tieredPrice);
-    }, [product, equiv, kgMode, quantity, displayPrice, tieredPrice]);
+    }, [product, presentation, equiv, kgMode, quantity, displayPrice, tieredPrice]);
+
+    const fmtClp = (value: number) =>
+        new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
+    // Precio de 1 unidad suelta, para el selector "Unidad | Caja (30) | …".
+    const unitChipPrice = getEffectivePrice(rawPrice, product?.priceTiers, 1 + groupInCart, subscriptionPrice);
+    // Lo que costarían las mismas unidades sueltas (con su escala), para mostrar el ahorro de la caja.
+    const looseCost = presentation
+        ? getEffectivePrice(rawPrice, product?.priceTiers, presentation.units, subscriptionPrice) * presentation.units
+        : 0;
 
     const subtotalText = useMemo(() => {
         return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(subtotal);
@@ -362,8 +403,54 @@ export default function ProductDetailPage() {
                             <span className="text-sm font-semibold text-slate-600">{rating.toFixed(1)} / 5</span>
                         </div>
 
+                        {/* --- Unidad de medida: Unidad | Caja (30) | Bandeja (15) --- */}
+                        {presentations.length > 0 && (
+                            <div className="mt-6">
+                                <p className="text-sm font-semibold text-slate-500 mb-2">¿Cómo lo llevas?</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    {[null, ...presentations].map((p) => {
+                                        const selected = (p?.id ?? null) === presentationId;
+                                        const soldOut = p ? product.stock < p.units : product.stock <= 0;
+                                        return (
+                                            <button
+                                                key={p?.id ?? 'unit'}
+                                                type="button"
+                                                onClick={() => handlePresentationChange(p?.id ?? null)}
+                                                disabled={soldOut && !selected}
+                                                aria-pressed={selected}
+                                                className={`min-h-[60px] rounded-2xl border-2 px-3 py-2 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                                                    selected
+                                                        ? 'border-veci-primary bg-white shadow-sm ring-2 ring-veci-primary/20'
+                                                        : 'border-slate-200 bg-white/70 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <span className="block text-sm font-extrabold text-slate-800">
+                                                    {p ? `${p.name} (${p.units})` : 'Unidad'}
+                                                </span>
+                                                <span className={`block text-sm font-bold ${soldOut ? 'text-slate-400' : 'text-slate-600'}`}>
+                                                    {soldOut ? 'Agotado' : fmtClp(p ? p.price : unitChipPrice)}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {/* --- Pricing --- */}
-                        {equiv ? (
+                        {presentation ? (
+                            <div className="mt-6">
+                                <p className="text-4xl font-extrabold text-veci-dark">{fmtClp(presentation.price)}</p>
+                                <p className="mt-1.5 text-sm font-semibold text-slate-500">
+                                    {presentation.name} de {presentation.units} unidades · {fmtClp(presentation.price / presentation.units)} c/u
+                                </p>
+                                {looseCost > presentation.price && (
+                                    <p className="mt-1 text-sm font-bold text-emerald-600">
+                                        Ahorras {fmtClp(looseCost - presentation.price)} frente a {presentation.units} sueltas
+                                    </p>
+                                )}
+                            </div>
+                        ) : equiv ? (
                             <div className="mt-6">
                                 <div className="flex items-baseline gap-3">
                                     <p className={`text-4xl font-extrabold ${hasOffer ? 'text-red-600' : 'text-veci-dark'}`}>
@@ -401,14 +488,14 @@ export default function ProductDetailPage() {
                             </>
                         )}
 
-                        {offerStockLeft !== null && (
+                        {offerStockLeft !== null && !presentation && (
                             <p className="mt-2 text-sm font-extrabold text-red-600">
                                 ¡Quedan {formatOfferStock(offerStockLeft, product.unit)} en oferta!
                             </p>
                         )}
 
-                        {/* --- Price Tiers Table --- */}
-                        {(product as any).priceTiers && (product as any).priceTiers.length > 0 && (
+                        {/* --- Price Tiers Table (por unidad; la caja tiene precio fijo) --- */}
+                        {!presentation && (product as any).priceTiers && (product as any).priceTiers.length > 0 && (
                             <div className="mt-5 rounded-2xl overflow-hidden border border-purple-200 shadow-sm">
                                 {/* Header */}
                                 <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500 px-4 py-3 flex items-center gap-2">
@@ -479,11 +566,22 @@ export default function ProductDetailPage() {
                         {/* --- Availability --- */}
                         <div className="mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
                             <p className="text-sm text-slate-500">Disponibilidad</p>
+                            {presentation ? (
+                                <p className="font-bold text-slate-700">
+                                    {product.stock >= presentation.units
+                                        ? `${Math.floor(product.stock / presentation.units)} ${presentation.name.toLowerCase()} disponibles (${product.stock} UND en stock)`
+                                        : `Sin stock para una ${presentation.name.toLowerCase()} entera`}
+                                </p>
+                            ) : (
                             <p className="font-bold text-slate-700">
                                 {shownStock > 0
                                     ? `${shownStock} ${isWeightUnit(product.unit) ? (product.unit ?? 'Kg').toUpperCase() : 'UND'} ${offerStockLeft !== null ? 'en oferta' : 'en stock'}`
                                     : 'Sin stock'}
                             </p>
+                            )}
+                            {presentation && unitsInCart > 0 && (
+                                <p className="text-xs font-semibold text-slate-500">Ya llevas {unitsInCart} und de este producto en el carrito.</p>
+                            )}
                             {equiv && availableStock > 0 && (
                                 <p className="text-sm font-semibold text-emerald-700 pt-1 border-t border-slate-200">
                                     ≈ {availableStock} {equivUnitLabel} disponibles
@@ -525,7 +623,7 @@ export default function ProductDetailPage() {
                         {/* --- Quantity --- */}
                         <div className="mt-6">
                             <p className="text-sm font-semibold text-slate-500 mb-3">
-                                {kgMode ? 'Cantidad (kg)' : equiv ? `Cantidad (${equivUnitLabel})` : isWeight ? `Cantidad (${(product.unit ?? 'Kg').toLowerCase()})` : 'Cantidad'}
+                                {presentation ? `Cantidad (${presentation.name.toLowerCase()})` : kgMode ? 'Cantidad (kg)' : equiv ? `Cantidad (${equivUnitLabel})` : isWeight ? `Cantidad (${(product.unit ?? 'Kg').toLowerCase()})` : 'Cantidad'}
                             </p>
                             <div className="flex items-center gap-3">
                                 <button
@@ -543,6 +641,11 @@ export default function ProductDetailPage() {
                                     <Plus className="w-4 h-4 mx-auto" />
                                 </button>
                             </div>
+                            {presentation && (
+                                <p className="mt-2 text-sm text-slate-500">
+                                    {quantity} {presentation.name.toLowerCase()} = {quantity * presentation.units} unidades
+                                </p>
+                            )}
                             {equiv && quantity > 0 && (
                                 <p className="mt-2 text-sm text-slate-500">
                                     {kgMode
@@ -556,7 +659,20 @@ export default function ProductDetailPage() {
                         {/* --- Add to Cart with running total --- */}
                         <button
                             onClick={() => {
-                                if (kgMode) {
+                                if (presentation) {
+                                    // Renglón aparte del de unidades sueltas; precio fijo de la caja.
+                                    addItem({
+                                        id: presentationCartId(product.id, presentation.id),
+                                        name: product.name,
+                                        price: presentation.price,
+                                        image: currentImage,
+                                        slug: product.slug,
+                                        unit: product.unit,
+                                        presentation,
+                                        stock: product.stock,
+                                    }, quantity);
+                                    setQuantity(1);
+                                } else if (kgMode) {
                                     addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, priceTiers: (product as any).priceTiers, subscriptionPrice, offerStock: offerStockLeft }, quantity);
                                 } else {
                                     addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight, priceTiers: (product as any).priceTiers, subscriptionPrice, tierGroup, offerStock: offerStockLeft }, quantity);

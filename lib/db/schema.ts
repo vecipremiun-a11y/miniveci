@@ -181,6 +181,34 @@ export const productImages = sqliteTable("product_images", {
     isPrimary: integer("is_primary", { mode: "boolean" }).default(false),
 });
 
+// Unidades de medida (presentaciones): Caja de 30, Bandeja de 15… El stock vive
+// siempre en unidades; la presentación solo dice cuántas trae y a cuánto se
+// vende entera. Reglas en lib/product-presentations.ts. Ver
+// drizzle/0029_product_presentations.sql.
+export const productPresentations = sqliteTable("product_presentations", {
+    id: text("id").primaryKey(),
+    productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+    // "pos" = llega del sync de POSVECI (el POS es dueño de sus datos);
+    // "store" = creada en el admin de miniveci, no viaja al POS.
+    source: text("source").notNull().default("store"),
+    posPresentationId: text("pos_presentation_id"),
+    name: text("name").notNull(),
+    units: integer("units").notNull(),
+    price: integer("price").notNull(), // CLP, presentación entera, divisible por units
+    barcode: text("barcode"),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    // Solo de miniveci: ocultarla en la web. El sync de POSVECI nunca lo toca.
+    hiddenInStore: integer("hidden_in_store", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    productIdx: index("product_presentations_product_idx").on(table.productId),
+    posUnq: uniqueIndex("product_presentations_pos_unq").on(table.productId, table.posPresentationId)
+        .where(sql`pos_presentation_id IS NOT NULL`),
+    barcodeUnq: uniqueIndex("product_presentations_barcode_unq").on(table.barcode)
+        .where(sql`barcode IS NOT NULL`),
+}));
+
 // --- ORDERS ---
 
 export const orders = sqliteTable("orders", {
@@ -248,6 +276,16 @@ export const orderItems = sqliteTable("order_items", {
     unitPrice: integer("unit_price").notNull(), // CLP (pesos)
     totalPrice: integer("total_price").notNull(),
     stockSource: text("stock_source"),
+    // Renglón vendido por presentación (Caja, Bandeja…): foto de la presentación
+    // al vender. quantity sigue en UNIDADES (cajas × units) y unitPrice =
+    // price / units. NULL en los renglones por unidad. Sin FK a propósito: si se
+    // borra la presentación, el pedido no se toca.
+    presentationId: text("presentation_id"),
+    presentationPosId: text("presentation_pos_id"),
+    presentationName: text("presentation_name"),
+    presentationUnits: integer("presentation_units"),
+    presentationQty: integer("presentation_qty"), // cajas
+    presentationPrice: integer("presentation_price"), // CLP de la presentación entera
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -315,10 +353,15 @@ export const categoriesRelations = relations(categories, ({ many }) => ({
 export const productsRelations = relations(products, ({ one, many }) => ({
     category: one(categories, { fields: [products.categoryId], references: [categories.id] }),
     images: many(productImages),
+    presentations: many(productPresentations),
 }));
 
 export const productImagesRelations = relations(productImages, ({ one }) => ({
     product: one(products, { fields: [productImages.productId], references: [products.id] }),
+}));
+
+export const productPresentationsRelations = relations(productPresentations, ({ one }) => ({
+    product: one(products, { fields: [productPresentations.productId], references: [products.id] }),
 }));
 
 export const ordersRelations = relations(orders, ({ many }) => ({

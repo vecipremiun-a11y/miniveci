@@ -5,6 +5,17 @@ import { products, categories, productImages } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { loadTierGroups } from "@/lib/tier-groups";
+import { listProductPresentations } from "@/lib/product-presentations-db";
+
+/** Unidades de medida del producto. Si falta la migración 0029, el formulario abre igual. */
+async function getPresentations(id: string) {
+    try {
+        return await listProductPresentations(id);
+    } catch (err) {
+        console.error("[EDIT_PRODUCT] no se pudieron leer las unidades de medida:", (err as Error).message);
+        return [];
+    }
+}
 
 async function getCategories() {
     return db.select().from(categories).orderBy(desc(categories.createdAt));
@@ -27,7 +38,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
     const { id } = await params;
 
     const product = await getProduct(id);
-    const [categoriesList, tierGroups] = await Promise.all([getCategories(), loadTierGroups()]);
+    const [categoriesList, tierGroups, presentations] = await Promise.all([getCategories(), loadTierGroups(), getPresentations(id)]);
 
     if (!product) {
         notFound();
@@ -49,7 +60,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
                 </p>
             </div>
 
-            <ProductForm initialData={product as any} categories={categoriesList} tierGroups={tierGroups} />
+            <ProductForm initialData={product as any} categories={categoriesList} tierGroups={tierGroups} presentations={presentations} />
         </div>
     );
 }

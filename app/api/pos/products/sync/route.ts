@@ -15,6 +15,7 @@ import { emitProductChange } from "@/lib/product-live-updates";
 import { adjustPosStockForPendingWebOrders } from "@/lib/order-stock";
 import { recomputeSubscriptionPrice } from "@/lib/subscription-price";
 import { slugify } from "@/lib/slug";
+import { readSyncPresentations, syncPosPresentations, type PresentationSyncResult } from "@/lib/presentation-sync";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -88,6 +89,10 @@ const syncProductRawSchema = z.object({
   // Ausente = no tocar; null = sin límite de stock; 0 = oferta agotada.
   offer_stock: z.number().min(0).optional().nullable(),
   offerStock: z.number().min(0).optional().nullable(),
+  // Unidades de medida (Caja, Bandeja…). Ausente o null = no tocar; array
+  // (aunque sea []) = la lista COMPLETA del POS. Cada una se valida sola en
+  // lib/presentation-sync.ts: una inválida se salta sin hacer fallar el sync.
+  presentations: z.array(z.unknown()).optional().nullable(),
 }).transform((d) => ({
   sku: d.sku,
   pos_product_id: ((): string | undefined => {
@@ -118,6 +123,7 @@ const syncProductRawSchema = z.object({
   tax_rate: d.tax_rate ?? d.taxRate,
   image_url: d.image_url ?? d.imageUrl,
   image_base64: d.image_base64 ?? d.imageBase64,
+  presentations: readSyncPresentations(d.presentations),
 }));
 
 type SyncProductData = z.output<typeof syncProductRawSchema>;
@@ -331,6 +337,7 @@ async function handleProductSync(req: NextRequest) {
       offer_stock: body.offer_stock,
       tierGroup: body.tierGroup,
       tier_group: body.tier_group,
+      presentations: Array.isArray(body.presentations) ? `${body.presentations.length} presentaciones` : body.presentations,
     });
 
     let data: SyncProductData;
@@ -541,6 +548,20 @@ async function handleProductSync(req: NextRequest) {
     // costo o el IVA, el precio de socio sube o baja con él.
     await recomputeSubscriptionPrice(db, productId);
 
+    // Unidades de medida del POS. Un error acá no hace fallar el sync del
+    // producto (que ya quedó guardado): se informa en la respuesta.
+    let presentationsResult: PresentationSyncResult | { error: string } | undefined;
+    if (data.presentations !== undefined) {
+      try {
+        const unit = data.unit ?? existingRow?.unit ?? "Und";
+        presentationsResult = await syncPosPresentations(db, { id: productId, unit }, data.presentations);
+        console.log("[POS_SYNC] presentations", skuUpper, JSON.stringify(presentationsResult));
+      } catch (err) {
+        console.error("[POS_SYNC] presentations falló para", skuUpper, err);
+        presentationsResult = { error: "No se pudieron guardar las unidades de medida" };
+      }
+    }
+
     // Handle image
     console.log("[POS_SYNC] Fields received:", Object.keys(body));
     console.log("[POS_SYNC] data.image_base64 present:", !!data.image_base64, "length:", data.image_base64?.length || 0);
@@ -551,7 +572,10 @@ async function handleProductSync(req: NextRequest) {
     await emitProductChange(productId, {
       slug: productSlug,
       reason: "sync-product-pos",
-      changedFields: ["name", "price", "stock", "category", "images", "priceTiers", "tierGroup", "offerStock"],
+      changedFields: [
+        "name", "price", "stock", "category", "images", "priceTiers", "tierGroup", "offerStock",
+        ...(presentationsResult ? ["presentations" as const] : []),
+      ],
     });
 
     return withCors(
@@ -566,6 +590,7 @@ async function handleProductSync(req: NextRequest) {
             sku: skuUpper,
             imageUrl: imageUrl || undefined,
           },
+          ...(presentationsResult ? { presentations: presentationsResult } : {}),
         },
         { status: 200 }
       )

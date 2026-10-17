@@ -4,6 +4,8 @@ import { productImages, products } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { resolveProduct, type CategoryInput, type ProductInput } from "@/lib/services/product-resolver";
 import type { StoreProductPayload } from "@/lib/store-product-types";
+import { presentationsAllowed } from "@/lib/product-presentations";
+import { loadStorePresentations } from "@/lib/product-presentations-db";
 
 export async function getPublicStoreProductById(productId: string): Promise<StoreProductPayload | null> {
     const rawProduct = await db.query.products.findFirst({
@@ -33,6 +35,10 @@ export async function getPublicStoreProductById(productId: string): Promise<Stor
 
     // Oferta vencida (offerEndsAt en el pasado) = precio normal para todos.
     const offerActive = isOfferActive(rawProduct);
+
+    const presentations = presentationsAllowed(rawProduct)
+        ? (await loadStorePresentations([rawProduct.id])).get(rawProduct.id) ?? []
+        : [];
 
     return {
         id: rawProduct.id,
@@ -67,5 +73,6 @@ export async function getPublicStoreProductById(productId: string): Promise<Stor
         tags: (rawProduct.tags as string[] | null) ?? null,
         priceTiers: (rawProduct.priceTiers as any[]) ?? [],
         tierGroup: rawProduct.tierGroup ?? null,
+        presentations,
     };
 }

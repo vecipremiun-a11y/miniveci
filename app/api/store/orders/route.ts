@@ -10,8 +10,14 @@ import { ZodError } from "zod";
 import {
     extractRaffleItems, linkRaffleEntriesToOrder,
 } from "@/lib/raffle-checkout";
-import { offerCapError, recalcStorePricing, resolveUnitPrice } from "@/lib/store-pricing";
-import { tierQuantities } from "@/lib/product-price";
+import { recalcStorePricing } from "@/lib/store-pricing";
+import { priceProductLines } from "@/lib/order-lines";
+import {
+    orderItemPresentation,
+    orderItemPresentationColumns,
+    type OrderLinePresentation,
+} from "@/lib/product-presentations";
+import { loadPresentationsByIds } from "@/lib/product-presentations-db";
 import { hasActiveSubscription } from "@/lib/subscriptions";
 import { extractBearer, verifyAccessToken, AuthHttpError } from "@/lib/mobile-auth";
 import { generatePublicCode } from "@/lib/bakery";
@@ -25,7 +31,7 @@ import { isReceiptUrl } from "@/lib/payment-receipt";
 import { generateUniqueOrderNumber } from "@/lib/order-number";
 import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { persistCheckoutProfile } from "@/lib/checkout-profile";
-import { createOrderPreference } from "@/lib/mp-checkout";
+import { createOrderPreference, mpLineItem } from "@/lib/mp-checkout";
 import { loadStoreDeliveryConfig, resolveShippingCost } from "@/lib/store-config";
 
 // Las condiciones de envío (costo y monto para envío gratis) viven en la tabla
@@ -134,6 +140,7 @@ export async function GET(req: NextRequest) {
                 quantity: it.quantity,
                 unitPrice: it.unitPrice,
                 totalPrice: it.totalPrice,
+                presentation: serializePresentation(orderItemPresentation(it)),
             })),
             createdAt: o.createdAt ?? "",
         }));
@@ -147,6 +154,15 @@ export async function GET(req: NextRequest) {
         console.error("[STORE_ORDERS_MOBILE_GET]", error);
         return NextResponse.json({ message: "Error interno" }, { status: 500 });
     }
+}
+
+/**
+ * Presentación de un renglón para la app y el admin en vivo: "2 Caja (30 und)
+ * × $7.500". null si se vendió por unidad. `quantity` del renglón sigue en
+ * unidades (60), así la app actual, que no conoce el campo, no se rompe.
+ */
+function serializePresentation(p: OrderLinePresentation | null) {
+    return p ? { id: p.id, name: p.name, units: p.units, quantity: p.qty, price: p.price } : null;
 }
 
 // ============================================================
@@ -209,28 +225,11 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             unitPrice: number;
             totalPrice: number;
             createdAt: string;
+            presentation: OrderLinePresentation | null;
         }> = [];
         const concatenatedItemNotes: string[] = [];
 
-        // Oferta por stock: no más de lo que queda a precio oferta.
-        const capError = offerCapError(data.items, productMap);
-        if (capError) {
-            return NextResponse.json({ message: capError }, { status: 400 });
-        }
-
-        // Los productos del mismo grupo de escala suman cantidad para el tramo.
-        const tierQty = tierQuantities(data.items.map((item) => {
-            const p = productMap.get(item.productId);
-            return {
-                quantity: item.quantity,
-                tierGroup: p?.tierGroup ?? null,
-                unit: p?.unit ?? null,
-                equivLabel: p?.equivLabel ?? null,
-                equivWeight: p?.equivWeight ?? null,
-            };
-        }));
-
-        for (const [index, item] of data.items.entries()) {
+        for (const item of data.items) {
             const p = productMap.get(item.productId);
             if (!p) {
                 return NextResponse.json({ message: `Producto no disponible: ${item.productId}` }, { status: 400 });
@@ -238,24 +237,41 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             if (!p.isPublished) {
                 return NextResponse.json({ message: `Producto no disponible: ${p.name}` }, { status: 400 });
             }
-
-            const unitPrice = resolveUnitPrice(p, tierQty[index], isSubscriber);
-            const totalPrice = unitPrice * item.quantity;
-
             if (item.notes && item.notes.trim().length > 0) {
                 concatenatedItemNotes.push(`${p.name}: ${item.notes.trim()}`);
             }
+        }
 
+        // Unidades de medida (Caja, Bandeja…): `quantity` de esos ítems son cajas.
+        const presentationMap = await loadPresentationsByIds(
+            data.items.map((item) => item.presentationId).filter((id): id is string => !!id),
+        );
+
+        // Escala por grupo, tope de oferta, cajas a precio fijo y stock en
+        // unidades: la misma regla que el checkout web (lib/order-lines.ts).
+        const priced = priceProductLines(
+            data.items.map((item) => ({ productId: item.productId, quantity: item.quantity, presentationId: item.presentationId ?? null })),
+            productMap,
+            presentationMap,
+            { isSubscriber },
+        );
+        if (!priced.ok) {
+            return NextResponse.json({ message: priced.error }, { status: 400 });
+        }
+
+        for (const line of priced.lines) {
+            const p = productMap.get(line.productId)!;
             itemsToInsert.push({
                 id: randomUUID(),
                 orderId: "", // se llena después
                 productId: p.id,
                 productName: p.name,
                 productSku: p.sku ?? p.id,
-                quantity: item.quantity,
-                unitPrice,
-                totalPrice,
+                quantity: line.quantity,
+                unitPrice: line.unitPrice,
+                totalPrice: line.totalPrice,
                 createdAt: "",
+                presentation: line.presentation,
             });
         }
 
@@ -319,7 +335,12 @@ async function handleMobileOrder(req: NextRequest, token: string) {
 
         // 9. Insertar order items
         await db.insert(orderItems).values(
-            itemsToInsert.map((it) => ({ ...it, orderId, createdAt: now })),
+            itemsToInsert.map(({ presentation, ...it }) => ({
+                ...it,
+                ...orderItemPresentationColumns(presentation),
+                orderId,
+                createdAt: now,
+            })),
         );
 
         // 10. Historia de estado
@@ -363,6 +384,7 @@ async function handleMobileOrder(req: NextRequest, token: string) {
                 quantity: it.quantity,
                 unitPrice: it.unitPrice,
                 totalPrice: it.totalPrice,
+                presentation: serializePresentation(it.presentation),
             })),
             createdAt: now,
             source: "mobile",
@@ -386,11 +408,7 @@ async function handleMobileOrder(req: NextRequest, token: string) {
                     customerName,
                     customerEmail,
                     customerPhone: data.phone.trim(),
-                    items: itemsToInsert.map((it) => ({
-                        title: it.productName,
-                        quantity: it.quantity,
-                        unitPrice: it.unitPrice,
-                    })),
+                    items: itemsToInsert.map((it) => mpLineItem(it.productName, it.quantity, it.unitPrice, it.presentation)),
                     shippingCost,
                     origin: "app",
                 });
@@ -584,7 +602,7 @@ async function handleLegacyWebOrder(req: NextRequest) {
             await db.insert(orderInvoices).values({ orderId, ...invoice.invoice, createdAt: now });
         }
 
-        const insertedItems: Array<{ id: string; productId: string | null; productName: string; quantity: number; unitPrice: number; totalPrice: number }> = [];
+        const insertedItems: SerializedStoreOrder["items"] = [];
         for (const item of pricedItems) {
             const itemId = randomUUID();
             await db.insert(orderItems).values({
@@ -596,6 +614,7 @@ async function handleLegacyWebOrder(req: NextRequest) {
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
                 totalPrice: item.totalPrice,
+                ...orderItemPresentationColumns(item.presentation),
                 createdAt: now,
             });
             insertedItems.push({
@@ -605,6 +624,7 @@ async function handleLegacyWebOrder(req: NextRequest) {
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
                 totalPrice: item.totalPrice,
+                presentation: serializePresentation(item.presentation),
             });
         }
 

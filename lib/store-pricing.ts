@@ -3,7 +3,9 @@ import { products, raffles } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 import { isRaffleItemId } from "@/lib/raffle-checkout";
 import { loadStoreDeliveryConfig, resolveShippingCost } from "@/lib/store-config";
-import { offerCapError, resolveUnitPrice, tierQuantities } from "@/lib/product-price";
+import type { OrderLinePresentation } from "@/lib/product-presentations";
+import { loadPresentationsByIds } from "@/lib/product-presentations-db";
+import { priceProductLines, type ProductLineInput } from "@/lib/order-lines";
 
 // La regla de precio vive en lib/product-price.ts (sin dependencias de base,
 // para poder testearla sola). Se re-exporta acá para no romper los imports.
@@ -48,17 +50,28 @@ export interface RawCartItem {
     name?: string;
     sku?: string | null;
     price?: number;
+    /** Unidades; en un renglón por presentación, cuántas presentaciones (cajas). */
     quantity?: number;
+    /** Unidad de medida (Caja, Bandeja…). Sin esto el renglón es por unidad, como siempre. */
+    presentationId?: string | null;
 }
 
 export interface PricedCartItem {
     id: string | null;
     name: string;
     sku: string;
+    /** Siempre en UNIDADES (cajas × units en los de presentación). */
     quantity: number;
     unitPrice: number;
     totalPrice: number;
     isRaffle: boolean;
+    /** Foto de la presentación vendida, o null si fue por unidad. */
+    presentation: OrderLinePresentation | null;
+}
+
+function presentationIdOf(it: RawCartItem | undefined): string | null {
+    const raw = it?.presentationId;
+    return typeof raw === "string" && raw.trim() ? raw.trim() : null;
 }
 
 export interface StorePricing {
@@ -115,30 +128,18 @@ export async function recalcStorePricing(
         : [];
     const raffleMap = new Map(raffleRows.map((r) => [r.id, r]));
 
-    // Cantidad con la que cada línea busca su tramo de escala: los productos
-    // del mismo grupo de escala suman entre ellos (ver tierQuantities).
-    const tierQty = tierQuantities(cartItems.map((it) => {
-        const p = isRaffleItemId(String(it?.id)) ? undefined : productMap.get(String(it?.id));
-        return {
-            quantity: Math.max(1, Math.round(Number(it?.quantity) || 0)),
-            tierGroup: p?.tierGroup ?? null,
-            unit: p?.unit ?? null,
-            equivLabel: p?.equivLabel ?? null,
-            equivWeight: p?.equivWeight ?? null,
-        };
-    }));
-
-    const capError = offerCapError(
-        cartItems
-            .filter((it) => !isRaffleItemId(String(it?.id)))
-            .map((it) => ({ productId: String(it!.id), quantity: Number(it?.quantity) || 0 })),
-        productMap,
+    // Unidades de medida (Caja, Bandeja…) que pide el carrito.
+    const presentationMap = await loadPresentationsByIds(
+        cartItems.filter((it) => !isRaffleItemId(String(it?.id))).map(presentationIdOf).filter((id): id is string => !!id),
     );
-    if (capError) return fail(capError);
 
-    const items: PricedCartItem[] = [];
+    // Primero se valida cada ítem (sorteo o producto). Los productos se ponen
+    // precio después, todos juntos (escala por grupo, tope de oferta, cajas y
+    // stock: lib/order-lines.ts), y se arman en el orden del carrito.
+    const slots: (PricedCartItem | number)[] = [];
+    const productLines: ProductLineInput[] = [];
 
-    for (const [index, it] of cartItems.entries()) {
+    for (const it of cartItems) {
         const id = String(it!.id);
         const requestedQty = Math.round(Number(it?.quantity) || 0);
         if (requestedQty > MAX_ITEM_QUANTITY) {
@@ -151,7 +152,7 @@ export async function recalcStorePricing(
             const raffle = m ? raffleMap.get(m[1]) : undefined;
             if (!raffle) return fail("Sorteo no disponible");
             const unitPrice = raffle.price ?? 0;
-            items.push({
+            slots.push({
                 id,
                 name: it?.name || raffle.name,
                 sku: it?.sku ? String(it.sku) : id,
@@ -159,6 +160,7 @@ export async function recalcStorePricing(
                 unitPrice,
                 totalPrice: unitPrice * quantity,
                 isRaffle: true,
+                presentation: null,
             });
             continue;
         }
@@ -167,18 +169,35 @@ export async function recalcStorePricing(
         if (!p) return fail("Producto no disponible");
         if (!p.isPublished) return fail(`Producto no disponible: ${p.name}`);
 
-        const unitPrice = resolveUnitPrice(p, tierQty[index], opts.isSubscriber ?? false);
+        slots.push(productLines.length);
+        productLines.push({
+            productId: p.id,
+            // Unidades, o cajas si es por presentación.
+            quantity,
+            // El tope de oferta se mide con lo pedido sin redondear (kg).
+            offerCapQuantity: Number(it?.quantity) || 0,
+            presentationId: presentationIdOf(it),
+        });
+    }
 
-        items.push({
+    const priced = priceProductLines(productLines, productMap, presentationMap, { isSubscriber: opts.isSubscriber });
+    if (!priced.ok) return fail(priced.error);
+
+    const items: PricedCartItem[] = slots.map((slot) => {
+        if (typeof slot !== "number") return slot;
+        const line = priced.lines[slot];
+        const p = productMap.get(line.productId)!;
+        return {
             id: p.id,
             name: p.name,
             sku: p.sku ?? p.id,
-            quantity,
-            unitPrice,
-            totalPrice: unitPrice * quantity,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            totalPrice: line.totalPrice,
             isRaffle: false,
-        });
-    }
+            presentation: line.presentation,
+        };
+    });
 
     const subtotal = items.reduce((s, it) => s + it.totalPrice, 0);
 

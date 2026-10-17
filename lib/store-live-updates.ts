@@ -14,6 +14,12 @@ export interface SerializedStoreOrderItem {
     quantity: number;
     unitPrice: number;
     totalPrice: number;
+    /**
+     * Si se vendió por unidad de medida: "2 Caja (30 und) × $7.500" →
+     * { name: "Caja", units: 30, quantity: 2, price: 7500 }. `quantity` del
+     * renglón sigue en unidades (60). null/ausente = por unidad.
+     */
+    presentation?: { id: string; name: string; units: number; quantity: number; price: number } | null;
 }
 
 export interface SerializedStoreOrder {

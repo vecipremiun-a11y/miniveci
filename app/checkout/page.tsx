@@ -14,6 +14,7 @@ import { useSession } from 'next-auth/react';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { AddressModal, type SavedAddress } from '@/components/checkout/AddressModal';
 import { formatRut, isValidRut } from '@/lib/rut';
+import { cartLineProductId, formatPresentationLine } from '@/lib/product-presentations';
 
 /**
  * Ultimo checkout completado en este navegador. Precarga a los invitados y tambien
@@ -482,6 +483,19 @@ export default function CheckoutPage() {
                 shippingCost: shipping,
                 total,
                 items: items.map(i => {
+                    // Caja/Bandeja…: va el id de la presentación y cuántas. El precio y
+                    // las unidades los pone el servidor desde la base.
+                    if (i.presentation) {
+                        const productId = cartLineProductId(i.id);
+                        return {
+                            id: productId,
+                            presentationId: i.presentation.id,
+                            name: i.name,
+                            sku: productId,
+                            quantity: i.quantity,
+                            price: i.presentation.price,
+                        };
+                    }
                     const equiv = hasEquiv(i);
                     const realId = i.id.replace(/__kg$/, '');
                     const posQuantity = equiv
@@ -937,7 +951,9 @@ export default function CheckoutPage() {
                                         <div className="min-w-0 flex-1">
                                             <p className="font-bold text-slate-800 leading-tight line-clamp-2 text-sm sm:text-base">{item.name}</p>
                                             <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                                                {hasEquiv(item)
+                                                {item.presentation
+                                                    ? formatPresentationLine({ qty: item.quantity, ...item.presentation })
+                                                    : hasEquiv(item)
                                                     ? `Cant: ${item.quantity} ${item.equivLabel}`
                                                     : `Cant: ${isWeightUnit(item.unit) ? `${item.quantity.toFixed(1)} ${(item.unit ?? 'kg').toLowerCase()}` : item.quantity}`}
                                             </p>

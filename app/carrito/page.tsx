@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
 import { useCart, isWeightUnit, hasEquiv, isAtOfferCap } from '@/components/cart/CartProvider';
+import { formatPresentationLine } from '@/lib/product-presentations';
 
 export default function CarritoPage() {
-    const { items, subtotal, updateQuantity, removeItem, clearCart, getItemUnitPrice } = useCart();
+    const { items, subtotal, updateQuantity, removeItem, clearCart, getItemUnitPrice, isAtStockCap } = useCart();
 
     const formattedSubtotal = new Intl.NumberFormat('es-CL', {
         style: 'currency',
@@ -59,6 +60,11 @@ export default function CarritoPage() {
                                     maximumFractionDigits: 0,
                                 }).format(lineTotal);
                                 const qtyLabel = (isWeight || isKgDirect) ? item.quantity.toFixed(1) : item.quantity;
+                                // Tope de "+": lo que queda en oferta o, en una caja, el stock para otra entera.
+                                const atCap = isAtOfferCap(item) || isAtStockCap(item);
+                                const capTitle = item.presentation
+                                    ? `No hay stock para otra ${item.presentation.name.toLowerCase()}`
+                                    : 'No quedan más unidades en oferta';
 
                                 return (
                                     <div key={item.id} className="flex flex-row items-center gap-3 sm:gap-4 p-3 sm:p-5 border-b border-slate-200/70 last:border-b-0">
@@ -73,7 +79,9 @@ export default function CarritoPage() {
                                         <div className="flex-1 min-w-0">
                                             <p className="font-bold text-slate-800 text-sm sm:text-base truncate">{item.name}</p>
                                             <p className="text-[11px] sm:text-sm text-slate-500 truncate">
-                                                {equiv
+                                                {item.presentation
+                                                    ? formatPresentationLine({ qty: item.quantity, ...item.presentation })
+                                                    : equiv
                                                     ? <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Math.round(getItemUnitPrice(item) * item.equivWeight!))} x {qtyLabel} {item.equivLabel}</>
                                                     : <>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(getItemUnitPrice(item))} x {qtyLabel}{isWeight ? ` ${(item.unit ?? 'kg').toLowerCase()}` : ''}</>}
                                             </p>
@@ -89,8 +97,8 @@ export default function CarritoPage() {
                                                 <span className="min-w-[2rem] text-center font-bold text-slate-700 text-sm">{qtyLabel}</span>
                                                 <button
                                                     onClick={() => updateQuantity(item.id, Math.round((item.quantity + stepVal) * 100) / 100)}
-                                                    disabled={isAtOfferCap(item)}
-                                                    title={isAtOfferCap(item) ? 'No quedan más unidades en oferta' : undefined}
+                                                    disabled={atCap}
+                                                    title={atCap ? capTitle : undefined}
                                                     className="w-7 h-7 rounded-full bg-white border border-slate-200 font-bold text-slate-600 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                                                 >
                                                     +
@@ -115,8 +123,8 @@ export default function CarritoPage() {
                                             <span className="min-w-[2.5rem] text-center font-bold text-slate-700">{qtyLabel}</span>
                                             <button
                                                 onClick={() => updateQuantity(item.id, Math.round((item.quantity + stepVal) * 100) / 100)}
-                                                disabled={isAtOfferCap(item)}
-                                                title={isAtOfferCap(item) ? 'No quedan más unidades en oferta' : undefined}
+                                                disabled={atCap}
+                                                title={atCap ? capTitle : undefined}
                                                 className="w-8 h-8 rounded-full bg-white border border-slate-200 font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
                                             >
                                                 +

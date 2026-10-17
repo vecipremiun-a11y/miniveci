@@ -6,12 +6,25 @@ import { Clock, Package, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Link from 'next/link';
+import { formatPresentationQty } from '@/lib/product-presentations';
 
 interface OrderItem {
     id: string;
     productName: string;
     quantity: number;
     imageUrl: string | null;
+    // Vendido por unidad de medida (Caja, Bandeja…); null si fue por unidad.
+    presentationName?: string | null;
+    presentationUnits?: number | null;
+    presentationQty?: number | null;
+}
+
+/** "3 Leche" o, por unidad de medida, "2 Caja (30 und) Huevo Extra". */
+function itemSummary(i: OrderItem): string {
+    if (i.presentationName && i.presentationUnits && i.presentationQty) {
+        return `${formatPresentationQty(i.presentationQty, i.presentationName, i.presentationUnits)} ${i.productName}`;
+    }
+    return `${i.quantity > 1 ? i.quantity + ' ' : ''}${i.productName}`;
 }
 
 interface Order {
@@ -112,7 +125,7 @@ export function OrderHistory() {
                     const statusInfo = statusLabels[order.status] || { label: order.status, color: 'bg-gray-100 text-gray-700' };
                     const addressParts = [order.shippingAddress, order.shippingComuna, order.shippingCity].filter(Boolean);
                     const address = addressParts.length > 0 ? addressParts.join(', ') : 'Retiro en local';
-                    const itemsSummary = order.items.map(i => `${i.quantity > 1 ? i.quantity + ' ' : ''}${i.productName}`).slice(0, 3).join(' • ');
+                    const itemsSummary = order.items.map(itemSummary).slice(0, 3).join(' • ');
                     const moreItems = order.items.length > 3 ? ` +${order.items.length - 3} más` : '';
                     const date = new Date(order.createdAt);
 

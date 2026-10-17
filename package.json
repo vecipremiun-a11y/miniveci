@@ -27,6 +27,7 @@
     "db:migrate:order-stock-flags": "node scripts/add-order-stock-flags.mjs",
     "db:migrate:subscription-margin": "node scripts/add-product-subscription-margin.mjs",
     "db:migrate:invoices": "node scripts/add-invoices.mjs",
+    "db:migrate:presentations": "node scripts/add-product-presentations.mjs",
     "pos:test:patch": "tsx --env-file=.env.local scripts/test-pos-status-patch.ts",
     "test": "vitest run"
   },
