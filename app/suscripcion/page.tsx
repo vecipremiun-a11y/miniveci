@@ -4,7 +4,12 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { Footer } from '@/components/Footer';
-import { BadgeCheck, Crown, Gem, Loader2, Sparkles, Star } from 'lucide-react';
+import { BadgeCheck, Clock, Crown, Gem, Loader2, Rocket, Sparkles, Star } from 'lucide-react';
+import { isSubscriptionLaunched, subscriptionLaunchDate } from '@/lib/subscription-launch';
+
+/** Cupos del precio especial y cuántos van tomados (se actualiza a mano). */
+const PREMIUM_SLOTS = 20;
+const PREMIUM_MEMBERS = 0;
 
 const benefits = [
     'Descuentos en todos los productos por 1 mes',
@@ -15,12 +20,32 @@ const benefits = [
     'Envíos preferentes para miembros',
 ];
 
+/**
+ * Si la membresía ya se lanzó (ver lib/subscription-launch.ts). Se calcula recién
+ * en el navegador, porque la página se arma al compilar, y se revisa cada 30 s
+ * para que el botón se active solo al llegar la fecha.
+ */
+function useSubscriptionLaunched(): boolean {
+    const [launched, setLaunched] = useState(false);
+    useEffect(() => {
+        const check = () => setLaunched(isSubscriptionLaunched());
+        const first = setTimeout(check, 0);
+        const id = setInterval(check, 30_000);
+        return () => { clearTimeout(first); clearInterval(id); };
+    }, []);
+    return launched;
+}
+
 export default function SuscripcionPage() {
     const { data: session, status } = useSession();
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [hasActive, setHasActive] = useState(false);
     const [checking, setChecking] = useState(true);
+    const launched = useSubscriptionLaunched();
+    const launchDate = subscriptionLaunchDate();
+    // Antes del lanzamiento no se vende; quien ya es Premium igual puede ir a su membresía.
+    const comingSoon = !launched && !hasActive;
 
     useEffect(() => {
         if (status === 'authenticated' && session?.user?.role === 'customer') {
@@ -38,6 +63,7 @@ export default function SuscripcionPage() {
     }, [status, session]);
 
     const handleSubscribe = async () => {
+        if (comingSoon) return;
         if (status !== 'authenticated' || session?.user?.role !== 'customer') {
             router.push('/login?redirect=/suscripcion');
             return;
@@ -69,6 +95,29 @@ export default function SuscripcionPage() {
             <div className="h-36 md:h-40" />
 
             <div className="max-w-7xl mx-auto px-3 sm:px-6 md:px-12 space-y-6 sm:space-y-10">
+                {!launched && (
+                    <section className="rounded-2xl sm:rounded-3xl bg-gradient-to-r from-veci-dark via-violet-600 to-fuchsia-600 text-white px-5 py-4 sm:px-8 sm:py-5 shadow-xl shadow-violet-300/30 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
+                        <span className="w-11 h-11 shrink-0 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center">
+                            <Rocket className="w-5 h-5" />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-yellow-200">Próximamente</p>
+                            <p className="mt-0.5 text-lg sm:text-xl font-extrabold leading-snug">
+                                La membresía Premium llega muy pronto
+                            </p>
+                            <p className="text-sm text-white/80">
+                                Estamos preparando todo para el lanzamiento. Muy pronto podrás suscribirte desde aquí.
+                            </p>
+                        </div>
+                        {launchDate && (
+                            <span className="shrink-0 inline-flex items-center gap-2 self-start sm:self-center rounded-full bg-white/15 border border-white/25 px-4 py-2 text-sm font-bold">
+                                <Clock className="w-4 h-4" />
+                                Lanzamiento: {launchDate.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', timeZone: 'America/Santiago' })}
+                            </span>
+                        )}
+                    </section>
+                )}
+
                 <section className="grid lg:grid-cols-[280px_1fr] gap-4 sm:gap-6 items-start">
                     <div className="rounded-2xl sm:rounded-3xl p-4 sm:p-6 bg-gradient-to-br from-veci-dark via-violet-600 to-fuchsia-600 text-white shadow-xl">
                         <div className="inline-flex items-center gap-2 text-xs font-bold bg-white/15 rounded-full px-3 py-1.5 border border-white/20">
@@ -104,10 +153,13 @@ export default function SuscripcionPage() {
                         <div className="mt-6">
                             <div className="flex items-center justify-between text-sm font-bold text-slate-700">
                                 <span className="inline-flex items-center gap-2"><Gem className="w-4 h-4 text-violet-500" />Miembros Premium Activos</span>
-                                <span>3/20 cupos</span>
+                                <span>{PREMIUM_MEMBERS}/{PREMIUM_SLOTS} cupos</span>
                             </div>
                             <div className="mt-2 w-full h-3 rounded-full bg-slate-200/80 overflow-hidden">
-                                <div className="h-full w-[15%] rounded-full bg-gradient-to-r from-cyan-500 to-blue-500" />
+                                <div
+                                    className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500"
+                                    style={{ width: `${Math.min(100, (PREMIUM_MEMBERS / PREMIUM_SLOTS) * 100)}%` }}
+                                />
                             </div>
                             <div className="mt-2 flex items-center justify-between text-xs text-slate-500 font-semibold">
                                 <span>Últimos cupos disponibles</span>
@@ -151,10 +203,16 @@ export default function SuscripcionPage() {
 
                     <button
                         onClick={handleSubscribe}
-                        disabled={loading || checking}
-                        className="mt-8 w-full inline-flex items-center justify-center gap-2 btn-secondary rounded-2xl py-4 text-lg font-extrabold shadow-xl disabled:opacity-60 cursor-pointer"
+                        disabled={loading || checking || comingSoon}
+                        className={`mt-8 w-full inline-flex items-center justify-center gap-2 rounded-2xl py-4 text-lg font-extrabold ${
+                            comingSoon
+                                ? 'bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed'
+                                : 'btn-secondary shadow-xl disabled:opacity-60 cursor-pointer'
+                        }`}
                     >
-                        {loading ? (
+                        {comingSoon ? (
+                            <><Clock className="w-5 h-5" /> Pronto</>
+                        ) : loading ? (
                             <><Loader2 className="w-5 h-5 animate-spin" /> Procesando...</>
                         ) : hasActive ? (
                             <><Crown className="w-5 h-5" /> Ya eres Premium — Ver membresía</>
