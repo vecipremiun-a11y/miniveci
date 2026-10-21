@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Plus, Minus, TrendingDown } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, type PointerEvent } from 'react';
 import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getTieredPrice, getOfferCartCap } from '@/components/cart/CartProvider';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import { COMERCIAL_VECI_BADGE, type StorePresentation } from '@/lib/store-product-types';
@@ -32,6 +32,8 @@ interface ProductCardProps {
     equivLabel?: string | null;
     equivWeight?: number | null;
     image?: string | null;
+    /** Todas las fotos del producto: con más de una, se van turnando al pasar el mouse. */
+    images?: string[];
     isPopular?: boolean;
     slug?: string;
     priceTiers?: PriceTier[];
@@ -48,7 +50,10 @@ interface ProductCardProps {
     presentations?: StorePresentation[];
 }
 
-export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, isPopular, slug, priceTiers, subscriptionPrice, badges, tierGroup, offerEndsAt, offerStock, presentations }: ProductCardProps) {
+/** Cada cuánto cambia la foto mientras el mouse está sobre la tarjeta. */
+const HOVER_IMAGE_INTERVAL_MS = 1400;
+
+export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, images, isPopular, slug, priceTiers, subscriptionPrice, badges, tierGroup, offerEndsAt, offerStock, presentations }: ProductCardProps) {
     const hasVeciSeal = badges?.includes(COMERCIAL_VECI_BADGE) ?? false;
     const { addItem, getGroupQuantity } = useCart();
     const router = useRouter();
@@ -60,6 +65,35 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
     const minQty = kgMode ? 0.5 : (equiv ? 1 : (isWeight ? 0.1 : 1));
     const [quantity, setQuantity] = useState(minQty);
     const imageSrc = image || PLACEHOLDER_IMAGE;
+
+    // Fotos de la vitrina: la principal primero y después las demás, sin repetir.
+    const gallery = useMemo(
+        () => Array.from(new Set([imageSrc, ...(images ?? []).filter(Boolean)])),
+        [imageSrc, images],
+    );
+    // Con el mouse encima (no con el dedo) las fotos se turnan; al salir vuelve la principal.
+    const [hovering, setHovering] = useState(false);
+    const [activeImage, setActiveImage] = useState(0);
+    const shownImage = activeImage < gallery.length ? activeImage : 0;
+
+    useEffect(() => {
+        if (!hovering || gallery.length < 2) return;
+        const timer = window.setInterval(
+            () => setActiveImage((i) => (i + 1) % gallery.length),
+            HOVER_IMAGE_INTERVAL_MS,
+        );
+        return () => window.clearInterval(timer);
+    }, [hovering, gallery.length]);
+
+    const handlePointerEnter = (e: PointerEvent) => {
+        if (e.pointerType !== 'mouse' || gallery.length < 2) return;
+        setHovering(true);
+        setActiveImage(1);
+    };
+    const handlePointerLeave = () => {
+        setHovering(false);
+        setActiveImage(0);
+    };
 
     // Grupo de escala: lo que ya hay en el carrito del mismo grupo suma para el
     // tramo, así el precio que se ve es el que va a quedar al agregar.
@@ -140,15 +174,38 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             onClick={goToDetail}
+            onPointerEnter={handlePointerEnter}
+            onPointerLeave={handlePointerLeave}
             className={`feria-card rounded-2xl flex flex-col overflow-hidden relative group cursor-pointer ${outOfStock ? 'opacity-70' : ''}`}
         >
             {/* Vitrina: imagen + estado */}
             <div className="relative aspect-square flex items-center justify-center bg-white border-b border-cerco-suave overflow-hidden">
-                <img
-                    src={imageSrc}
-                    alt={name}
-                    className="w-full h-full object-contain p-1.5 sm:p-2 transform group-hover:scale-[1.06] transition-transform duration-300"
-                />
+                {gallery.map((src, index) => (
+                    <img
+                        key={src}
+                        src={src}
+                        alt={index === 0 ? name : ''}
+                        aria-hidden={index === 0 ? undefined : true}
+                        loading={index === 0 ? undefined : 'lazy'}
+                        className={`w-full h-full object-contain p-1.5 sm:p-2 transform group-hover:scale-[1.06] transition-[transform,opacity] duration-300 ${
+                            index === 0 ? '' : 'absolute inset-0'
+                        } ${index === shownImage ? 'opacity-100' : 'opacity-0'}`}
+                    />
+                ))}
+
+                {/* Puntitos: qué foto se está viendo, solo mientras se turnan */}
+                {hovering && gallery.length > 1 && !(hasOffer && offerEndsAt) && (
+                    <div className="absolute bottom-2 inset-x-0 flex justify-center gap-1 pointer-events-none">
+                        {gallery.map((src, index) => (
+                            <span
+                                key={src}
+                                className={`h-1.5 rounded-full transition-all duration-300 ${
+                                    index === shownImage ? 'w-4 bg-hoja' : 'w-1.5 bg-tinta/25'
+                                }`}
+                            />
+                        ))}
+                    </div>
+                )}
 
                 <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-1.5 pointer-events-none">
                     <div className="flex flex-col items-start gap-1">

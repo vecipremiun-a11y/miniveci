@@ -140,6 +140,7 @@ export function OfferCarousel() {
                     equivLabel={p.equivLabel}
                     equivWeight={p.equivWeight}
                     image={primaryImage(p)}
+                    images={p.images.map((i) => i.url)}
                     priceTiers={p.priceTiers}
                     subscriptionPrice={p.subscriptionPrice}
                     badges={p.badges}

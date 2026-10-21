@@ -242,6 +242,7 @@ export function BakeryCarousel() {
                                         equivLabel={p.equivLabel}
                                         equivWeight={p.equivWeight}
                                         image={p.images.find((i) => i.isPrimary)?.url || p.images[0]?.url || null}
+                                        images={p.images.map((i) => i.url)}
                                         priceTiers={p.priceTiers}
                                         subscriptionPrice={p.subscriptionPrice}
                                         badges={p.badges}

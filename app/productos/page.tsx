@@ -403,6 +403,7 @@ function ProductsPageContent() {
                                         equivLabel={product.equivLabel}
                                         equivWeight={product.equivWeight}
                                         image={getPrimaryImage(product)}
+                                        images={product.images?.map((i) => i.url)}
                                         isPopular={product.badges?.includes('popular') || product.tags?.includes('popular') || false}
                                         slug={product.slug}
                                         priceTiers={product.priceTiers}
