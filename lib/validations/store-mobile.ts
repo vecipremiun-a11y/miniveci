@@ -30,6 +30,9 @@ export const storeMobileOrderSchema = z.object({
     items: z.array(storeOrderItemInputSchema).min(1, "Al menos un producto"),
     method: z.enum(DELIVERY_METHODS),
     address: z.string().max(500).optional().nullable(),
+    // Opcional: con la comuna se cobra su tarifa de envío (ej. Alto Hospicio).
+    // Sin ella, la zona se busca en el texto de `address`.
+    comuna: z.string().max(120).optional().nullable(),
     phone: z.string().min(6).max(40),
     notes: z.string().max(500).optional().nullable(),
     paymentMethod: z.enum(PAYMENT_METHODS_MOBILE),

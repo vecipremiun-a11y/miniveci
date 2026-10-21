@@ -1,5 +1,12 @@
 import { db } from "@/lib/db";
 import { storeConfig } from "@/lib/db/schema";
+import {
+    DEFAULT_DELIVERY_ZONE_FEES,
+    deliveryFeeFor,
+    parseDeliveryZoneFees,
+    type DeliveryDestination,
+    type DeliveryZoneFee,
+} from "@/lib/delivery-zones";
 
 /**
  * Condiciones de envío de la tienda.
@@ -14,8 +21,10 @@ import { storeConfig } from "@/lib/db/schema";
  */
 
 export interface StoreDeliveryConfig {
-    /** Costo de envío a domicilio en CLP. */
+    /** Costo de envío a domicilio en CLP (Iquique y toda comuna sin tarifa propia). */
     deliveryFee: number;
+    /** Comunas con tarifa propia, ej. Alto Hospicio (ver lib/delivery-zones.ts). */
+    zoneFees: DeliveryZoneFee[];
     /**
      * Monto de compra desde el cual el envío sale gratis.
      * 0 = desactivado (siempre se cobra el envío).
@@ -25,11 +34,14 @@ export interface StoreDeliveryConfig {
 
 export const DEFAULT_STORE_DELIVERY_CONFIG: StoreDeliveryConfig = {
     deliveryFee: 1990,
+    zoneFees: DEFAULT_DELIVERY_ZONE_FEES,
     freeDeliveryThreshold: 0,
 };
 
 export const STORE_CONFIG_KEYS = {
     deliveryFee: "delivery_fee",
+    /** JSON: [{ "comuna": "Alto Hospicio", "fee": 3000 }] */
+    zoneFees: "delivery_zone_fees",
     freeDeliveryThreshold: "free_delivery_threshold",
 } as const;
 
@@ -49,6 +61,7 @@ export async function loadStoreDeliveryConfig(): Promise<StoreDeliveryConfig> {
         const map = new Map(rows.map(r => [r.key, r.value]));
         return {
             deliveryFee: toInt(map.get(STORE_CONFIG_KEYS.deliveryFee), DEFAULT_STORE_DELIVERY_CONFIG.deliveryFee),
+            zoneFees: parseDeliveryZoneFees(map.get(STORE_CONFIG_KEYS.zoneFees)) ?? DEFAULT_STORE_DELIVERY_CONFIG.zoneFees,
             freeDeliveryThreshold: toInt(
                 map.get(STORE_CONFIG_KEYS.freeDeliveryThreshold),
                 DEFAULT_STORE_DELIVERY_CONFIG.freeDeliveryThreshold,
@@ -69,17 +82,19 @@ export function isDeliveryType(deliveryType: string | null | undefined): boolean
  *
  * `payableSubtotal` es lo que la persona paga en productos, es decir el
  * subtotal ya con los descuentos aplicados: si un cupón la deja bajo el
- * umbral, el envío se cobra. Retiro en tienda nunca paga envío.
+ * umbral, el envío se cobra. Retiro en tienda nunca paga envío. `destination`
+ * elige la tarifa de la comuna (sin ella, la base).
  */
 export function resolveShippingCost(params: {
     deliveryType: string | null | undefined;
     payableSubtotal: number;
     config: StoreDeliveryConfig;
+    destination?: DeliveryDestination;
 }): number {
-    const { deliveryType, payableSubtotal, config } = params;
+    const { deliveryType, payableSubtotal, config, destination } = params;
     if (!isDeliveryType(deliveryType)) return 0;
     if (config.freeDeliveryThreshold > 0 && payableSubtotal >= config.freeDeliveryThreshold) return 0;
-    return config.deliveryFee;
+    return deliveryFeeFor(config.deliveryFee, config.zoneFees, destination ?? {});
 }
 
 /**

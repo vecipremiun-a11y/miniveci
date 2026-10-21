@@ -276,12 +276,15 @@ async function handleMobileOrder(req: NextRequest, token: string) {
         }
 
         const subtotal = itemsToInsert.reduce((s, it) => s + it.totalPrice, 0);
-        // Mismas condiciones que el checkout web (store_config).
+        // Mismas condiciones que el checkout web (store_config). La app manda la
+        // comuna si la tiene; si no, la zona se reconoce en el texto de la dirección.
         const deliveryConfig = await loadStoreDeliveryConfig();
+        const shippingComuna = data.method === "delivery" ? data.comuna?.trim() || null : null;
         const shippingCost = resolveShippingCost({
             deliveryType: data.method,
             payableSubtotal: subtotal,
             config: deliveryConfig,
+            destination: { comuna: shippingComuna, address: data.address },
         });
         const total = subtotal + shippingCost;
 
@@ -308,7 +311,7 @@ async function handleMobileOrder(req: NextRequest, token: string) {
             customerPhone: data.phone.trim(),
             customerRut,
             shippingAddress: data.method === "delivery" ? (data.address?.trim() ?? null) : null,
-            shippingComuna: null,
+            shippingComuna,
             shippingCity: null,
             shippingNotes: shippingNotesFinal,
             deliveryType: data.method,
@@ -554,7 +557,12 @@ async function handleLegacyWebOrder(req: NextRequest) {
         // SEGURIDAD: recalcular montos server-side. No confiar en price/total del cliente.
         // El precio de suscriptor se decide contra la base, nunca contra el body.
         const isSubscriber = await hasActiveSubscription(customerId);
-        const pricing = await recalcStorePricing(cartItems, { deliveryType, couponCode, isSubscriber });
+        const pricing = await recalcStorePricing(cartItems, {
+            deliveryType,
+            couponCode,
+            isSubscriber,
+            destination: { comuna: shippingComuna, city: shippingCity, address: shippingAddress },
+        });
         if (!pricing.ok) {
             return NextResponse.json({ error: pricing.error || "Carrito inválido" }, { status: 400 });
         }

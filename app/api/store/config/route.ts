@@ -17,6 +17,8 @@ export async function GET() {
             {
                 delivery: {
                     fee: delivery.deliveryFee,
+                    // Comunas con tarifa propia; el resto paga `fee`. Ver lib/delivery-zones.ts.
+                    zones: delivery.zoneFees,
                     freeThreshold: delivery.freeDeliveryThreshold,
                     freeEnabled: delivery.freeDeliveryThreshold > 0,
                 },

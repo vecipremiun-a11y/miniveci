@@ -3,6 +3,7 @@ import { products, raffles } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 import { isRaffleItemId } from "@/lib/raffle-checkout";
 import { loadStoreDeliveryConfig, resolveShippingCost } from "@/lib/store-config";
+import type { DeliveryDestination } from "@/lib/delivery-zones";
 import type { OrderLinePresentation } from "@/lib/product-presentations";
 import { loadPresentationsByIds } from "@/lib/product-presentations-db";
 import { priceProductLines, type ProductLineInput } from "@/lib/order-lines";
@@ -92,13 +93,14 @@ function fail(error: string): StorePricing {
 /**
  * Recalcula precios, subtotal, envío, descuento y total server-side.
  * @param cartItems items tal cual los manda el cliente (solo se usan id/quantity/name; el precio se ignora)
- * @param opts deliveryType y couponCode opcionales para envío/cupón; `isSubscriber`
+ * @param opts deliveryType y couponCode opcionales para envío/cupón; `destination`
+ *   (comuna/ciudad/dirección) elige la tarifa de envío de la comuna; `isSubscriber`
  *   habilita el precio de suscriptor. Ojo: ese flag lo resuelve el handler contra
  *   la base (`hasActiveSubscription`), NUNCA sale del body del request.
  */
 export async function recalcStorePricing(
     cartItems: RawCartItem[],
-    opts: { deliveryType?: string | null; couponCode?: string | null; isSubscriber?: boolean } = {},
+    opts: { deliveryType?: string | null; couponCode?: string | null; isSubscriber?: boolean; destination?: DeliveryDestination } = {},
 ): Promise<StorePricing> {
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
         return fail("El carrito está vacío");
@@ -217,6 +219,7 @@ export async function recalcStorePricing(
         deliveryType: opts.deliveryType,
         payableSubtotal,
         config: deliveryConfig,
+        destination: opts.destination,
     });
 
     const total = Math.max(0, payableSubtotal + shippingCost);

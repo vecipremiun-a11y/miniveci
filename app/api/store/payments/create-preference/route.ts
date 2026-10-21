@@ -85,7 +85,12 @@ export async function POST(req: NextRequest) {
         // Nunca confiar en los montos que envía el navegador (price tampering).
         // El precio de suscriptor también se resuelve acá, contra la base.
         const isSubscriber = await hasActiveSubscription(customerId);
-        const pricing = await recalcStorePricing(cartItems, { deliveryType, couponCode, isSubscriber });
+        const pricing = await recalcStorePricing(cartItems, {
+            deliveryType,
+            couponCode,
+            isSubscriber,
+            destination: { comuna: shippingComuna, city: shippingCity, address: shippingAddress },
+        });
         if (!pricing.ok) {
             return NextResponse.json({ error: pricing.error || "Carrito inválido" }, { status: 400 });
         }

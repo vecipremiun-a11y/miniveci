@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { storeConfig } from "@/lib/db/schema";
 import { requireAuth, AuthError } from "@/lib/auth-utils";
 import { loadStoreDeliveryConfig, STORE_CONFIG_KEYS } from "@/lib/store-config";
+import { MAX_DELIVERY_ZONES, normalizePlace } from "@/lib/delivery-zones";
 import { z, ZodError } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -11,11 +12,25 @@ export const dynamic = "force-dynamic";
 const MAX_DELIVERY_FEE = 100_000;
 const MAX_FREE_THRESHOLD = 10_000_000;
 
+const feeSchema = z.number()
+    .int("El costo de envío debe ser un número entero")
+    .min(0, "El costo de envío no puede ser negativo")
+    .max(MAX_DELIVERY_FEE, `El costo de envío no puede superar $${MAX_DELIVERY_FEE.toLocaleString("es-CL")}`);
+
 const updateSchema = z.object({
-    deliveryFee: z.number()
-        .int("El costo de envío debe ser un número entero")
-        .min(0, "El costo de envío no puede ser negativo")
-        .max(MAX_DELIVERY_FEE, `El costo de envío no puede superar $${MAX_DELIVERY_FEE.toLocaleString("es-CL")}`)
+    deliveryFee: feeSchema.optional(),
+    /** Comunas con tarifa propia. [] = todas pagan el costo base. */
+    zoneFees: z.array(z.object({
+        comuna: z.string().trim()
+            .max(60, "El nombre de la comuna es muy largo")
+            .refine(v => normalizePlace(v).length >= 2, "Escribe el nombre de la comuna"),
+        fee: feeSchema,
+    }))
+        .max(MAX_DELIVERY_ZONES, `Máximo ${MAX_DELIVERY_ZONES} comunas`)
+        .refine(
+            zones => new Set(zones.map(z => normalizePlace(z.comuna))).size === zones.length,
+            "Hay una comuna repetida",
+        )
         .optional(),
     /** 0 apaga el envío gratis. */
     freeDeliveryThreshold: z.number()
@@ -47,18 +62,19 @@ export async function PATCH(req: NextRequest) {
         const data = updateSchema.parse(body);
 
         const now = new Date().toISOString();
-        const entries: Array<[string, number]> = [];
-        if (data.deliveryFee !== undefined) entries.push([STORE_CONFIG_KEYS.deliveryFee, data.deliveryFee]);
+        const entries: Array<[string, string]> = [];
+        if (data.deliveryFee !== undefined) entries.push([STORE_CONFIG_KEYS.deliveryFee, String(data.deliveryFee)]);
+        if (data.zoneFees !== undefined) entries.push([STORE_CONFIG_KEYS.zoneFees, JSON.stringify(data.zoneFees)]);
         if (data.freeDeliveryThreshold !== undefined) {
-            entries.push([STORE_CONFIG_KEYS.freeDeliveryThreshold, data.freeDeliveryThreshold]);
+            entries.push([STORE_CONFIG_KEYS.freeDeliveryThreshold, String(data.freeDeliveryThreshold)]);
         }
 
         for (const [key, value] of entries) {
             await db.insert(storeConfig)
-                .values({ key, value: String(value), updatedAt: now })
+                .values({ key, value, updatedAt: now })
                 .onConflictDoUpdate({
                     target: storeConfig.key,
-                    set: { value: String(value), updatedAt: now },
+                    set: { value, updatedAt: now },
                 });
         }
 

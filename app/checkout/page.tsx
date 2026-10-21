@@ -14,6 +14,7 @@ import { useSession } from 'next-auth/react';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { AddressModal, type SavedAddress } from '@/components/checkout/AddressModal';
 import { formatRut, isValidRut } from '@/lib/rut';
+import { findDeliveryZone, type DeliveryZoneFee } from '@/lib/delivery-zones';
 import { cartLineProductId, formatPresentationLine } from '@/lib/product-presentations';
 
 /**
@@ -84,10 +85,14 @@ export default function CheckoutPage() {
     const [couponMessage, setCouponMessage] = useState<string | null>(null);
     const [couponError, setCouponError] = useState<string | null>(null);
 
-    // Condiciones de envío (costo y monto para envío gratis). Vienen del
-    // servidor porque se editan desde el admin; acá son solo para mostrar, el
-    // total real lo recalcula el backend al crear el pedido.
-    const [deliveryConfig, setDeliveryConfig] = useState({ fee: 0, freeThreshold: 0 });
+    // Condiciones de envío (costo base, comunas con tarifa propia y monto para
+    // envío gratis). Vienen del servidor porque se editan desde el admin; acá son
+    // solo para mostrar, el total real lo recalcula el backend al crear el pedido.
+    const [deliveryConfig, setDeliveryConfig] = useState<{ fee: number; zones: DeliveryZoneFee[]; freeThreshold: number }>({
+        fee: 0,
+        zones: [],
+        freeThreshold: 0,
+    });
 
     useEffect(() => {
         let mounted = true;
@@ -97,6 +102,7 @@ export default function CheckoutPage() {
                 if (!mounted || !data?.delivery) return;
                 setDeliveryConfig({
                     fee: Number(data.delivery.fee) || 0,
+                    zones: Array.isArray(data.delivery.zones) ? data.delivery.zones : [],
                     freeThreshold: Number(data.delivery.freeThreshold) || 0,
                 });
             })
@@ -326,7 +332,10 @@ export default function CheckoutPage() {
     const missingForFreeDelivery = freeDeliveryOn
         ? Math.max(0, deliveryConfig.freeThreshold - payableSubtotal)
         : 0;
-    const shipping = deliveryMethod === 'delivery' && !reachedFreeDelivery ? deliveryConfig.fee : 0;
+    // Tarifa según la comuna de la dirección elegida (ej. Alto Hospicio cobra más).
+    const deliveryZone = findDeliveryZone(deliveryConfig.zones, { comuna: contactComuna, city: contactCity, address: contactAddress });
+    const deliveryFee = deliveryZone?.fee ?? deliveryConfig.fee;
+    const shipping = deliveryMethod === 'delivery' && !reachedFreeDelivery ? deliveryFee : 0;
     const total = Math.max(0, payableSubtotal + shipping);
 
     const money = useMemo(
@@ -981,7 +990,10 @@ export default function CheckoutPage() {
                     <div className="mt-6 pt-6 border-t border-slate-200/80 space-y-2.5 text-sm">
                         <Row label="Subtotal" value={money.format(subtotal)} />
                         <Row label="Descuento" value={discount > 0 ? `-${money.format(discount)}` : money.format(0)} />
-                        <Row label="Envío" value={shipping === 0 ? 'Gratis' : money.format(shipping)} />
+                        <Row
+                            label={deliveryMethod === 'delivery' && deliveryZone ? `Envío a ${deliveryZone.comuna}` : 'Envío'}
+                            value={shipping === 0 ? 'Gratis' : money.format(shipping)}
+                        />
                         {deliveryMethod === 'delivery' && reachedFreeDelivery && (
                             <p className="text-xs font-bold text-emerald-600">
                                 ¡Tu compra tiene envío gratis!
