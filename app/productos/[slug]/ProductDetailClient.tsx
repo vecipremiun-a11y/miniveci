@@ -1,18 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Footer } from '@/components/Footer';
 import { TierGroupCarousel } from '@/components/products/TierGroupCarousel';
 import { OfferCountdown } from '@/components/products/OfferEndsLabel';
+import { ProductImageLightbox } from '@/components/products/ProductImageLightbox';
 import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getOfferCartCap, cartLineUnits } from '@/components/cart/CartProvider';
 import { cartLineProductId, maxPresentationBoxes, presentationCartId } from '@/lib/product-presentations';
 import { formatOfferStock } from '@/components/products/ProductCard';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
 import { COMERCIAL_VECI_BADGE } from '@/lib/store-product-types';
-import { ChevronRight, Loader2, Minus, Plus, Scale, ShoppingCart, Star, Tag, Zap, Check } from 'lucide-react';
+import { ChevronRight, Loader2, Maximize2, Minus, Plus, Scale, ShoppingCart, Star, Tag, Zap, Check } from 'lucide-react';
 
 type ProductDetail = StoreProductPayload;
 
@@ -35,6 +36,8 @@ export default function ProductDetailPage() {
     const [product, setProduct] = useState<ProductDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState(0);
+    const [lightboxOpen, setLightboxOpen] = useState(false);
+    const closeLightbox = useCallback(() => setLightboxOpen(false), []);
     const [quantity, setQuantity] = useState(1);
     const [buyMode, setBuyMode] = useState<'unit' | 'kg'>('unit');
     // Unidad de medida elegida (Caja, Bandeja…); null = por unidad suelta.
@@ -315,7 +318,7 @@ export default function ProductDetailPage() {
 
                 <section className="grid lg:grid-cols-2 gap-8">
                     <div className="space-y-4">
-                        <div className={`relative bg-white/60 border border-white rounded-3xl p-8 min-h-[420px] flex items-center justify-center overflow-hidden ${hasOffer && product.offerEndsAt ? 'pb-32' : ''}`}>
+                        <div className={`relative bg-white/60 border border-white rounded-3xl overflow-hidden ${hasOffer && product.offerEndsAt ? 'pb-32' : ''}`}>
                             {hasOffer && product.offerEndsAt && (
                                 <OfferCountdown endsAt={product.offerEndsAt} size="detail" />
                             )}
@@ -326,11 +329,32 @@ export default function ProductDetailPage() {
                                     className="absolute top-4 left-4 w-28 sm:w-32 h-auto drop-shadow-sm pointer-events-none"
                                 />
                             )}
-                            <img
-                                src={currentImage}
-                                alt={product.name}
-                                className="max-h-[360px] w-full object-contain"
-                            />
+                            {/* La foto ocupa todo el recuadro; un clic la abre en el visor */}
+                            <button
+                                type="button"
+                                onClick={() => setLightboxOpen(true)}
+                                disabled={product.images.length === 0}
+                                className="block w-full aspect-square max-h-[640px] p-3 sm:p-5 enabled:cursor-zoom-in"
+                                aria-label={`Ampliar imagen de ${product.name}`}
+                            >
+                                <img
+                                    src={currentImage}
+                                    alt={product.name}
+                                    className="w-full h-full object-contain"
+                                />
+                            </button>
+                            {product.images.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setLightboxOpen(true)}
+                                    className="absolute top-3 right-3 z-[2] inline-flex items-center gap-1.5 h-10 px-3 rounded-full bg-white/90 backdrop-blur border border-slate-200 shadow-sm text-sm font-bold text-slate-700 hover:bg-white hover:text-veci-dark transition-colors"
+                                    aria-label="Ver imagen en tamaño completo"
+                                    title="Ver imagen en tamaño completo"
+                                >
+                                    <Maximize2 className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Ampliar</span>
+                                </button>
+                            )}
                         </div>
 
                         {product.images.length > 1 && (
@@ -693,6 +717,15 @@ export default function ProductDetailPage() {
                     <TierGroupCarousel tierGroup={tierGroup} currentProductId={product.id} />
                 )}
             </div>
+
+            {lightboxOpen && product.images.length > 0 && (
+                <ProductImageLightbox
+                    images={product.images.map((img) => ({ url: img.url, alt: img.altText || product.name }))}
+                    index={Math.min(selectedImage, product.images.length - 1)}
+                    onIndexChange={setSelectedImage}
+                    onClose={closeLightbox}
+                />
+            )}
 
             <Footer />
         </main>
