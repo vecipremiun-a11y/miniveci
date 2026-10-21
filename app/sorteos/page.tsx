@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
-    Sparkles, ArrowRight, ChevronRight, Shield, Gift, Users,
+    Sparkles, ArrowRight, ChevronRight, Gift, Clock, Star,
     ClipboardList, Ticket, CheckCircle2, Trophy, QrCode, Store, Receipt,
     Sparkle, Smartphone, Headphones, Watch, Camera,
 } from "lucide-react";
@@ -87,21 +87,6 @@ export default function SorteosPage() {
                             <p className="mt-5 text-slate-500 text-base sm:text-lg max-w-md">
                                 Sumate a nuestros sorteos y llevate esos productos que tanto querés. ¡Es fácil, rápido y seguro!
                             </p>
-
-                            <Link
-                                href="#sorteos-activos"
-                                className="mt-7 inline-flex items-center gap-2 px-6 py-3 rounded-full bg-veci-primary text-white font-bold shadow-lg shadow-veci-primary/25 hover:shadow-xl hover:scale-105 transition"
-                            >
-                                Ver sorteos activos
-                                <ChevronRight className="h-4 w-4" />
-                            </Link>
-
-                            {/* Badges */}
-                            <div className="mt-10 flex flex-wrap items-start gap-x-8 gap-y-4">
-                                <Badge icon={Shield} color="text-veci-primary" bg="bg-veci-primary/10" title="100% Seguro" subtitle="Sin trámites complicados" />
-                                <Badge icon={Gift} color="text-pink-500" bg="bg-pink-100" title="Productos increíbles" subtitle="Nuevos sorteos cada semana" />
-                                <Badge icon={Users} color="text-emerald-500" bg="bg-emerald-100" title="Miles de participantes" subtitle="¡Y muchos ganadores!" />
-                            </div>
                         </motion.div>
 
                         {/* Ilustración */}
@@ -117,10 +102,7 @@ export default function SorteosPage() {
                 </div>
             </section>
 
-            {/* BANNER SORTEO DE TEMPORADA */}
-            <SorteoTemporadaBanner />
-
-            {/* SORTEOS ACTIVOS */}
+            {/* SORTEOS ACTIVOS: los productos que se están sorteando, justo bajo el hero */}
             <section id="sorteos-activos" className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 py-12 sm:py-16">
                 <div className="flex items-end justify-between mb-6">
                     <div>
@@ -142,8 +124,11 @@ export default function SorteosPage() {
                     <SkeletonGrid />
                 ) : active.length === 0 ? (
                     <PreviewGrid />
+                ) : active.length === 1 ? (
+                    // Un solo sorteo: tarjeta a lo ancho, para que no quede perdida en la grilla.
+                    <RaffleCard raffle={active[0]} index={0} wide />
                 ) : (
-                    <div className="grid gap-4 sm:gap-5 grid-cols-2 lg:grid-cols-4">
+                    <div className={`grid gap-6 grid-cols-1 sm:grid-cols-2 ${active.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
                         {active.slice(0, 8).map((r, i) => <RaffleCard key={r.id} raffle={r} index={i} />)}
                     </div>
                 )}
@@ -184,30 +169,15 @@ export default function SorteosPage() {
                 </div>
             </section>
 
+            {/* BANNER SORTEO DE TEMPORADA (boleta del local), al final */}
+            <SorteoTemporadaBanner />
+
             <Footer />
         </main>
     );
 }
 
 /* ------------ Subcomponentes ------------ */
-
-function Badge({
-    icon: Icon, color, bg, title, subtitle,
-}: {
-    icon: any; color: string; bg: string; title: string; subtitle: string;
-}) {
-    return (
-        <div className="flex items-center gap-2.5">
-            <div className={`w-9 h-9 rounded-full ${bg} flex items-center justify-center flex-shrink-0`}>
-                <Icon className={`h-4 w-4 ${color}`} />
-            </div>
-            <div>
-                <p className="text-sm font-extrabold text-slate-800 leading-tight">{title}</p>
-                <p className="text-[11px] text-slate-500">{subtitle}</p>
-            </div>
-        </div>
-    );
-}
 
 function SorteoTemporadaBanner() {
     return (
@@ -479,11 +449,41 @@ function PreviewGrid() {
     );
 }
 
-function RaffleCard({ raffle: r, index }: { raffle: Raffle; index: number }) {
+const fmtNumber = (n: number) => n.toLocaleString("es-CL");
+const fmtMoney = (n: number) =>
+    new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(n);
+
+/** Papel picado detrás del premio. */
+function Confetti() {
+    return (
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+            <span className="absolute left-[10%] top-[16%] h-2.5 w-2.5 rounded-full bg-amber-400/80" />
+            <span className="absolute left-[84%] top-[72%] h-2 w-2 rounded-full bg-violet-500/60" />
+            <span className="absolute left-[16%] top-[80%] h-3 w-1.5 rotate-45 rounded-sm bg-pink-500/60" />
+            <span className="absolute left-[64%] top-[9%] h-1.5 w-3 -rotate-12 rounded-sm bg-cyan-400/70" />
+            <span className="absolute left-[44%] top-[88%] h-1.5 w-1.5 rounded-full bg-emerald-400/70" />
+            <Sparkles className="absolute left-[6%] top-[46%] h-4 w-4 text-amber-500/70" />
+            <Sparkles className="absolute right-[7%] top-[38%] h-3.5 w-3.5 text-pink-500/60" />
+            <div className="absolute -bottom-16 -right-16 h-48 w-48 rounded-full bg-white/50 blur-2xl" />
+        </div>
+    );
+}
+
+/**
+ * Tarjeta de sorteo con forma de boleto: borde de colores, el premio sobre
+ * papel picado, sello "¡GRATIS!" que se mueve y botón para participar.
+ * `wide` = una sola tarjeta a lo ancho (foto a un lado, datos al otro).
+ */
+function RaffleCard({ raffle: r, index, wide = false }: { raffle: Raffle; index: number; wide?: boolean }) {
+    const reduceMotion = useReducedMotion();
     const days = daysUntil(r.endsAt || r.drawAt);
-    const pct = r.totalNumbers > 0 ? Math.round((r.soldCount / r.totalNumbers) * 100) : 0;
-    const isFeatured = r.featured;
+    const free = r.type === "free";
+    const taken = r.soldCount;
+    const left = Math.max(0, r.totalNumbers - taken);
+    const pct = r.totalNumbers > 0 ? Math.min(100, Math.round((taken / r.totalNumbers) * 100)) : 0;
     const isNew = index === 1; // marcar el 2do como "Nuevo" como en la ref
+    const urgent = days !== null && days <= 3;
+    const daysLabel = days == null ? "Sin fecha límite" : days === 0 ? "¡Cierra hoy!" : `Quedan ${days} día${days === 1 ? "" : "s"}`;
 
     return (
         <motion.div
@@ -491,54 +491,116 @@ function RaffleCard({ raffle: r, index }: { raffle: Raffle; index: number }) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: index * 0.06 }}
+            className={wide ? "max-w-5xl mx-auto" : "h-full"}
         >
             <Link
                 href={`/sorteos/${r.slug}`}
-                className="group block rounded-2xl bg-white border border-slate-100 p-3 hover:shadow-lg hover:border-veci-primary/30 transition"
+                className="group relative block h-full rounded-[28px] p-[3px] bg-gradient-to-br from-amber-400 via-pink-500 to-violet-600 shadow-xl shadow-pink-200/70 hover:shadow-2xl hover:shadow-pink-300/80 hover:-translate-y-1 transition duration-300"
             >
-                <div className="relative aspect-square rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden mb-3">
-                    {r.coverImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={r.coverImage} alt={r.name} className="h-full w-full object-cover group-hover:scale-105 transition duration-500" />
-                    ) : (
-                        <div className="h-full w-full flex items-center justify-center">
-                            <Gift className="h-12 w-12 text-slate-300" />
-                        </div>
-                    )}
-                    {isFeatured && (
-                        <span className="absolute top-2 left-2 text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
-                            Destacado
-                        </span>
-                    )}
-                    {!isFeatured && isNew && (
-                        <span className="absolute top-2 left-2 text-[10px] font-extrabold px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                            Nuevo
-                        </span>
-                    )}
-                    {r.type === "free" && (
-                        <span className="absolute top-2 right-2 text-[10px] font-extrabold px-2 py-0.5 rounded bg-gradient-to-r from-amber-400 to-yellow-500 text-white">
-                            GRATIS
-                        </span>
-                    )}
-                </div>
+                <div className={`relative h-full rounded-[25px] bg-white overflow-hidden flex flex-col ${wide ? "sm:grid sm:grid-cols-2" : ""}`}>
+                    {/* Vitrina: el premio sobre papel picado */}
+                    <div className={`relative overflow-hidden bg-gradient-to-br from-amber-100 via-pink-100 to-violet-200 ${wide ? "aspect-square sm:aspect-auto sm:min-h-[400px]" : "aspect-square"}`}>
+                        <Confetti />
+                        {r.coverImage ? (
+                            // multiply: el fondo blanco de la foto se funde con el degradado.
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                                src={r.coverImage}
+                                alt={r.name}
+                                className="absolute inset-0 h-full w-full object-contain p-7 sm:p-9 mix-blend-multiply group-hover:scale-110 group-hover:-rotate-2 transition duration-500"
+                            />
+                        ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <Gift className="h-16 w-16 text-pink-400" />
+                            </div>
+                        )}
 
-                <h3 className="font-extrabold text-slate-900 text-sm sm:text-base line-clamp-1">{r.name}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                    {days != null ? (days === 0 ? "Cierra hoy" : `Quedan ${days} día${days === 1 ? "" : "s"}`) : "Sin fecha límite"}
-                </p>
+                        {(r.featured || isNew) && (
+                            <span className={`absolute top-3 left-3 z-10 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold text-white shadow-md ${r.featured ? "bg-violet-600" : "bg-emerald-500"}`}>
+                                <Star className="h-3 w-3 fill-current" />
+                                {r.featured ? "Destacado" : "Nuevo"}
+                            </span>
+                        )}
 
-                <div className="mt-3">
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-veci-primary transition-all" style={{ width: `${pct}%` }} />
+                        {/* Sello: gratis o precio por número */}
+                        <motion.div
+                            className="absolute top-3 right-3 z-10"
+                            animate={reduceMotion ? undefined : { rotate: [7, -5, 7], scale: [1, 1.08, 1] }}
+                            transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                            <div className={`rounded-2xl px-3 py-1.5 text-center text-white shadow-lg ring-2 ${free ? "bg-gradient-to-br from-rose-500 to-red-600 shadow-red-500/40 ring-yellow-300" : "bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-violet-500/40 ring-white"}`}>
+                                <p className={`font-black leading-none ${wide ? "text-2xl" : "text-xl"}`}>
+                                    {free ? "¡GRATIS!" : fmtMoney(r.price ?? 0)}
+                                </p>
+                                <p className={`mt-0.5 text-[9px] font-extrabold uppercase tracking-wider ${free ? "text-yellow-200" : "text-white/80"}`}>
+                                    {free ? "sin costo" : "por número"}
+                                </p>
+                            </div>
+                        </motion.div>
+
+                        <span className={`absolute bottom-3 left-3 z-10 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold shadow-md ${urgent ? "bg-rose-600 text-white animate-pulse" : "bg-white/90 text-slate-800 backdrop-blur"}`}>
+                            <Clock className="h-3.5 w-3.5" />
+                            {daysLabel}
+                        </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-1.5">
-                        {r.soldCount.toLocaleString("es-CL")} / {r.totalNumbers.toLocaleString("es-CL")} números vendidos
-                    </p>
+
+                    {/* Datos */}
+                    <div className={`relative flex flex-1 flex-col gap-3 ${wide ? "p-6 sm:p-9 sm:justify-center" : "p-4 sm:p-5"}`}>
+                        {/* Línea picada del boleto */}
+                        {!wide && <div aria-hidden className="absolute top-0 inset-x-5 border-t-2 border-dashed border-pink-200" />}
+
+                        <p className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.15em] text-pink-500">
+                            <Sparkles className="h-3.5 w-3.5" />
+                            {free ? "Sorteo gratis" : "Sorteo"}
+                        </p>
+                        <h3 className={`font-black text-slate-900 leading-tight line-clamp-2 ${wide ? "text-3xl sm:text-4xl" : "text-lg"}`}>
+                            {r.name}
+                        </h3>
+                        {wide && r.description && (
+                            <p className="text-sm sm:text-base text-slate-500 line-clamp-3">{r.description}</p>
+                        )}
+                        <p className={`text-slate-600 ${wide ? "text-base" : "text-sm"}`}>
+                            {free ? (
+                                <>Participar te cuesta <span className="font-black text-emerald-600 text-lg">$0</span></>
+                            ) : (
+                                <><span className="font-black text-violet-600 text-lg">{fmtMoney(r.price ?? 0)}</span> por número</>
+                            )}
+                        </p>
+
+                        <div className="mt-auto pt-1">
+                            <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                                <span className="text-slate-700">
+                                    {free
+                                        ? `${fmtNumber(left)} número${left === 1 ? "" : "s"} gratis disponible${left === 1 ? "" : "s"}`
+                                        : `${fmtNumber(taken)} / ${fmtNumber(r.totalNumbers)} vendidos`}
+                                </span>
+                                <span className="shrink-0 text-pink-600">{taken === 0 ? "¡Sé el primero!" : `${pct}%`}</span>
+                            </div>
+                            <div className="mt-1.5 h-2.5 rounded-full bg-pink-100 overflow-hidden">
+                                <div
+                                    className="h-full rounded-full bg-gradient-to-r from-amber-400 via-pink-500 to-violet-600"
+                                    style={{ width: `${taken > 0 ? Math.max(pct, 4) : 0}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        <span className={`relative mt-1 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-pink-500 via-rose-500 to-orange-400 font-black text-white shadow-lg shadow-rose-300/60 group-hover:shadow-xl group-hover:shadow-rose-400/60 transition ${wide ? "py-4 text-lg" : "py-3 text-sm sm:text-base"}`}>
+                            {/* Brillo que cruza el botón al pasar el mouse */}
+                            <span aria-hidden className="absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-white/35 group-hover:translate-x-[400%] transition-transform duration-700" />
+                            <Ticket className="h-4 w-4" />
+                            {free ? "¡Participar gratis!" : "Comprar número"}
+                            <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition" />
+                        </span>
+                    </div>
                 </div>
 
-                <button className="mt-3 w-full py-2 rounded-full bg-veci-primary text-white font-bold text-xs sm:text-sm group-hover:shadow-lg group-hover:shadow-veci-primary/25 transition">
-                    Participar ahora
-                </button>
+                {/* Muescas del boleto, a la altura de la línea picada */}
+                {!wide && (
+                    <div aria-hidden className="pointer-events-none absolute inset-x-[3px] top-[3px] aspect-square">
+                        <span className="absolute -left-[14px] bottom-0 h-[22px] w-[22px] translate-y-1/2 rounded-full bg-white" />
+                        <span className="absolute -right-[14px] bottom-0 h-[22px] w-[22px] translate-y-1/2 rounded-full bg-white" />
+                    </div>
+                )}
             </Link>
         </motion.div>
     );
