@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Footer } from '@/components/Footer';
 import { useCart, isWeightUnit, hasEquiv } from '@/components/cart/CartProvider';
-import { ArrowLeft, CalendarDays, Clock3, CreditCard, MapPin, Store, Loader2, ChevronDown, Clock, Phone as PhoneIcon, Navigation, Upload, Copy, Check, X, ImageIcon, Pencil, User, Mail, Phone, FileText } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Clock3, CreditCard, MapPin, Store, Loader2, ChevronDown, Clock, Phone as PhoneIcon, Navigation, Upload, Copy, Check, X, ImageIcon, Pencil, User, Mail, Phone, FileText, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar } from '@/components/ui/calendar';
@@ -285,6 +285,8 @@ export default function CheckoutPage() {
         setContactNotes(addr.addressNotes || '');
         setAddressModalOpen(false);
     };
+
+    const selectedAddress = savedAddresses.find(a => a.id === selectedAddressId) ?? null;
 
     const handleAddressSelect = (id: string) => {
         setSelectedAddressId(id);
@@ -719,74 +721,52 @@ export default function CheckoutPage() {
                                 </div>
                             ) : (
                             <div className="grid sm:grid-cols-2 gap-4">
-                                <DatePickerField
-                                    label="Fecha entrega"
-                                    value={deliveryDate}
-                                    onChange={setDeliveryDate}
-                                />
-                                <TimePickerField
-                                    label="Horario"
-                                    value={deliveryTime}
-                                    onChange={setDeliveryTime}
-                                />
-
+                                {/* Orden: dirección → fecha y horario → notas */}
                                 {hasStoreAccount ? (
                                     <div className="sm:col-span-2">
                                         <span className="text-[11px] uppercase tracking-wide text-slate-400 font-bold">Dirección de envío</span>
-                                        <div className="mt-1.5 grid sm:grid-cols-2 gap-3">
-                                            {savedAddresses.map(addr => {
-                                                const selected = selectedAddressId === addr.id;
-                                                return (
-                                                    <button
-                                                        key={addr.id}
-                                                        type="button"
-                                                        onClick={() => handleAddressSelect(addr.id)}
-                                                        aria-pressed={selected}
-                                                        className={`relative text-left p-4 rounded-2xl border-2 transition-all ${selected ? 'border-veci-primary bg-veci-primary/5 shadow-sm' : 'border-slate-200 bg-white/80 hover:border-slate-300'}`}
-                                                    >
-                                                        {selected && (
-                                                            <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-veci-primary text-white flex items-center justify-center">
-                                                                <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                                        <div className="mt-1.5 flex flex-col sm:flex-row gap-2">
+                                            {savedAddresses.length > 0 ? (
+                                                <Select
+                                                    value={selectedAddressId === 'custom' ? undefined : selectedAddressId}
+                                                    onValueChange={handleAddressSelect}
+                                                >
+                                                    <SelectTrigger className="flex-1 min-w-0 h-auto min-h-[50px] bg-white/80 border-slate-200 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-slate-700 focus:ring-veci-secondary/50 focus:ring-2 [&>span]:line-clamp-none">
+                                                        <SelectValue placeholder="Elige una dirección">
+                                                            {selectedAddress && <SavedAddressSummary address={selectedAddress} withIcon />}
+                                                        </SelectValue>
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-white border border-slate-200 shadow-lg backdrop-blur-none">
+                                                        {savedAddresses.map(addr => (
+                                                            <SelectItem key={addr.id} value={addr.id} className="py-2.5 cursor-pointer">
+                                                                <SavedAddressSummary address={addr} />
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : (
+                                                // Sin libreta: la dirección precargada (perfil o último pedido), o el aviso de que falta una.
+                                                <div className="flex-1 min-w-0 flex items-start gap-2.5 min-h-[50px] bg-white/80 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm">
+                                                    <MapPin className={`w-4 h-4 mt-0.5 shrink-0 ${contactAddress ? 'text-veci-primary' : 'text-slate-400'}`} />
+                                                    {contactAddress ? (
+                                                        <span className="min-w-0">
+                                                            <span className="block font-bold text-slate-700">Última dirección usada</span>
+                                                            <span className="block text-slate-600 truncate">
+                                                                {[contactAddress, contactComuna, contactCity].filter(Boolean).join(', ')}
                                                             </span>
-                                                        )}
-                                                        <span className="flex items-center gap-2 pr-6">
-                                                            <MapPin className={`w-4 h-4 shrink-0 ${selected ? 'text-veci-primary' : 'text-slate-400'}`} />
-                                                            <span className="text-sm font-bold text-slate-700 truncate">{addr.label}</span>
-                                                            {addr.isDefault && (
-                                                                <span className="text-[10px] font-bold text-veci-primary bg-veci-primary/10 px-2 py-0.5 rounded-full shrink-0">Predeterminada</span>
-                                                            )}
                                                         </span>
-                                                        <span className="block mt-1.5 text-sm text-slate-600 leading-snug">{addr.address}</span>
-                                                        <span className="block text-xs text-slate-400">{[addr.comuna, addr.city].filter(Boolean).join(', ')}</span>
-                                                        {addr.addressNotes && (
-                                                            <span className="block mt-1 text-xs text-slate-400 italic line-clamp-1">{addr.addressNotes}</span>
-                                                        )}
-                                                    </button>
-                                                );
-                                            })}
-
-                                            {/* Sin libreta pero con una dirección precargada (perfil o último pedido) */}
-                                            {savedAddresses.length === 0 && contactAddress && (
-                                                <div className="relative text-left p-4 rounded-2xl border-2 border-veci-primary bg-veci-primary/5">
-                                                    <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-veci-primary text-white flex items-center justify-center">
-                                                        <Check className="w-3.5 h-3.5" strokeWidth={3} />
-                                                    </span>
-                                                    <span className="flex items-center gap-2 pr-6">
-                                                        <MapPin className="w-4 h-4 shrink-0 text-veci-primary" />
-                                                        <span className="text-sm font-bold text-slate-700">Última dirección usada</span>
-                                                    </span>
-                                                    <span className="block mt-1.5 text-sm text-slate-600 leading-snug">{contactAddress}</span>
-                                                    <span className="block text-xs text-slate-400">{[contactComuna, contactCity].filter(Boolean).join(', ')}</span>
+                                                    ) : (
+                                                        <span className="self-center text-slate-400 font-medium">Aún no tienes direcciones guardadas</span>
+                                                    )}
                                                 </div>
                                             )}
-
                                             <button
                                                 type="button"
                                                 onClick={() => setAddressModalOpen(true)}
-                                                className="flex flex-col items-center justify-center gap-1.5 p-4 min-h-[104px] rounded-2xl border-2 border-dashed border-slate-300 text-slate-500 hover:border-veci-primary hover:text-veci-primary hover:bg-veci-primary/5 transition-all"
+                                                className="shrink-0 inline-flex items-center justify-center gap-2 min-h-[50px] px-4 rounded-xl border-2 border-dashed border-slate-300 text-sm font-bold text-slate-600 hover:border-veci-primary hover:text-veci-primary hover:bg-veci-primary/5 transition-all"
                                             >
-                                                <span className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-lg font-bold leading-none">+</span>
-                                                <span className="text-sm font-bold">Agregar dirección</span>
+                                                <Plus className="w-4 h-4" />
+                                                {savedAddresses.length > 0 ? 'Agregar nueva dirección' : 'Agregar dirección'}
                                             </button>
                                         </div>
                                     </div>
@@ -805,6 +785,16 @@ export default function CheckoutPage() {
                                         />
                                     </div>
                                 )}
+                                <DatePickerField
+                                    label="Fecha entrega"
+                                    value={deliveryDate}
+                                    onChange={setDeliveryDate}
+                                />
+                                <TimePickerField
+                                    label="Horario"
+                                    value={deliveryTime}
+                                    onChange={setDeliveryTime}
+                                />
                                 <InputField label="Notas de entrega" value={contactNotes} onChange={setContactNotes} className="sm:col-span-2" />
                             </div>
                             )}
@@ -1163,6 +1153,29 @@ function TimePickerField({
                 </SelectContent>
             </Select>
         </label>
+    );
+}
+
+/** Una dirección de la libreta, en el desplegable del checkout y en su opción elegida. */
+function SavedAddressSummary({ address, withIcon }: { address: SavedAddress; withIcon?: boolean }) {
+    return (
+        <span className="flex items-start gap-2.5 min-w-0 text-left">
+            {withIcon && <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-veci-primary" />}
+            <span className="min-w-0">
+                <span className="flex items-center gap-2">
+                    <span className="font-bold text-slate-700 truncate">{address.label}</span>
+                    {address.isDefault && (
+                        <span className="text-[10px] font-bold text-veci-primary bg-veci-primary/10 px-2 py-0.5 rounded-full shrink-0">Predeterminada</span>
+                    )}
+                </span>
+                <span className="block text-slate-600 truncate">
+                    {address.address}
+                    {(address.comuna || address.city) && (
+                        <span className="text-slate-400"> · {[address.comuna, address.city].filter(Boolean).join(', ')}</span>
+                    )}
+                </span>
+            </span>
+        </span>
     );
 }
 
