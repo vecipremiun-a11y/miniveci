@@ -8,7 +8,7 @@ import { branchIds } from "@/lib/category-tree";
 import { getSessionCustomerId } from "@/lib/session-customer";
 import { hasActiveSubscription } from "@/lib/subscriptions";
 import { activeOfferCondition, quickFilterConditions } from "@/lib/store-filters";
-import { isOfferActive, tierGroupKey } from "@/lib/product-price";
+import { isOfferActive, normalizePriceTiers, tierGroupKey } from "@/lib/product-price";
 import { presentationsAllowed } from "@/lib/product-presentations";
 import { loadStorePresentations } from "@/lib/product-presentations-db";
 
@@ -71,6 +71,16 @@ export async function GET(req: NextRequest) {
                 .from(products)
                 .where(sql`${products.tierGroup} IS NOT NULL`);
             const ids = grouped.filter((g) => tierGroupKey(g.tierGroup) === tierGroupParam).map((g) => g.id);
+            if (ids.length === 0) {
+                return NextResponse.json({ data: [], meta: { total: 0, page, limit, totalPages: 0 } });
+            }
+            conditions.push(inArray(products.id, ids));
+        }
+
+        // Productos puntuales por id: el carrito pone al día sus renglones guardados.
+        const idsParam = searchParams.get("ids");
+        if (idsParam !== null) {
+            const ids = [...new Set(idsParam.split(",").map((id) => id.trim()).filter(Boolean))].slice(0, 100);
             if (ids.length === 0) {
                 return NextResponse.json({ data: [], meta: { total: 0, page, limit, totalPages: 0 } });
             }
@@ -190,7 +200,7 @@ export async function GET(req: NextRequest) {
                 images: itemImages,
                 badges: raw.badges,
                 tags: raw.tags,
-                priceTiers: (raw.priceTiers as any[]) ?? [],
+                priceTiers: normalizePriceTiers(raw.priceTiers),
                 tierGroup: raw.tierGroup ?? null,
                 subscriptionPrice: isSubscriber && raw.subscriptionPrice ? raw.subscriptionPrice : null,
                 presentations: presentationsByProduct.get(raw.id) ?? [],

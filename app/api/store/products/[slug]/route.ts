@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isOfferActive } from "@/lib/product-price";
+import { isOfferActive, normalizePriceTiers } from "@/lib/product-price";
 import { db } from "@/lib/db";
 import { products, productImages } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest, context: any) {
             })),
             badges: rawProduct.badges,
             tags: rawProduct.tags,
-            priceTiers: (rawProduct.priceTiers as any[]) ?? [],
+            priceTiers: normalizePriceTiers(rawProduct.priceTiers),
             tierGroup: rawProduct.tierGroup ?? null,
             presentations,
         };

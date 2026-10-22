@@ -247,10 +247,78 @@ export interface PriceableProduct {
     priceTiers?: unknown;
 }
 
-interface PriceTier {
+export interface PriceTier {
     minQty: number;
     maxQty: number | null;
     price: number;
+}
+
+/**
+ * Escala limpia: tramos ordenados por "desde", cada uno "hasta" el siguiente
+ * menos 1 y el último sin tope. Cada tramo es más barato que el anterior.
+ *
+ * Arregla las escalas mal cargadas (en POSVECI o en el admin) para que llevar
+ * más nunca salga más caro:
+ * - Un hueco ("3–9" y después "19–29") dejaba de 10 a 18 sin tramo, a precio
+ *   normal. Ahora el tramo de abajo sigue hasta donde empieza el siguiente.
+ * - Un último tramo cerrado ("3–11") mandaba las 12 a precio normal. Ahora el
+ *   último no tiene tope.
+ * - Un tramo sin precio ($0) regalaba el producto: se descarta.
+ * - Un tramo que no es más barato que uno anterior no sirve: se descarta. Si
+ *   dos empiezan en la misma cantidad, queda el más barato.
+ *
+ * Las cantidades son enteras (unidades). Se usa para cobrar (`findPriceTier`),
+ * al guardar (admin y POSVECI) y en lo que mandan las APIs de la tienda.
+ */
+export function normalizePriceTiers(tiers: unknown): PriceTier[] {
+    if (!Array.isArray(tiers)) return [];
+    const valid = tiers
+        .map((t) => ({ minQty: Number(t?.minQty), price: Number(t?.price) }))
+        .filter((t) => Number.isFinite(t.minQty) && t.minQty > 0 && Number.isFinite(t.price) && t.price > 0)
+        .sort((a, b) => a.minQty - b.minQty || a.price - b.price);
+
+    const kept: { minQty: number; price: number }[] = [];
+    for (const tier of valid) {
+        const prev = kept[kept.length - 1];
+        if (prev && (tier.minQty === prev.minQty || tier.price >= prev.price)) continue;
+        kept.push(tier);
+    }
+    return kept.map((tier, i) => ({
+        minQty: tier.minQty,
+        maxQty: i < kept.length - 1 ? kept[i + 1].minQty - 1 : null,
+        price: tier.price,
+    }));
+}
+
+/** Tramo que le toca a una cantidad: el más alto que alcanza, o null (precio normal). */
+export function findPriceTier(tiers: unknown, quantity: number): PriceTier | null {
+    let match: PriceTier | null = null;
+    for (const tier of normalizePriceTiers(tiers)) {
+        if (quantity >= tier.minQty) match = tier;
+    }
+    return match;
+}
+
+/**
+ * Dónde va el cliente en la escala, para la tarjeta y la ficha. Recibe la
+ * escala ya normalizada.
+ *
+ * - `current`: tramo de lo que YA hay en el carrito (-1 = ninguno). Es el que
+ *   se marca: no se adelanta a lo que todavía no agrega.
+ * - `afterAdd`: tramo al agregar `adding` más (-1 = ninguno). Es el precio que
+ *   se muestra en el botón.
+ * - `next`: el tramo siguiente al del carrito, y `missing`: cuánto le falta.
+ */
+export function tierProgress(tiers: PriceTier[], inCart: number, adding: number) {
+    const indexFor = (quantity: number) => tiers.reduce((found, tier, i) => (quantity >= tier.minQty ? i : found), -1);
+    const current = inCart > 0 ? indexFor(inCart) : -1;
+    const next = tiers[current + 1] ?? null;
+    return {
+        current,
+        afterAdd: indexFor(inCart + adding),
+        next,
+        missing: next ? Math.round((next.minQty - inCart) * 100) / 100 : 0,
+    };
 }
 
 /**
@@ -279,8 +347,7 @@ export function resolveUnitPrice(
     isSubscriber = false,
 ): number {
     const basePrice = product.webPrice ?? 0;
-    const tiers = (product.priceTiers as PriceTier[] | null) ?? [];
-    const matchedTier = tiers.find((t) => quantity >= t.minQty && (t.maxQty === null || quantity <= t.maxQty));
+    const matchedTier = findPriceTier(product.priceTiers, quantity);
     const offerPrice = isOfferActive(product) ? product.offerPrice! : null;
     const regularPrice = matchedTier ? matchedTier.price : (offerPrice ?? basePrice);
 

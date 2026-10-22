@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { COMERCIAL_VECI_BADGE } from "@/lib/store-product-types";
-import { costPlusTax as costPlusTaxOf, DEFAULT_SUBSCRIPTION_MARGIN, subscriptionPriceFor, tierGroupKey } from "@/lib/product-price";
+import { costPlusTax as costPlusTaxOf, DEFAULT_SUBSCRIPTION_MARGIN, normalizePriceTiers, subscriptionPriceFor, tierGroupKey } from "@/lib/product-price";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, X, UploadCloud, Info, Trash2, TrendingDown, Infinity, Zap, Tag, DollarSign, TrendingUp, Eye, EyeOff } from "lucide-react";
@@ -87,7 +87,7 @@ export function ProductForm({ initialData, categories, tierGroups = [], presenta
             isFeatured: initialData?.isFeatured ?? false,
             tags: initialData?.tags || [],
             badges: initialData?.badges || [],
-            priceTiers: initialData?.priceTiers || [],
+            priceTiers: normalizePriceTiers(initialData?.priceTiers),
             tierGroup: initialData?.tierGroup ?? "",
             images: initialData?.images || [],
         },
@@ -1006,33 +1006,48 @@ export function ProductForm({ initialData, categories, tierGroups = [], presenta
                                             { bg: 'from-violet-50 to-purple-50', border: 'border-violet-200', badge: 'bg-violet-500', badgeText: 'text-white', accent: 'text-violet-600', label: 'bg-violet-100 text-violet-700', ring: 'ring-violet-200' },
                                         ];
 
+                                        // Tramos encadenados: solo se escribe el "desde"; el "hasta" es
+                                        // el desde del siguiente menos 1 y el último no tiene tope. Así no
+                                        // quedan huecos (un "3–9" seguido de "19–29" dejaba de 10 a 18 a
+                                        // precio normal). Al guardar se ordena igual (normalizePriceTiers).
+                                        const chain = (list: typeof tiers) => list.map((tier, i) => ({
+                                            ...tier,
+                                            maxQty: i < list.length - 1 ? list[i + 1].minQty - 1 : null,
+                                        }));
+
                                         const addTier = () => {
-                                            const updated = [...tiers];
-                                            if (updated.length > 0 && updated[updated.length - 1].maxQty === null) {
-                                                const prevMin = updated[updated.length - 1].minQty ?? 1;
-                                                updated[updated.length - 1] = { ...updated[updated.length - 1], maxQty: prevMin + 9 };
-                                            }
-                                            const lastMax = updated.length > 0 ? (updated[updated.length - 1].maxQty ?? 0) : 0;
-                                            field.onChange([...updated, { minQty: lastMax + 1, maxQty: null, price: 0 }]);
+                                            const last = tiers[tiers.length - 1];
+                                            // El primero desde 2: desde 1 sería el precio de todas las ventas.
+                                            field.onChange(chain([...tiers, { minQty: last ? last.minQty + 10 : 2, maxQty: null, price: 0 }]));
                                         };
 
-                                        const updateTier = (index: number, key: string, value: number | null) => {
-                                            const updated = [...tiers];
-                                            updated[index] = { ...updated[index], [key]: value };
-                                            field.onChange(updated);
+                                        const updateTier = (index: number, key: 'minQty' | 'price', value: number) => {
+                                            field.onChange(chain(tiers.map((tier, i) => (i === index ? { ...tier, [key]: value } : tier))));
                                         };
 
                                         const removeTier = (index: number) => {
-                                            field.onChange(tiers.filter((_: any, i: number) => i !== index));
+                                            field.onChange(chain(tiers.filter((_, i) => i !== index)));
+                                        };
+
+                                        // Lo que el guardado descartaría o reordenaría, para avisarlo antes.
+                                        const tierWarning = (i: number): string | null => {
+                                            const tier = tiers[i];
+                                            const prev = tiers[i - 1];
+                                            if (!(tier.price > 0)) return 'Ponle precio: un tramo sin precio no se guarda.';
+                                            if (prev && tier.minQty <= prev.minQty) return `El "desde" tiene que ser mayor que ${prev.minQty} (el del tramo anterior).`;
+                                            if (prev && prev.price > 0 && tier.price >= prev.price) return `Tiene que ser más barato que el tramo anterior (${prev.price}): si no, no se usa.`;
+                                            if (!prev && tier.minQty <= 1) return 'Desde 2 o más: desde 1 es el precio de todas las ventas.';
+                                            return null;
                                         };
 
                                         return (
                                             <FormItem>
                                                 {tiers.length > 0 && (
                                                     <div className="space-y-3">
-                                                        {tiers.map((tier: any, i: number) => {
+                                                        {tiers.map((tier, i) => {
                                                             const isLast = tier.maxQty === null;
                                                             const colors = tierColors[i % tierColors.length];
+                                                            const warning = tierWarning(i);
                                                             return (
                                                                 <div
                                                                     key={i}
@@ -1088,21 +1103,20 @@ export function ProductForm({ initialData, categories, tierGroups = [], presenta
                                                                         {/* Max Qty */}
                                                                         <div>
                                                                             <label className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 block ${colors.accent}`}>Hasta</label>
-                                                                            {isLast ? (
-                                                                                <div className={`h-11 rounded-xl border-2 border-dashed ${colors.border} bg-white/60 flex items-center justify-center gap-2`}>
-                                                                                    <Infinity className={`h-5 w-5 ${colors.accent}`} />
-                                                                                    <span className={`text-sm font-bold ${colors.accent}`}>∞</span>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <Input
-                                                                                    type="number"
-                                                                                    min={tier.minQty}
-                                                                                    className={`h-11 text-center text-base font-bold bg-white border-2 ${colors.border} rounded-xl`}
-                                                                                    value={tier.maxQty ?? ''}
-                                                                                    placeholder="∞"
-                                                                                    onChange={(e) => updateTier(i, 'maxQty', e.target.value === '' ? null : Number(e.target.value))}
-                                                                                />
-                                                                            )}
+                                                                            {/* Sale solo: el "desde" del tramo siguiente menos 1 */}
+                                                                            <div
+                                                                                className={`h-11 rounded-xl border-2 border-dashed ${colors.border} bg-white/60 flex items-center justify-center gap-2`}
+                                                                                title={isLast ? 'Sin tope' : 'Se ajusta con el "desde" del tramo siguiente'}
+                                                                            >
+                                                                                {isLast ? (
+                                                                                    <>
+                                                                                        <Infinity className={`h-5 w-5 ${colors.accent}`} />
+                                                                                        <span className={`text-sm font-bold ${colors.accent}`}>∞</span>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <span className={`text-base font-bold tabular-nums ${colors.accent}`}>{tier.maxQty}</span>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
 
                                                                         {/* Price */}
@@ -1120,6 +1134,9 @@ export function ProductForm({ initialData, categories, tierGroups = [], presenta
                                                                             </div>
                                                                         </div>
                                                                     </div>
+                                                                    {warning && (
+                                                                        <p className="mt-3 pl-3 text-xs font-semibold text-amber-700">{warning}</p>
+                                                                    )}
                                                                 </div>
                                                             );
                                                         })}

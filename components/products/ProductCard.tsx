@@ -6,6 +6,7 @@ import { useEffect, useState, useMemo, type PointerEvent } from 'react';
 import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getTieredPrice, getOfferCartCap } from '@/components/cart/CartProvider';
 import type { PriceTier } from '@/components/cart/CartProvider';
 import { COMERCIAL_VECI_BADGE, type StorePresentation } from '@/lib/store-product-types';
+import { normalizePriceTiers, tierProgress } from '@/lib/product-price';
 import { OfferCountdown } from '@/components/products/OfferEndsLabel';
 import { useRouter } from 'next/navigation';
 
@@ -19,6 +20,27 @@ export function formatOfferStock(offerStock: number, unit?: string | null): stri
     return isWeightUnit(unit)
         ? `${offerStock.toLocaleString('es-CL', { maximumFractionDigits: 3 })} ${(unit ?? 'kg').toLowerCase()}`
         : `${Math.floor(offerStock)} und`;
+}
+
+/**
+ * Aviso bajo la escala: a qué precio pasa al agregar lo elegido, o cuánto le
+ * falta en el carrito para el próximo tramo. null si no hay nada que decir.
+ */
+export function tierHintText(
+    tiers: PriceTier[],
+    progress: ReturnType<typeof tierProgress>,
+    inCart: number,
+    adding: number,
+    byWeight = false,
+): string | null {
+    const qty = (q: number) => (byWeight ? `${q.toLocaleString('es-CL', { maximumFractionDigits: 2 })} kg` : `${q}`);
+    if (progress.afterAdd > progress.current) {
+        const price = fmtCLP(tiers[progress.afterAdd].price);
+        return inCart > 0 ? `Con ${qty(adding)} más pasas a ${price} c/u` : `Llevando ${qty(adding)} pagas ${price} c/u`;
+    }
+    if (inCart <= 0) return null;
+    if (!progress.next) return 'Ya tienes el mejor precio';
+    return `Te ${progress.missing === 1 ? 'falta' : 'faltan'} ${qty(progress.missing)} para ${fmtCLP(progress.next.price)} c/u`;
 }
 
 interface ProductCardProps {
@@ -55,7 +77,7 @@ const HOVER_IMAGE_INTERVAL_MS = 1400;
 
 export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit, equivLabel, equivWeight, image, images, isPopular, slug, priceTiers, subscriptionPrice, badges, tierGroup, offerEndsAt, offerStock, presentations }: ProductCardProps) {
     const hasVeciSeal = badges?.includes(COMERCIAL_VECI_BADGE) ?? false;
-    const { addItem, getGroupQuantity } = useCart();
+    const { addItem, getGroupQuantity, getLineQuantity } = useCart();
     const router = useRouter();
     const equiv = hasEquiv({ equivLabel, equivWeight });
     const [buyMode, setBuyMode] = useState<'unit' | 'kg'>('unit');
@@ -95,17 +117,21 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
         setActiveImage(0);
     };
 
-    // Grupo de escala: lo que ya hay en el carrito del mismo grupo suma para el
-    // tramo, así el precio que se ve es el que va a quedar al agregar.
+    // Escala: lo que ya hay en el carrito cuenta para el tramo (todo el grupo de
+    // escala, o este mismo renglón si va solo, que es donde se suma al agregar).
+    // El precio del botón es el que queda al agregar; el tramo marcado es el
+    // que ya se alcanzó en el carrito.
     const groupable = Boolean(tierGroup) && !equiv && !isWeight;
-    const groupInCart = groupable ? getGroupQuantity(tierGroup) : 0;
-    const tierQty = quantity + groupInCart;
+    const inCart = groupable ? getGroupQuantity(tierGroup) : getLineQuantity(kgMode ? `${id}__kg` : id);
+    const tierQty = inCart + quantity;
+    const tiers = useMemo(() => normalizePriceTiers(priceTiers), [priceTiers]);
+    const progress = tierProgress(tiers, inCart, quantity);
 
     const hasOffer = Boolean(isOffer && offerPrice && offerPrice < price);
     const rawPrice = hasOffer ? offerPrice! : price;
-    const tieredPrice = getEffectivePrice(rawPrice, priceTiers, tierQty, subscriptionPrice);
+    const tieredPrice = getEffectivePrice(rawPrice, tiers, tierQty, subscriptionPrice);
     // Lo que pagaría sin la membresía, para mostrar el ahorro tachado.
-    const regularPrice = getTieredPrice(rawPrice, priceTiers, tierQty);
+    const regularPrice = getTieredPrice(rawPrice, tiers, tierQty);
     const isSubscriberPrice = tieredPrice < regularPrice;
     const displayPrice = equiv ? Math.round(tieredPrice * equivWeight!) : tieredPrice;
     const discountPercent = hasOffer ? Math.round(((price - offerPrice!) / price) * 100) : 0;
@@ -145,19 +171,20 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
     // Lo que la escala le ahorra en esta compra frente al precio de lista
     const tierSavings = useMemo(() => {
-        if (!priceTiers || priceTiers.length === 0) return 0;
+        if (tiers.length === 0) return 0;
         const baseUnit = equiv && !kgMode ? Math.round(rawPrice * equivWeight!) : rawPrice;
         return Math.max(0, Math.round(quantity * baseUnit) - subtotalValue);
-    }, [priceTiers, equiv, kgMode, rawPrice, equivWeight, quantity, subtotalValue]);
+    }, [tiers, equiv, kgMode, rawPrice, equivWeight, quantity, subtotalValue]);
+    const tierHint = tierHintText(tiers, progress, inCart, quantity, kgMode || isWeight);
     // Stock label always shows real kg for equiv products
     const stockLabel = outOfStock ? 'Sin stock' : (isWeightUnit(unit) ? `${shownStock} ${(unit ?? 'Kg').toUpperCase()}` : `${shownStock} UND`);
     const lowStock = !outOfStock && shownStock <= 5;
 
     const handleAdd = () => {
         if (kgMode) {
-            addItem({ id: `${id}__kg`, name, price: rawPrice, image: imageSrc, slug, unit, priceTiers, subscriptionPrice, offerStock: offerStockLeft }, quantity);
+            addItem({ id: `${id}__kg`, name, price: rawPrice, image: imageSrc, slug, unit, priceTiers: tiers, subscriptionPrice, offerStock: offerStockLeft }, quantity);
         } else {
-            addItem({ id, name, price: rawPrice, image: imageSrc, slug, unit, equivLabel, equivWeight, priceTiers, subscriptionPrice, tierGroup, offerStock: offerStockLeft }, quantity);
+            addItem({ id, name, price: rawPrice, image: imageSrc, slug, unit, equivLabel, equivWeight, priceTiers: tiers, subscriptionPrice, tierGroup, offerStock: offerStockLeft }, quantity);
         }
         setQuantity(minQty);
     };
@@ -305,7 +332,7 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                 )}
 
                 {/* Tramos por cantidad: se leen como boleta, no como aviso */}
-                {priceTiers && priceTiers.length > 0 && (
+                {tiers.length > 0 && (
                     <div className="rounded-xl bg-white border border-lechuga-viva p-1.5 space-y-1" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 px-0.5">
                             <TrendingDown className="w-3 h-3 text-tallo shrink-0" strokeWidth={2.5} />
@@ -314,8 +341,9 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
                             </span>
                         </div>
 
-                        {priceTiers.map((tier, idx) => {
-                            const isActive = tierQty >= tier.minQty && (tier.maxQty === null || tierQty <= tier.maxQty);
+                        {tiers.map((tier, idx) => {
+                            // Se marca el tramo ya alcanzado en el carrito, no el que tendría al agregar.
+                            const isActive = idx === progress.current;
                             const isLastTier = tier.maxQty === null;
                             return (
                                 <div
@@ -336,7 +364,13 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
                         {groupable && (
                             <p className="text-[10px] font-semibold text-tallo leading-tight px-0.5 pt-0.5">
-                                Suma con otros “{tierGroup}”{groupInCart > 0 ? ` · llevas ${groupInCart}` : ''}
+                                Suma con otros “{tierGroup}”{inCart > 0 ? ` · llevas ${inCart}` : ''}
+                            </p>
+                        )}
+
+                        {tierHint && (
+                            <p className="text-[10px] font-bold text-hoja leading-tight px-0.5">
+                                {tierHint}
                             </p>
                         )}
 

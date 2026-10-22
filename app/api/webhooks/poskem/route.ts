@@ -3,6 +3,7 @@ import {
     cleanTierGroup,
     normalizeOfferEndsAt,
     normalizeOfferStock,
+    normalizePriceTiers,
     offerEndsAtAfterPosUpdate,
     offerStockAfterPosUpdate,
 } from "@/lib/product-price";
@@ -118,13 +119,14 @@ async function handleProductCreatedOrUpdated(payload: Record<string, unknown>) {
     if (rawPriceTiers === null) {
         priceTiers = null; // Explicitly clear tiers
     } else if (Array.isArray(rawPriceTiers)) {
-        priceTiers = rawPriceTiers
+        // Encadenada: sin huecos, sin tramos en $0 y el último sin tope (normalizePriceTiers).
+        priceTiers = normalizePriceTiers(rawPriceTiers
             .filter((t: any) => typeof t === 'object' && t !== null && typeof t.minQty === 'number' && typeof t.price === 'number')
             .map((t: any) => ({
                 minQty: Math.max(1, Math.round(t.minQty ?? t.min_qty ?? 1)),
                 maxQty: (t.maxQty === null || t.maxQty === undefined) ? ((t.max_qty === null || t.max_qty === undefined) ? null : Math.round(t.max_qty)) : Math.round(t.maxQty),
                 price: Math.round(t.price ?? 0),
-            }));
+            })));
         if (priceTiers.length === 0) priceTiers = null;
     }
 

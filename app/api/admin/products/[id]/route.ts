@@ -7,7 +7,7 @@ import { mapMutationKeysToStoreFields } from "@/lib/store-product-change-fields"
 import { productSchema } from "@/lib/validations/product";
 import { eq } from "drizzle-orm";
 import { ZodError } from "zod";
-import { cleanTierGroup, normalizeOfferEndsAt, normalizeOfferStock } from "@/lib/product-price";
+import { cleanTierGroup, normalizeOfferEndsAt, normalizeOfferStock, normalizePriceTiers } from "@/lib/product-price";
 import { recomputeSubscriptionPrice } from "@/lib/subscription-price";
 
 export async function GET(
@@ -61,6 +61,9 @@ export async function PUT(
         }
         if (validatedData.offerEndsAt !== undefined) {
             validatedData.offerEndsAt = normalizeOfferEndsAt(validatedData.offerEndsAt);
+        }
+        if (validatedData.priceTiers !== undefined) {
+            validatedData.priceTiers = normalizePriceTiers(validatedData.priceTiers);
         }
 
         const existingResult = await db.select().from(products).where(eq(products.id, id)).limit(1);

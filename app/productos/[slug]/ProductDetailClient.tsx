@@ -9,8 +9,8 @@ import { OfferCountdown } from '@/components/products/OfferEndsLabel';
 import { ProductImageLightbox } from '@/components/products/ProductImageLightbox';
 import { useCart, isWeightUnit, hasEquiv, getEffectivePrice, getOfferCartCap, cartLineUnits } from '@/components/cart/CartProvider';
 import { cartLineProductId, maxPresentationBoxes, presentationCartId } from '@/lib/product-presentations';
-import { formatOfferStock } from '@/components/products/ProductCard';
-import type { PriceTier } from '@/components/cart/CartProvider';
+import { formatOfferStock, tierHintText } from '@/components/products/ProductCard';
+import { normalizePriceTiers, tierProgress } from '@/lib/product-price';
 import type { ProductChangeEventPayload, StoreProductPayload } from '@/lib/store-product-types';
 import { COMERCIAL_VECI_BADGE } from '@/lib/store-product-types';
 import { ChevronRight, Loader2, Maximize2, Minus, Plus, Scale, ShoppingCart, Star, Tag, Zap, Check } from 'lucide-react';
@@ -32,7 +32,7 @@ export default function ProductDetailPage() {
     const params = useParams<{ slug: string }>();
     const slug = params?.slug;
 
-    const { addItem, getGroupQuantity, items: cartItems } = useCart();
+    const { addItem, getGroupQuantity, getLineQuantity, items: cartItems } = useCart();
     const [product, setProduct] = useState<ProductDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState(0);
@@ -209,12 +209,17 @@ export default function ProductDetailPage() {
     const hasOffer = Boolean(product?.isOffer && product?.offerPrice && product.offerPrice < product.price);
     const rawPrice = hasOffer ? product!.offerPrice! : product?.price ?? 0;
     const subscriptionPrice = product?.subscriptionPrice;
-    // Grupo de escala: lo que ya hay en el carrito del mismo grupo suma para el tramo.
+    // Escala: lo que ya hay en el carrito cuenta para el tramo (todo el grupo de
+    // escala, o este mismo renglón si va solo). Se marca el tramo ya alcanzado
+    // en el carrito; el precio es el que queda al agregar.
     const tierGroup = product?.tierGroup ?? null;
     const groupable = Boolean(tierGroup) && !equiv && !isWeightUnit(product?.unit);
-    const groupInCart = groupable ? getGroupQuantity(tierGroup) : 0;
-    const tierQty = quantity + groupInCart;
-    const tieredPrice = getEffectivePrice(rawPrice, (product as any)?.priceTiers, tierQty, subscriptionPrice);
+    const inCart = !product ? 0 : groupable ? getGroupQuantity(tierGroup) : getLineQuantity(kgMode ? `${product.id}__kg` : product.id);
+    const tierQty = quantity + inCart;
+    const tiers = useMemo(() => normalizePriceTiers(product?.priceTiers), [product?.priceTiers]);
+    const progress = tierProgress(tiers, inCart, quantity);
+    const tierHint = tierHintText(tiers, progress, inCart, quantity, kgMode || isWeight);
+    const tieredPrice = getEffectivePrice(rawPrice, tiers, tierQty, subscriptionPrice);
     const displayPrice = equiv ? Math.round(tieredPrice * equivW) : tieredPrice;
     const discountPercent = hasOffer ? Math.round(((product!.price - product!.offerPrice!) / product!.price) * 100) : 0;
 
@@ -253,10 +258,10 @@ export default function ProductDetailPage() {
     const fmtClp = (value: number) =>
         new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
     // Precio de 1 unidad suelta, para el selector "Unidad | Caja (30) | …".
-    const unitChipPrice = getEffectivePrice(rawPrice, product?.priceTiers, 1 + groupInCart, subscriptionPrice);
+    const unitChipPrice = getEffectivePrice(rawPrice, tiers, 1 + inCart, subscriptionPrice);
     // Lo que costarían las mismas unidades sueltas (con su escala), para mostrar el ahorro de la caja.
     const looseCost = presentation
-        ? getEffectivePrice(rawPrice, product?.priceTiers, presentation.units, subscriptionPrice) * presentation.units
+        ? getEffectivePrice(rawPrice, tiers, presentation.units, subscriptionPrice) * presentation.units
         : 0;
 
     const subtotalText = useMemo(() => {
@@ -519,7 +524,7 @@ export default function ProductDetailPage() {
                         )}
 
                         {/* --- Price Tiers Table (por unidad; la caja tiene precio fijo) --- */}
-                        {!presentation && (product as any).priceTiers && (product as any).priceTiers.length > 0 && (
+                        {!presentation && tiers.length > 0 && (
                             <div className="mt-5 rounded-2xl overflow-hidden border border-purple-200 shadow-sm">
                                 {/* Header */}
                                 <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500 px-4 py-3 flex items-center gap-2">
@@ -527,15 +532,16 @@ export default function ProductDetailPage() {
                                     <p className="text-sm font-bold text-white">Ahorra comprando más</p>
                                     {groupable && (
                                         <span className="ml-auto text-[11px] font-semibold text-white/90 text-right leading-tight">
-                                            Suma con otros “{tierGroup}”{groupInCart > 0 ? ` · llevas ${groupInCart}` : ''}
+                                            Suma con otros “{tierGroup}”{inCart > 0 ? ` · llevas ${inCart}` : ''}
                                         </span>
                                     )}
                                 </div>
                                 {/* Tiers */}
                                 <div className="bg-gradient-to-b from-purple-50/60 to-white divide-y divide-purple-100">
-                                    {((product as any).priceTiers as PriceTier[]).map((tier, idx) => {
+                                    {tiers.map((tier, idx) => {
                                         const fmt = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
-                                        const isActive = tierQty >= tier.minQty && (tier.maxQty === null || tierQty <= tier.maxQty);
+                                        // Se marca el tramo ya alcanzado en el carrito, no el que tendría al agregar.
+                                        const isActive = idx === progress.current;
                                         const tierColors = [
                                             { bg: 'bg-blue-500', light: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
                                             { bg: 'bg-emerald-500', light: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
@@ -584,6 +590,11 @@ export default function ProductDetailPage() {
                                         );
                                     })}
                                 </div>
+                                {tierHint && (
+                                    <p className="px-4 py-2.5 bg-white border-t border-purple-100 text-sm font-bold text-purple-700">
+                                        {tierHint}
+                                    </p>
+                                )}
                             </div>
                         )}
 
@@ -697,9 +708,9 @@ export default function ProductDetailPage() {
                                     }, quantity);
                                     setQuantity(1);
                                 } else if (kgMode) {
-                                    addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, priceTiers: (product as any).priceTiers, subscriptionPrice, offerStock: offerStockLeft }, quantity);
+                                    addItem({ id: `${product.id}__kg`, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, priceTiers: tiers, subscriptionPrice, offerStock: offerStockLeft }, quantity);
                                 } else {
-                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight, priceTiers: (product as any).priceTiers, subscriptionPrice, tierGroup, offerStock: offerStockLeft }, quantity);
+                                    addItem({ id: product.id, name: product.name, price: rawPrice, image: currentImage, slug: product.slug, unit: product.unit, equivLabel: product.equivLabel, equivWeight: product.equivWeight, priceTiers: tiers, subscriptionPrice, tierGroup, offerStock: offerStockLeft }, quantity);
                                 }
                             }}
                             disabled={maxQty <= 0}

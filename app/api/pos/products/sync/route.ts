@@ -3,6 +3,7 @@ import {
   cleanTierGroup,
   normalizeOfferEndsAt,
   normalizeOfferStock,
+  normalizePriceTiers,
   offerEndsAtAfterPosUpdate,
   offerStockAfterPosUpdate,
 } from "@/lib/product-price";
@@ -366,13 +367,14 @@ async function handleProductSync(req: NextRequest) {
     if (data.price_tiers === null) {
       priceTiers = null;
     } else if (Array.isArray(data.price_tiers)) {
-      priceTiers = data.price_tiers
+      // Encadenada: sin huecos, sin tramos en $0 y el último sin tope (normalizePriceTiers).
+      priceTiers = normalizePriceTiers(data.price_tiers
         .filter((t) => typeof t.price === 'number')
         .map((t) => ({
           minQty: Math.max(1, Math.round(t.minQty ?? t.min_qty ?? 1)),
           maxQty: (t.maxQty === null || t.maxQty === undefined) ? ((t.max_qty === null || t.max_qty === undefined) ? null : Math.round(t.max_qty)) : Math.round(t.maxQty),
           price: Math.round(t.price),
-        }));
+        })));
       if (priceTiers.length === 0) priceTiers = null;
     }
 

@@ -1,8 +1,9 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { tierGroupKey, tierQuantities } from '@/lib/product-price';
+import { findPriceTier, tierGroupKey, tierQuantities } from '@/lib/product-price';
 import { cartLineProductId, maxPresentationBoxes, type StorePresentation } from '@/lib/product-presentations';
+import type { StoreProductPayload } from '@/lib/store-product-types';
 
 /** Presentación de un renglón del carrito (Caja, Bandeja…). */
 export type CartPresentation = StorePresentation;
@@ -68,13 +69,13 @@ export function isRaffleCartId(id: string): boolean {
     return id.startsWith('raffle:');
 }
 
-/** Returns the effective unit price for a given quantity based on price tiers */
+/**
+ * Precio por escala para una cantidad: el del tramo más alto que alcanza, o el
+ * base. Es la regla del servidor (`findPriceTier` en lib/product-price), que
+ * también arregla las escalas mal cargadas.
+ */
 export function getTieredPrice(basePrice: number, priceTiers: PriceTier[] | undefined, quantity: number): number {
-    if (!priceTiers || priceTiers.length === 0) return basePrice;
-    const tier = priceTiers.find(t =>
-        quantity >= t.minQty && (t.maxQty === null || quantity <= t.maxQty)
-    );
-    return tier ? tier.price : basePrice;
+    return findPriceTier(priceTiers, quantity)?.price ?? basePrice;
 }
 
 /**
@@ -152,6 +153,41 @@ function capByPresentationStock(item: CartItem, quantity: number, items: CartIte
     return cap === null ? quantity : Math.min(quantity, cap);
 }
 
+/** Los productos de la tienda por id, de a 100 (el tope de la API). */
+async function fetchStoreProducts(ids: string[], signal: AbortSignal): Promise<Map<string, StoreProductPayload>> {
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += 100) chunks.push(ids.slice(i, i + 100));
+    const pages = await Promise.all(chunks.map(async (chunk) => {
+        const res = await fetch(`/api/store/products?ids=${chunk.map(encodeURIComponent).join(',')}&limit=100`, { signal });
+        if (!res.ok) return [];
+        const json = await res.json();
+        return Array.isArray(json?.data) ? (json.data as StoreProductPayload[]) : [];
+    }));
+    return new Map(pages.flat().map((p) => [p.id, p]));
+}
+
+/**
+ * Renglón por unidad puesto al día con el precio, la escala, el grupo y la
+ * oferta de hoy. El carrito guarda esos datos al agregar: si después cambian
+ * (POSVECI corrige un tramo, se acaba una oferta), seguía mostrando los viejos
+ * aunque el servidor cobre los nuevos. Igual que lo agrega la tarjeta.
+ */
+function refreshCartLine(item: CartItem, product: StoreProductPayload | undefined): CartItem {
+    if (!product || isRaffleCartId(item.id) || item.presentation) return item;
+    const hasOffer = Boolean(product.isOffer && product.offerPrice && product.offerPrice < product.price);
+    const fresh: CartItem = {
+        ...item,
+        price: hasOffer ? product.offerPrice! : product.price,
+        priceTiers: product.priceTiers ?? [],
+        subscriptionPrice: product.subscriptionPrice ?? null,
+        offerStock: hasOffer ? product.offerStock ?? null : null,
+        // El renglón por kilo de un producto por unidad equivalente no lleva grupo.
+        ...(item.id.endsWith('__kg') ? {} : { tierGroup: product.tierGroup ?? null }),
+    };
+    const quantity = capByOffer(fresh, item.quantity);
+    return { ...fresh, quantity: quantity > 0 ? quantity : item.quantity };
+}
+
 interface CartContextValue {
     items: CartItem[];
     totalItems: number;
@@ -166,6 +202,8 @@ interface CartContextValue {
     getItemTierQuantity: (item: CartItem) => number;
     /** Unidades en el carrito de un grupo de escala (0 si no hay). */
     getGroupQuantity: (tierGroup?: string | null) => number;
+    /** Cantidad de un renglón del carrito por su id (0 si no está). */
+    getLineQuantity: (id: string) => number;
     /** Renglón por presentación que ya no tiene stock para otra caja. */
     isAtStockCap: (item: CartItem) => boolean;
     addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number) => void;
@@ -185,14 +223,30 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return;
 
+        let saved: CartItem[] = [];
         try {
             const parsed = JSON.parse(raw) as CartItem[];
             if (Array.isArray(parsed)) {
-                setItems(parsed.filter((item) => item?.id && item.quantity > 0));
+                saved = parsed.filter((item) => item?.id && item.quantity > 0);
+                setItems(saved);
             }
         } catch {
             localStorage.removeItem(STORAGE_KEY);
         }
+
+        // Los renglones guardados se ponen al día con los precios y escalas de hoy.
+        const ids = [...new Set(
+            saved.filter((item) => !isRaffleCartId(item.id) && !item.presentation).map((item) => cartLineProductId(item.id)),
+        )];
+        if (ids.length === 0) return;
+        const controller = new AbortController();
+        fetchStoreProducts(ids, controller.signal)
+            .then((fresh) => {
+                if (fresh.size === 0) return;
+                setItems((prev) => prev.map((item) => refreshCartLine(item, fresh.get(cartLineProductId(item.id)))));
+            })
+            .catch(() => {});
+        return () => controller.abort();
     }, []);
 
     useEffect(() => {
@@ -235,10 +289,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setItems((prev) => {
             const existing = prev.find((p) => p.id === item.id);
             if (existing) {
-                // El stock en oferta que llega ahora es más nuevo que el guardado.
-                const offerStock = item.offerStock ?? null;
-                const quantity = capByOffer({ ...existing, offerStock }, equiv ? existing.quantity + safeQuantity : round2(existing.quantity + safeQuantity));
-                return prev.map((p) => (p.id === item.id ? { ...p, offerStock, quantity } : p));
+                // Precio, escala y stock en oferta que llegan ahora son más nuevos que los guardados.
+                const fresh: CartItem = {
+                    ...existing,
+                    price: item.price,
+                    priceTiers: item.priceTiers,
+                    tierGroup: item.tierGroup,
+                    subscriptionPrice: item.subscriptionPrice,
+                    offerStock: item.offerStock ?? null,
+                };
+                const quantity = capByOffer(fresh, equiv ? existing.quantity + safeQuantity : round2(existing.quantity + safeQuantity));
+                return prev.map((p) => (p.id === item.id ? { ...fresh, quantity } : p));
             }
             const quantity = capByOffer(item, safeQuantity);
             if (quantity <= 0) return prev;
@@ -310,6 +371,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         ), 0);
     }, [items]);
 
+    const getLineQuantity = useCallback(
+        (id: string) => items.find((item) => item.id === id)?.quantity ?? 0,
+        [items],
+    );
+
     const isAtStockCap = useCallback((item: CartItem) => {
         const cap = getPresentationCap(item, items);
         return cap !== null && item.quantity >= cap;
@@ -325,8 +391,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             }
             return sum + effectivePrice * item.quantity;
         }, 0);
-        return { items, totalItems, subtotal, getItemUnitPrice, getItemTierQuantity, getGroupQuantity, isAtStockCap, addItem, updateQuantity, removeItem, clearCart };
-    }, [items, getItemUnitPrice, getItemTierQuantity, getGroupQuantity, isAtStockCap]);
+        return { items, totalItems, subtotal, getItemUnitPrice, getItemTierQuantity, getGroupQuantity, getLineQuantity, isAtStockCap, addItem, updateQuantity, removeItem, clearCart };
+    }, [items, getItemUnitPrice, getItemTierQuantity, getGroupQuantity, getLineQuantity, isAtStockCap]);
 
     return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

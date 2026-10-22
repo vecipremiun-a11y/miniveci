@@ -8,7 +8,7 @@ import { tokenizeSearch } from "@/lib/search-text";
 import { searchTokensCondition } from "@/lib/search-sql";
 import { desc, asc, eq, and, sql, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
-import { cleanTierGroup, normalizeOfferEndsAt, normalizeOfferStock } from "@/lib/product-price";
+import { cleanTierGroup, normalizeOfferEndsAt, normalizeOfferStock, normalizePriceTiers } from "@/lib/product-price";
 import { recomputeSubscriptionPrice } from "@/lib/subscription-price";
 
 export async function GET(req: NextRequest) {
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
             isFeatured: productData.isFeatured,
             tags: productData.tags,
             badges: productData.badges,
-            priceTiers: productData.priceTiers ?? null,
+            priceTiers: normalizePriceTiers(productData.priceTiers),
             tierGroup: cleanTierGroup(productData.tierGroup),
             offerEndsAt: normalizeOfferEndsAt(productData.offerEndsAt),
             offerStock: normalizeOfferStock(productData.offerStock, productData.unit),

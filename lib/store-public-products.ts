@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { isOfferActive } from "@/lib/product-price";
+import { isOfferActive, normalizePriceTiers } from "@/lib/product-price";
 import { productImages, products } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { resolveProduct, type CategoryInput, type ProductInput } from "@/lib/services/product-resolver";
@@ -71,7 +71,7 @@ export async function getPublicStoreProductById(productId: string): Promise<Stor
         })),
         badges: (rawProduct.badges as string[] | null) ?? null,
         tags: (rawProduct.tags as string[] | null) ?? null,
-        priceTiers: (rawProduct.priceTiers as any[]) ?? [],
+        priceTiers: normalizePriceTiers(rawProduct.priceTiers),
         tierGroup: rawProduct.tierGroup ?? null,
         presentations,
     };

@@ -8,15 +8,13 @@
  * front es un componente 'use client' con React adentro.
  */
 import { describe, it, expect } from "vitest";
-import { resolveUnitPrice, type PriceableProduct } from "../product-price";
+import { findPriceTier, resolveUnitPrice, type PriceableProduct } from "../product-price";
 
 interface PriceTier { minQty: number; maxQty: number | null; price: number }
 
 // --- Copia exacta de components/cart/CartProvider.tsx ---
 function getTieredPrice(basePrice: number, priceTiers: PriceTier[] | undefined, quantity: number): number {
-    if (!priceTiers || priceTiers.length === 0) return basePrice;
-    const tier = priceTiers.find(t => quantity >= t.minQty && (t.maxQty === null || quantity <= t.maxQty));
-    return tier ? tier.price : basePrice;
+    return findPriceTier(priceTiers, quantity)?.price ?? basePrice;
 }
 
 function getEffectivePrice(
@@ -35,6 +33,9 @@ const TIERS: (PriceTier[] | undefined)[] = [
     undefined,
     [{ minQty: 3, maxQty: 5, price: 700 }],
     [{ minQty: 10, maxQty: null, price: 450 }],
+    // Mal cargadas: hueco, último tramo cerrado y tramo en $0.
+    [{ minQty: 3, maxQty: 4, price: 700 }, { minQty: 9, maxQty: 19, price: 600 }],
+    [{ minQty: 1, maxQty: null, price: 0 }, { minQty: 3, maxQty: 5, price: 700 }],
 ];
 const SUBS = [null, 0, 450, 600, 1500];
 const OFFERS: { isOffer: boolean; offerPrice: number | null }[] = [
