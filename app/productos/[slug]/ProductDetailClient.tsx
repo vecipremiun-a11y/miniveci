@@ -210,8 +210,9 @@ export default function ProductDetailPage() {
     const rawPrice = hasOffer ? product!.offerPrice! : product?.price ?? 0;
     const subscriptionPrice = product?.subscriptionPrice;
     // Escala: lo que ya hay en el carrito cuenta para el tramo (todo el grupo de
-    // escala, o este mismo renglón si va solo). Se marca el tramo ya alcanzado
-    // en el carrito; el precio es el que queda al agregar.
+    // escala, o este mismo renglón si va solo). El precio c/u y el tramo marcado
+    // son los ya alcanzados en el carrito: no bajan hasta agregar. El total del
+    // botón sí usa el tramo al que se llega agregando.
     const tierGroup = product?.tierGroup ?? null;
     const groupable = Boolean(tierGroup) && !equiv && !isWeightUnit(product?.unit);
     const inCart = !product ? 0 : groupable ? getGroupQuantity(tierGroup) : getLineQuantity(kgMode ? `${product.id}__kg` : product.id);
@@ -219,8 +220,9 @@ export default function ProductDetailPage() {
     const tiers = useMemo(() => normalizePriceTiers(product?.priceTiers), [product?.priceTiers]);
     const progress = tierProgress(tiers, inCart, quantity);
     const tierHint = tierHintText(tiers, progress, inCart, quantity, kgMode || isWeight);
-    const tieredPrice = getEffectivePrice(rawPrice, tiers, tierQty, subscriptionPrice);
+    const tieredPrice = getEffectivePrice(rawPrice, tiers, Math.max(inCart, minQty), subscriptionPrice);
     const displayPrice = equiv ? Math.round(tieredPrice * equivW) : tieredPrice;
+    const addPrice = getEffectivePrice(rawPrice, tiers, tierQty, subscriptionPrice);
     const discountPercent = hasOffer ? Math.round(((product!.price - product!.offerPrice!) / product!.price) * 100) : 0;
 
     const priceText = useMemo(() => {
@@ -250,10 +252,10 @@ export default function ProductDetailPage() {
         if (!product) return 0;
         // Caja: precio fijo de la presentación entera.
         if (presentation) return quantity * presentation.price;
-        if (kgMode) return Math.round(quantity * tieredPrice);
-        if (equiv) return quantity * displayPrice;
-        return Math.round(quantity * tieredPrice);
-    }, [product, presentation, equiv, kgMode, quantity, displayPrice, tieredPrice]);
+        if (kgMode) return Math.round(quantity * addPrice);
+        if (equiv) return quantity * Math.round(addPrice * equivW);
+        return Math.round(quantity * addPrice);
+    }, [product, presentation, equiv, kgMode, quantity, addPrice, equivW]);
 
     const fmtClp = (value: number) =>
         new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);

@@ -119,8 +119,9 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
     // Escala: lo que ya hay en el carrito cuenta para el tramo (todo el grupo de
     // escala, o este mismo renglón si va solo, que es donde se suma al agregar).
-    // El precio del botón es el que queda al agregar; el tramo marcado es el
-    // que ya se alcanzó en el carrito.
+    // El precio c/u y el tramo marcado son los que ya se alcanzaron en el
+    // carrito: no bajan hasta agregar. El botón dice lo que cuesta lo que se
+    // agrega, ya con el tramo al que se llega.
     const groupable = Boolean(tierGroup) && !equiv && !isWeight;
     const inCart = groupable ? getGroupQuantity(tierGroup) : getLineQuantity(kgMode ? `${id}__kg` : id);
     const tierQty = inCart + quantity;
@@ -129,11 +130,13 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
     const hasOffer = Boolean(isOffer && offerPrice && offerPrice < price);
     const rawPrice = hasOffer ? offerPrice! : price;
-    const tieredPrice = getEffectivePrice(rawPrice, tiers, tierQty, subscriptionPrice);
+    const shownQty = Math.max(inCart, minQty);
+    const tieredPrice = getEffectivePrice(rawPrice, tiers, shownQty, subscriptionPrice);
     // Lo que pagaría sin la membresía, para mostrar el ahorro tachado.
-    const regularPrice = getTieredPrice(rawPrice, tiers, tierQty);
+    const regularPrice = getTieredPrice(rawPrice, tiers, shownQty);
     const isSubscriberPrice = tieredPrice < regularPrice;
     const displayPrice = equiv ? Math.round(tieredPrice * equivWeight!) : tieredPrice;
+    const addPrice = getEffectivePrice(rawPrice, tiers, tierQty, subscriptionPrice);
     const discountPercent = hasOffer ? Math.round(((price - offerPrice!) / price) * 100) : 0;
 
     // Oferta por stock: mientras dure, se muestra y se vende solo lo que queda en
@@ -163,9 +166,9 @@ export function ProductCard({ id, name, price, offerPrice, isOffer, stock, unit,
 
     const subtotalValue = useMemo(() => (
         kgMode
-            ? Math.round(quantity * tieredPrice)
-            : equiv ? quantity * displayPrice : Math.round(quantity * tieredPrice)
-    ), [equiv, kgMode, quantity, displayPrice, tieredPrice]);
+            ? Math.round(quantity * addPrice)
+            : equiv ? quantity * Math.round(addPrice * equivWeight!) : Math.round(quantity * addPrice)
+    ), [equiv, kgMode, quantity, addPrice, equivWeight]);
 
     const cardSubtotal = useMemo(() => fmtCLP(subtotalValue), [subtotalValue]);
 
